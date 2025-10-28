@@ -1,3 +1,10 @@
+MESH_RENDER_COMMAND :: struct {
+    kind: enum {SKINNED;};
+    skinned_mesh: *Skinned_Mesh;
+    world_model: Matrix4;
+    skinning_matrices : []Matrix4;
+}
+
 Vertex :: struct
 {
 	position : Vector3;
@@ -163,10 +170,10 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool {
         if !success {
             log_error("Inverse failed in joint % of load_mesh_from_file()!\n", it_index);
         }
-        
+
    	    it.inverse_bind_transform = result;
     }
-    
+
 	// Parse vertices
 	line, found = consume_next_line (*handler);
 	if line != "vertices:"

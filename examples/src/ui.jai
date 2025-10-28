@@ -13,31 +13,40 @@ g_params : struct
 	interpolation_mode := Interpolation_Mode.LINEAR;
 };
 
-rnder_me: UI_RENDER_COMMAND;
+// rnder_me: UI_RENDER_COMMAND;
 UI_RENDER_COMMAND :: struct {
-    should_render: bool;
     r: getrect.Rect;
     distance: float;
     text: string;
-    is_label := true;
+    is_label : bool;
     theme: getrect.Label_Theme;
 }
 
-doLabel :: (text: string, x: float, y:float, z:float, render_pass: enum{UI_PASS;} = .UI_PASS) {
+doLabel :: inline (text: string, pos: Vector3) {
+    doLabel(text, pos.x, pos.y, pos.z);
+}
+
+doLabel :: (text: string, x: float, y:float, z:float) {
 	label_theme : getrect.Label_Theme;
 	label_theme.font = g_font;
     text_width := simp.prepare_text (g_font, text);
     r := getrect.get_rect (x, y,xx text_width, xx g_font.character_height);
-    rnder_me.text = text;
-    rnder_me.r = r;
-    rnder_me.distance = z;
-    rnder_me.should_render = true;
-    rnder_me.theme = label_theme;
+
+    draw_cmd: Draw_Command;
+    draw_cmd.should_render = true;
+    draw_cmd.kind = .UI;
+    using draw_cmd;
+    ui.text = text;
+    ui.r = r;
+    ui.distance = z;
+    ui.theme = label_theme;
+
+    array_add(*drawing_commands, draw_cmd);
 }
 
 update_ui :: (delta_time : float)
 {
-    defer rnder_me = .{};
+    // defer rnder_me = .{};
 	using g_params;
 
 	glDisable (GL_DEPTH_TEST);
@@ -101,9 +110,6 @@ update_ui :: (delta_time : float)
 
         // doLabel("GLADIATOR2", r.x, r.y-20, 0);
         // doLabel("GLADIATOR3", 50, 150, 0);
-	}
-	if rnder_me.should_render {
-        getrect.label (rnder_me.r, rnder_me.text, *rnder_me.theme);
 	}
 	r.y -= pad;
 	// Show Skeleton checkbox

@@ -1,3 +1,12 @@
+physics_coordinates :: struct {
+    forward :: Vector3.{1,0,0};
+    left 	:: Vector3.{0,1,0};
+    up 	    :: Vector3.{0,0,1};
+
+    back    :: #run -forward; //forward backward? rightward? downward?
+    right 	:: #run -left;
+    down 	:: #run -up;
+}
 //:tagDecisionsReasonings
 #import "Math";
 b :: #import "Basic";
@@ -7,13 +16,7 @@ b :: #import "Basic";
 #import "SIMD_Math";
 
 
-//make video of changing this and playing sanity restored from dark souls
-forward :: Vector3.{1,0,0}; //I think this is nonsense->if you rotate around X your model should change PITCH (up down) (example, cahracter was running and tripped and started rolling)
-left 	:: Vector3.{0,1,0}; //I think this is nonsense->if you rotate around Y your model should change YAW (left right) (example: character falls down to the side)
-up 		:: Vector3.{0,0,1}; //I think this is nonsense->if you rotate around Z your model should change ROLL (turning aroud up axis), (example: character turns 180 and now is looking backwards)
-back    :: #run -forward; //forward backward? rightward? downward?
-right 	:: #run -left;
-down 	:: #run -up;
+
 
 
 //:tagIrrelevantStuffThatMaybeIShouldMOveOrDelete <- STARTS HERE

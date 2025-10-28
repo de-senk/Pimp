@@ -349,12 +349,12 @@ message_loop :: (w: Workspace) {
     }
 
     {
-    append(*sb, "\nSTUPID_PROC_POINTERS:= **void.[\n");
+    append(*sb, "\nSTUD_PROC_POINTERS:= **void.[\n");
     for procedure_names {
         print_to_builder(*sb, "cast(*void)(*%),\n", it);
     }
     append(*sb, "];\n\n");
-    append(*sb, "STUPID_PROC_LIST :: string.[\n");
+    append(*sb, "STUD_PROC_LIST :: string.[\n");
     for procedure_names {
         print_to_builder(*sb, "\"%\",\n", it);
     }

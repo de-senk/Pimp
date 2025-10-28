@@ -214,51 +214,7 @@ draw_line :: (start : Vector3, end : Vector3, start_color : Vector4, end_color :
 	glDrawArrays (GL_LINES, 0, 2);
 }
 
-draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matrices : []Matrix4)
-{
-	assert (skinning_matrices.count <= MAX_JOINTS, "Skinning matrices array cannot have more than % elements for now.");
 
-	// Fill the uniform buffer with the skinning data
-	glBindBuffer (GL_UNIFORM_BUFFER, g_big_data_ubo);
-	glBufferSubData (GL_UNIFORM_BUFFER, 0, size_of (Matrix4) * skinning_matrices.count, skinning_matrices.data);
-	glBindBuffer (GL_UNIFORM_BUFFER, 0);
-
-	glBindVertexArray (vao);
-	glBindBuffer (GL_ARRAY_BUFFER, vbo);
-	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
-	glUseProgram (g_mesh_shader);
-
-	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_Model_Matrix"), 1, GL_TRUE, *model_matrix.coef[0][0]);
-	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_View_Projection_Matrix"), 1, GL_TRUE, *g_camera.view_projection_matrix.coef[0][0]);
-
-	glDrawElements (GL_TRIANGLES, cast (u32) indices.count, GL_UNSIGNED_INT, null);
-}
-
-draw_pose :: (using pose : Skeleton_Pose, transform : Matrix4, color : Vector4)
-{
-	for * joints
-	{
-		parent_transform : Matrix4 = ---;
-        parent := it.parent;
-		if parent
-		    parent_transform = transform * parent.model_space_transform;
-		else
-			parent_transform = transform;
-
-		world_space_transform := transform * it.model_space_transform;
-		start := xyz (
-			parent_transform._14,
-			parent_transform._24,
-			parent_transform._34
-		);
-		end := xyz (
-			world_space_transform._14,
-			world_space_transform._24,
-			world_space_transform._34
-		);
-		draw_line (start, end, color);
-	}
-}
 
 // Following is the vertex and fragment shaders for rendering
 // skinned meshes and lines.

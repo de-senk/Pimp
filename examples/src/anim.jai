@@ -1,3 +1,8 @@
+SKELETON_RENDER_COMMAND :: struct {
+    pose: *Skeleton_Pose;
+    color: Vector4;
+    world_model: Matrix4;
+}
 // In general, the names we use are a bit confusing because we have
 // a sampled animation that comes from your disk, and we want to
 // produce an animation on your screen. So there are terms that we

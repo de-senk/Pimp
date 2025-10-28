@@ -32,7 +32,7 @@ World :: struct {
 };
 
 
-STUPID_PROC_POINTERS:= **void.[
+STUD_PROC_POINTERS:= **void.[
 cast(*void)(*simulate),
 cast(*void)(*l2w),
 cast(*void)(*l2w_rotate_only),
@@ -40,7 +40,7 @@ cast(*void)(*w2l),
 cast(*void)(*w2l_rotate_only),
 ];
 
-STUPID_PROC_LIST :: string.[
+STUD_PROC_LIST :: string.[
 "simulate",
 "l2w",
 "l2w_rotate_only",

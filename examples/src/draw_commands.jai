@@ -1,5 +1,104 @@
-#load "backend_dx11/renderer_dx11.jai";
+// For now I will try to put on this file draws that are built on top of draw primitives
+// I think that the render commands strategy leads to less complicated code than not using it.
+// I'm yet to find a real practical weakness of the render commands queue strategy.
 
+//:tagHighestLevelOfAbstractionExplanationAndCode
+
+drawing_commands: [..]Draw_Command;
+Draw_Command :: struct {
+    should_render: bool; //maybe nonsense because it is IMMEDIATE MODE, BUT, maybe some frustrum culling sets this.
+    kind: enum{TRIANGLE_MESH;DEBUG_SPHERE;SKELETON;UI;};
+    union { //I dont like that I have these structs sparsed around files.
+        ui: UI_RENDER_COMMAND;
+        mesh: MESH_RENDER_COMMAND;
+        skeleton: SKELETON_RENDER_COMMAND;
+        // debug_sphere: DEBUG_SPHERE_RENDER_COMMAND;
+    }
+}
+
+//for usage in quicksort
+compare_render_commands :: (a: type_of(Draw_Command.kind), b: type_of(Draw_Command.kind)) -> s64 {
+    //NOTE: UI IS LAST!, matbe create a separate UI3D for text on 3d world that can be discarded by x-buffer, oh I always forget that this is automatic in modern gpus!
+    //TODO: Sort triangle meshes by materials.
+    if a > b return -1;
+    return 0;
+}
+
+actual_draw :: (using cmd: Draw_Command) {
+    if !should_render return;
+    if kind == {
+        case .SKELETON; draw_pose(skeleton.pose, skeleton.world_model, skeleton.color);
+        case .TRIANGLE_MESH; draw_mesh(mesh.skinned_mesh, mesh.world_model, mesh.skinning_matrices);
+        // case .DEBUG_SPHERE; draw_sphere(mesh.pose, mesh.world_model);
+        case .UI; draw_ui_element(ui);
+    }
+}
+
+draw_ui_element :: (using uircmd : UI_RENDER_COMMAND) {
+    glDisable (GL_DEPTH_TEST);
+	glDepthMask (GL_FALSE);
+	simp.set_shader_for_color ();
+
+    getrect.label (r, text, *theme);
+}
+
+draw_pose :: (using pose : Skeleton_Pose, transform : Matrix4, color : Vector4)
+{
+
+    // Disable depth mask and testing so we can see
+    // the skeleton through other things
+    glDepthMask (GL_FALSE); //:tagMaybeCache ? but opengl already does caching internally.
+	glDisable (GL_DEPTH_TEST);
+
+	for * joints
+	{
+		parent_transform : Matrix4 = ---;
+        parent := it.parent;
+		if parent
+		    parent_transform = transform * parent.model_space_transform;
+		else
+			parent_transform = transform;
+
+		world_space_transform := transform * it.model_space_transform;
+		start := xyz (
+			parent_transform._14,
+			parent_transform._24,
+			parent_transform._34
+		);
+		end := xyz (
+			world_space_transform._14,
+			world_space_transform._24,
+			world_space_transform._34
+		);
+		draw_line (start, end, color);
+	}
+}
+
+
+draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matrices : []Matrix4)
+{
+
+	glDepthMask (GL_TRUE); //:tagMaybeCache
+	glEnable (GL_DEPTH_TEST);
+	assert (skinning_matrices.count <= MAX_JOINTS, "Skinning matrices array cannot have more than % elements for now.");
+
+	// Fill the uniform buffer with the skinning data
+	glBindBuffer (GL_UNIFORM_BUFFER, g_big_data_ubo);
+	glBufferSubData (GL_UNIFORM_BUFFER, 0, size_of (Matrix4) * skinning_matrices.count, skinning_matrices.data);
+	glBindBuffer (GL_UNIFORM_BUFFER, 0);
+
+	glBindVertexArray (vao);
+	glBindBuffer (GL_ARRAY_BUFFER, vbo);
+	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
+	glUseProgram (g_mesh_shader);
+
+	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_Model_Matrix"), 1, GL_TRUE, *model_matrix.coef[0][0]);
+	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_View_Projection_Matrix"), 1, GL_TRUE, *g_camera.view_projection_matrix.coef[0][0]);
+
+	glDrawElements (GL_TRIANGLES, cast (u32) indices.count, GL_UNSIGNED_INT, null);
+}
+
+#if 0 {
 NUM_VERTEX_OF_SPHERE :: 3072;
 #no_reset g_sphere_vertices_lod0: [NUM_VERTEX_OF_SPHERE] DebugDrawVertex;
 #no_reset g_sphere_vertices_lod1: [9*9*2-9] Vector3;
@@ -595,3 +694,31 @@ HLSL;
   }
   return true;
 }
+} //#if 0
+
+
+//
+// I use uppercase to determine the Highest level of abstraction.
+//
+//:tagHighestLevelOfAbstractionExplanationAndCode
+Draw :: (using pose : *Skeleton_Pose, world_model : Matrix4 = Matrix4_Identity, color : Vector4 = Vector4.{0,1,0,1}) {
+    cmd: Draw_Command;
+    cmd.kind = .SKELETON;
+    cmd.should_render = true;
+    cmd.skeleton.world_model = world_model;
+    cmd.skeleton.pose = pose;
+    cmd.skeleton.color = color;
+    array_add(*drawing_commands, cmd);
+}
+
+Draw :: (using mesh : *Skinned_Mesh, world_model : Matrix4 = Matrix4_Identity, skinning_matrices : []Matrix4) {
+    cmd: Draw_Command;
+    cmd.kind = .TRIANGLE_MESH;
+    cmd.should_render = true;
+    cmd.mesh.kind = .SKINNED;
+    cmd.mesh.world_model = world_model;
+    cmd.mesh.skinned_mesh = mesh;
+    cmd.mesh.skinning_matrices = skinning_matrices;
+    array_add(*drawing_commands, cmd);
+}
+
