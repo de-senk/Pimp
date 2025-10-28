@@ -1,0 +1,597 @@
+#load "backend_dx11/renderer_dx11.jai";
+
+NUM_VERTEX_OF_SPHERE :: 3072;
+#no_reset g_sphere_vertices_lod0: [NUM_VERTEX_OF_SPHERE] DebugDrawVertex;
+#no_reset g_sphere_vertices_lod1: [9*9*2-9] Vector3;
+#no_reset g_sphere_vertices_lod2: [5*5*2-5] Vector3;
+
+
+fill_sphere_vertices :: ()  {
+    modify_color :: () #expand
+    {
+            vv := `v00.position*10.01;
+            `modifiable_color.x = vv.x;
+            `modifiable_color.y = vv.y;
+            `modifiable_color.z = vv.z;
+    };
+
+
+    generate_sphere_vertices :: (vertices: []DebugDrawVertex, subdivisions: int = 16)
+    {
+        lat_segments := subdivisions;
+        lon_segments := subdivisions * 2;
+        ccountter := 0;
+        for lat: 0..lat_segments
+        {
+            phi := PI * cast(float)lat / cast(float)lat_segments;
+            for lon: 0..lon_segments
+            {
+                theta := TAU * cast(float)lon / cast(float)lon_segments;
+
+                x := sin(phi) * cos(theta);
+                y := cos(phi);
+                z := sin(phi) * sin(theta);
+
+                // vertex := position + Vector3.{x, y, z} * radius;
+                // vertex := l2w(position, orientation, Vector3.{x, y, z} * radius);
+                vertex :=  Vector3.{x, y, z};
+                vertices[ccountter].position = vertex;
+                vertices[ccountter].color = .{vertex.x,vertex.y,vertex.z,1};
+                ccountter+=1;
+            }
+        }
+        log("%",ccountter);
+    }
+
+    generate_sphere_triangles :: (vertices: []DebugDrawVertex, lat_segments: int, lon_segments: int) {
+        count := 0;
+
+        modifiable_color := Vector4.{1.0,1.0,1.0,1};
+        for lat: 0..lat_segments-1 {
+            phi0 := PI * lat / lat_segments;
+            phi1 := PI * (lat+1) / lat_segments;
+
+            for lon: 0..lon_segments-1 {
+                theta0 := TAU * lon / lon_segments;
+                theta1 := TAU * (lon+1) / lon_segments;
+
+                // four corner positions on the unit sphere
+                v00 := Vector3.{ sin(phi0)*cos(theta0), cos(phi0), sin(phi0)*sin(theta0) };
+                v01 := Vector3.{ sin(phi0)*cos(theta1), cos(phi0), sin(phi0)*sin(theta1) };
+                v10 := Vector3.{ sin(phi1)*cos(theta0), cos(phi1), sin(phi1)*sin(theta0) };
+                v11 := Vector3.{ sin(phi1)*cos(theta1), cos(phi1), sin(phi1)*sin(theta1) };
+
+                // two triangles: (v00,v10,v01) and (v01,v10,v11)
+                modifiable_color.x = (v00.x + 1)/2;
+                modifiable_color.y = (v00.y + 1)/2;
+                modifiable_color.z = (v00.z + 1)/2;
+                // log("%",v00.y + 1);
+                vertices[count].position = v00; vertices[count].color = modifiable_color; count+=1;
+                vertices[count].position = v10; vertices[count].color = modifiable_color; count+=1;
+                vertices[count].position = v01; vertices[count].color = modifiable_color; count+=1;
+
+                vertices[count].position = v01; vertices[count].color = modifiable_color; count+=1;
+                vertices[count].position = v10; vertices[count].color = modifiable_color; count+=1;
+                vertices[count].position = v11; vertices[count].color = modifiable_color; count+=1;
+            }
+        }
+        log("count %", count); // actual vertex count to draw
+    }
+
+
+     // generate_sphere_vertices(g_sphere_vertices_lod0, 16 );
+     generate_sphere_triangles(g_sphere_vertices_lod0, 16 ,32);
+     // generate_sphere_vertices(g_sphere_vertices_lod1, 16/2 );
+     // generate_sphere_vertices(g_sphere_vertices_lod2, 16/4 );
+
+
+}
+#run fill_sphere_vertices();
+
+DrawSphere :: (position: Vector3, orientation: Quaternion, radius: float, subdivisions := 16, color := Vector4.{ 1, 1, 1, 1 }, mass : float32 = 1.0)  {
+    transform := Matrix4_Identity;
+    transform = translate(transform, position);
+    transform = rotate(transform, orientation);
+    transform = scale(transform, .{radius,radius,radius});
+
+    jdraw_push_sphere(.{transform, color });
+}
+
+
+draw_polygon :: (vertices: [] Vector3, color := Vector4.{ 1, 1, 1, 1 }) {
+    dx11_set_shader_for_color(true);
+
+    for j: 1..vertices.count - 2 {
+        k := (j + 1) % vertices.count;
+
+        v0 := vertices[0];
+        v1 := vertices[j];
+        v2 := vertices[k];
+        jdraw_triangle(.{ v0.x, v0.y, v0.z }, .{ v1.x, v1.y, v1.z }, .{ v2.x, v2.y, v2.z }, color);
+    }
+}
+
+DrawCircle :: (pos: Vector3, r: float, color := Vector4.{ 1, 1, 1, 1 }) {
+    POINTS_PER_CIRCLE :: 10;
+    THETA :: TAU / POINTS_PER_CIRCLE;
+    {
+        vertices : [POINTS_PER_CIRCLE] Vector3;
+        for i: 0..POINTS_PER_CIRCLE - 1 {
+            vertices[i] = pos + .{ cos(THETA * i), sin(THETA * i) , 0} * r;
+        }
+        draw_polygon(vertices, color);
+    }
+    {
+        vertices : [POINTS_PER_CIRCLE] Vector3;
+        for i: 0..POINTS_PER_CIRCLE - 1 {
+            vertices[i] = pos + .{0,  cos(THETA * i), sin(THETA * i) } * r;
+        }
+        draw_polygon(vertices, color);
+    }
+    {
+        vertices : [POINTS_PER_CIRCLE] Vector3;
+        for i: 0..POINTS_PER_CIRCLE - 1 {
+            vertices[i] = pos + .{ cos(THETA * i), 0, sin(THETA * i) } * r;
+        }
+        draw_polygon(vertices, color);
+    }
+}
+
+
+biggest_mass_so_far: float= 0.1;
+Draw :: (using body: *RigidBody) {
+
+   if biggest_mass_so_far < body.mass then biggest_mass_so_far = body.mass;
+    draw_as_capsule :: (using body: *RigidBody) { //draw_capsule for grep
+        if g_jolt_renderer.enable_wireframe
+        then g_jolt_renderer.current_state = .WIREFRAME;
+        defer g_jolt_renderer.current_state = .NORMAL;
+
+        capsule_height := size.capsule_height;
+        capsule_center :=/*this is not center its base tip!*/ l2w(body.position, body.orientation, .{0,-size.capsule_height/2,0});
+        capsule_radius := size.capsule_radius;
+
+        // if sparse_if(2) //transparency
+        DrawCapsule (capsule_center,orientation, capsule_radius , capsule_height, subdivisions = 16, color = Vector4.{ 1, 1, 1, 1 });
+
+    }
+   draw_as_sphere :: (using body: *RigidBody) {//draw_sphere for grep
+        if g_jolt_renderer.enable_wireframe
+        then g_jolt_renderer.current_state = .WIREFRAME;
+        defer g_jolt_renderer.current_state = .NORMAL;
+        // if sparse_if(2) //transparency
+        // DrawCircle(position, length(size));
+        DrawSphere(position, orientation, size.sphere_radius, mass = mass);
+        // DrawWireframeSphere(position, length(size));
+
+    }
+   draw_as_plane :: (using body: *RigidBody) { //draw_plane for grep
+        R3D := rotation_matrix(Matrix3, orientation);
+        density_alpha_blend := clamp(body.mass / biggest_mass_so_far, 0.99, 1.0);
+
+        center := Vector3.{ position.x, position.y, position.z };
+        {
+            plane_normal := R3D * size *0.5;
+
+            plane_normal.x = clamp(plane_normal.x, 0.10, 0.20);
+            plane_normal.y = clamp(plane_normal.y, 0.10, 0.20);
+            plane_normal.z = clamp(plane_normal.z, 0.10, 0.20);
+
+
+            v0 := R3D * Vector3.{-100, -100 ,  0} + center;
+            v1 := R3D * Vector3.{-100,  100 ,  0} + center;
+            v3 := R3D * Vector3.{ 100, -100 ,  0} + center;
+            v2 := R3D * Vector3.{ 100,  100 ,  0} + center;
+            draw_polygon(.[ v0, v1, v2, v3 ], Vector4.{ plane_normal.x, plane_normal.y, plane_normal.z, density_alpha_blend });
+            // debug_break();
+        }
+    }
+    draw_as_hull_shape  :: (using body: *RigidBody) {
+        if g_jolt_renderer.enable_wireframe
+        then g_jolt_renderer.current_state = .WIREFRAME;
+        defer g_jolt_renderer.current_state = .NORMAL;
+
+        maxidx := shape.local_points.count -1;
+        for tri: shape.trianglemesh
+        {
+            // reached_max_idx := tri.a > maxidx ||tri.b > maxidx || tri.c > maxidx;
+            // if reached_max_idx {
+            //     log("maxidx %, abc % % %",maxidx,tri.a,tri.b,tri.c, );
+            //     log("maxidx %, abc % % %",maxidx,tri.a,tri.b,tri.c, );
+            //     log("maxidx %, abc % % %",maxidx,tri.a,tri.b,tri.c, );
+            // }
+            //     log("shape.local_point %, abc % % %",maxidx,tri.a,tri.b,tri.c, );
+                local_v0 := shape.local_points[tri.a];
+                local_v1 := shape.local_points[tri.b];
+                local_v2 := shape.local_points[tri.c];
+                // log("   aa 4 % % %",local_v0, local_v1, local_v2);
+        		v0 := l2w(body.position, body.orientation, local_v0);
+                v1 := l2w(body.position, body.orientation, local_v1);
+                v2 := l2w(body.position, body.orientation, local_v2);
+
+                /* AI CODE HERE, I ASKED AI TO ADD COLOR TO MY CODE */
+                    // compute face normal
+                    n := 0.4*normalize(cross(local_v1 - local_v0,
+                                         local_v2 - local_v0));
+                    // simple color mapping from normal to RGB
+                    color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), 1 };
+                /* AI CODE ENDS HERE  AI CODE ENDS HERE AI CODE ENDS HERE*/
+
+                draw_polygon(.[ v0, v1, v2 ], color);
+        }
+    }
+
+    draw_as_hull  :: (using body: *RigidBody) {
+        if g_jolt_renderer.enable_wireframe
+        then g_jolt_renderer.current_state = .WIREFRAME;
+        defer g_jolt_renderer.current_state = .NORMAL;
+
+	    currentIndex: u32;
+	    local_vertex: [4]Vector3;
+        start_face := hull_shape.mesh.faces;
+        current_face := start_face;
+        while true { defer if current_face == start_face break;
+        	start_edge := current_face.edge;
+            current_edge := start_edge;
+    	    while true { defer if current_edge == start_edge then break;
+        		localPoint := hull_shape.scale * current_edge.tail.vertex;
+        		local_vertex[currentIndex] = localPoint;
+        		currentIndex += 1;
+        		should_draw_face := currentIndex == 4;
+        		if should_draw_face
+        		{
+
+            		v0 := l2w(body.position, body.orientation, local_vertex[0]);
+                    v1 := l2w(body.position, body.orientation, local_vertex[1]);
+                    v2 := l2w(body.position, body.orientation, local_vertex[2]);
+                    v3 := l2w(body.position, body.orientation, local_vertex[3]);
+
+                    /* AI CODE HERE, I ASKED AI TO ADD COLOR TO MY CODE */
+                        // compute face normal
+                        n := 0.4*normalize(cross(local_vertex[1] - local_vertex[0],
+                                             local_vertex[2] - local_vertex[0]));
+                        // simple color mapping from normal to RGB
+                        color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), 1 };
+                    /* AI CODE ENDS HERE  AI CODE ENDS HERE AI CODE ENDS HERE*/
+
+                    draw_polygon(.[ v0, v1, v2, v3 ], color);
+
+
+                    currentIndex = 0; //to use  local_vertex array as a ring buffer
+                }
+                //while loop edge related:
+                current_edge = current_edge.next;
+            }
+            //while loop face related:
+            current_face = current_face.next;
+    	}
+    }
+
+    draw_as_cube :: (using body: *RigidBody) {
+        R3D := rotation_matrix(Matrix3, orientation);
+        density_alpha_blend := clamp(body.mass / biggest_mass_so_far, 0.1, 0.5);
+        rotate_around_fake :: (v0: *Vector3, v1: *Vector3, v2: *Vector3, v3: *Vector3) {
+            SHOULD_ROTATE_VISUALLY :: false;
+
+            qv0 := Vector4.{v0.x, v0.y, v0.z, 1 };
+            qv1 := Vector4.{v1.x, v1.y, v1.z, 1 };
+            qv2 := Vector4.{v2.x, v2.y, v2.z, 1 };
+            qv3 := Vector4.{v3.x, v3.y, v3.z, 1 };
+
+            qp0 := Vector4.{v0.x, v0.y, v0.z, 1 };
+            qp1 := Vector4.{v1.x, v1.y, v1.z, 1 };
+            qp2 := Vector4.{v2.x, v2.y, v2.z, 1 };
+            qp3 := Vector4.{v3.x, v3.y, v3.z, 1 };
+            rquat :Quaternion;
+            varang :float32= cast(float32)g_timer.current/4;//sin(cast(float32)g_timer.current);
+            // set_from_axis_and_angle(*rquat, .{0,-.5,1},-3.141592/2);
+            // qp0.xyz = rotate( qp0.xyz, rquat);
+            // qp1.xyz = rotate( qp1.xyz, rquat);
+            // qp2.xyz = rotate( qp2.xyz, rquat);
+            // qp3.xyz = rotate( qp3.xyz, rquat);
+
+            #if SHOULD_ROTATE_VISUALLY set_from_axis_and_angle(*rquat, .{0,1,0},varang);
+            qp0.xyz = rotate( qp0.xyz, rquat);
+            qp1.xyz = rotate( qp1.xyz, rquat);
+            qp2.xyz = rotate( qp2.xyz, rquat);
+            qp3.xyz = rotate( qp3.xyz, rquat);
+
+
+
+
+            v0.* = qp0.xyz;
+            v1.* = qp1.xyz;
+            v2.* = qp2.xyz;
+            v3.* = qp3.xyz;
+
+        }
+    // 3D
+    {
+        R :=  R3D; //its a matrix4!
+        center := Vector3.{ position.x, position.y, position.z };
+          //front face
+        {
+            v0 := R * Vector3.{ -size.x , -size.y  , -size.z } + center;
+            v1 := R * Vector3.{  size.x , -size.y  , -size.z } + center;
+            v2 := R * Vector3.{  size.x ,  size.y  , -size.z } + center;
+            v3 := R * Vector3.{ -size.x ,  size.y  , -size.z } + center;
+            rotate_around_fake(*v0, *v1, *v2, *v3);
+            draw_polygon(.[ v0, v1, v2, v3 ], .{ .4, 0, 0, density_alpha_blend });
+            // debug_break();
+        }
+
+        //back face
+        {
+            v0 := R * Vector3.{ -size.x , -size.y  , size.z } + center;
+            v1 := R * Vector3.{  size.x , -size.y  , size.z } + center;
+            v2 := R * Vector3.{  size.x ,  size.y  , size.z } + center;
+            v3 := R * Vector3.{ -size.x ,  size.y  , size.z } + center;
+            rotate_around_fake(*v0, *v1, *v2, *v3);
+            draw_polygon(.[v0, v1, v2, v3 ], .{ .4, 1, 0, density_alpha_blend });
+        }
+
+         //top 1 face
+        {
+            v0 := R * Vector3.{ -size.x , -size.y  , -size.z } + center;
+            v1 := R * Vector3.{  size.x , -size.y  , -size.z } + center;
+            v2 := R * Vector3.{  size.x ,  -size.y  , size.z } + center;
+            v3 := R * Vector3.{ -size.x ,  -size.y  , size.z } + center;
+            rotate_around_fake(*v0, *v1, *v2, *v3);
+            draw_polygon(.[v0, v1, v2, v3 ], .{ .6, .2, 0, density_alpha_blend });
+        }
+
+         //bottom face
+       {
+            v0 := R * Vector3.{ -size.x , size.y  , -size.z } + center;
+            v1 := R * Vector3.{  size.x , size.y  , -size.z } + center;
+            v2 := R * Vector3.{  size.x , size.y  , size.z } + center;
+            v3 := R * Vector3.{ -size.x , size.y  , size.z } + center;
+            rotate_around_fake(*v0, *v1, *v2, *v3);
+            draw_polygon(.[v0, v1, v2, v3 ], .{ .4, .5, 0, density_alpha_blend });
+        }
+
+         //side 1 face
+        {
+            v0 := R * Vector3.{ -size.x , size.y  , -size.z } + center;
+            v1 := R * Vector3.{ -size.x , -size.y  , -size.z } + center;
+            v2 := R * Vector3.{ -size.x , -size.y  , size.z } + center;
+            v3 := R * Vector3.{ -size.x , size.y  , size.z } + center;
+            rotate_around_fake(*v0, *v1, *v2, *v3);
+            draw_polygon(.[v0, v1, v2, v3 ], .{ .1, .1, .1, density_alpha_blend });
+        }
+
+         //side 2 face
+       {
+            v0 := R * Vector3.{ size.x , size.y  , -size.z } + center;
+            v1 := R * Vector3.{ size.x , -size.y  , -size.z } + center;
+            v2 := R * Vector3.{ size.x , -size.y  , size.z } + center;
+            v3 := R * Vector3.{ size.x , size.y  , size.z } + center;
+            rotate_around_fake(*v0, *v1, *v2, *v3);
+            draw_polygon(.[v0, v1, v2, v3 ], .{ .1, .1, 0.5, density_alpha_blend });
+        }
+    }
+
+    }
+
+    if g_should_draw && shape_kind == .CUBE draw_as_cube(body);
+    if g_should_draw && shape_kind == .HULL draw_as_hull(body);
+    if !g_should_draw && shape_kind == .HULL draw_as_hull_shape(body);
+    if shape_kind == .PLANE draw_as_plane(body);
+    if shape_kind == .SPHERE draw_as_sphere(body);
+    if g_should_draw && shape_kind == .CAPSULE draw_as_capsule(body);
+
+}
+
+
+
+dx11_prepare_and_draw_text ::  (font: *Dynamic_Font, x: s64, y: s64, text: string, color := Vector4.{1,1,1,1}, effects: MyFont_Effects = 0) -> width: s64 {
+    width := prepare_text(font, text, effects);
+    dx11_draw_prepared_text(font,  x,  y,  color);
+    return width;
+}
+
+dx11_draw_prepared_text :: (font: *Dynamic_Font, x: s64, y: s64, color := Vector4.{1, 1, 1, 1}, effects: MyFont_Effects = 0) {
+    generate_quads_for_prepared_text(font, x, y, effects);
+    dx11_draw_generated_quads(font, color);
+}
+
+
+dx11_draw_generated_quads :: (font: *Dynamic_Font, color := Vector4.{1, 1, 1, 1}) {
+    quads := font.current_quads;
+
+	dx11_set_shader (.UI_TEXT);
+
+    draw_letter_quad :: (font: *Dynamic_Font, quad: Font_Quad, color: Vector4) {
+        page := quad.glyph.page;
+        if page.bitmap_data.width  <= 1 return;
+        if page.bitmap_data.height <= 1 return;
+        using quad;
+
+        uv0 := Vector2.{u0, v0};
+        uv1 := Vector2.{u1, v0};
+        uv2 := Vector2.{u1, v1};
+        uv3 := Vector2.{u0, v1};
+
+        dx11_immediate_quad_for_text(p0, p1, p2, p3, color, uv0, uv1, uv2, uv3);
+    }
+
+
+    last_texture: *ID3D11ShaderResourceView = null;
+    for quad, i: quads {
+        page := quad.glyph.page;
+        map  := *page.texture;
+
+        if page.dirty {
+            page.dirty = false;
+            assert(fill_mTexture_from_Bitmap(map, page.bitmap_data));
+            queue_glyph_add_texture(map); //so we upload only the latest one, this might destroy different font styles, yet to be verified.
+        }
+
+        if map.srv != last_texture {
+            // dx11_immediate_flush();
+            handle := map.srv;
+            last_texture = handle;
+            ID3D11DeviceContext_PSSetShaderResources(d3d11_device_context, 2, 1, *handle);
+        }
+
+
+        context.imm_ctx.current_texture_cell_index = map.cell_index;
+        draw_letter_quad(font, quad, color);
+    }
+}
+
+
+
+//dont look at me.
+try_compile_debug_3d_shader :: () -> (success:bool)
+{
+//:tagCode_Starts_Here_hashdasjdah
+
+DEBUG_3D_SHADER :: #string HLSL
+      // cbuffer ConstantBuffer : register(b0)
+// {
+//     matrix ViewProjection;
+// };
+
+cbuffer CameraData : register(b0) {
+    matrix u_View_Matrix;
+    matrix u_Projection_Matrix;
+    float3 u_Camera_Position;
+};
+
+struct VSInputLayout
+{
+    float3 Position : POSITION;
+    float4 Color : COLOR;
+};
+
+struct PSInputLayout
+{
+    float4 Position : SV_POSITION;
+    float4 Color : COLOR0;
+};
+
+PSInputLayout VSMain(VSInputLayout input)
+{
+    PSInputLayout output;
+    output.Position = mul(float4(input.Position, 1.0), mul(u_View_Matrix, u_Projection_Matrix));
+    // output.Position = mul(float4(input.Position, 1.0), ViewProjection);
+    output.Color = input.Color;
+    return output;
+}
+
+float4 PSMain(PSInputLayout input) : SV_TARGET
+{
+    return input.Color;
+}
+HLSL;
+
+DEBUG_3D_SHADER_FOR_INSTANCING :: #string HLSL
+cbuffer CameraData : register(b0) {
+    matrix u_View_Matrix;
+    matrix u_Projection_Matrix;
+    float3 u_Camera_Position;
+};
+
+
+struct Sphere_Instancing_Data
+{
+    float4x4 Model;
+    float4 ColorScale;
+};
+
+StructuredBuffer<Sphere_Instancing_Data> u_Instance_Model : register(t0);
+
+struct VSInputLayout
+{
+    float3 Position : POSITION;
+    float4 Color : COLOR;
+};
+
+struct PSInputLayout
+{
+    float4 Position : SV_POSITION;
+    float4 Color : COLOR0;
+};
+
+PSInputLayout VSMain(VSInputLayout input, uint instanceID : SV_InstanceID)
+{
+    PSInputLayout output;
+    float4x4 instanceModel = u_Instance_Model[instanceID].Model;
+    float4 colorScale = u_Instance_Model[instanceID].ColorScale;
+
+    float3 world_pos = mul(float4(input.Position, 1.0f), instanceModel);
+    output.Position = mul(float4(world_pos, 1.0), mul(u_View_Matrix, u_Projection_Matrix));
+
+    output.Color.x = colorScale.x*input.Color.x;
+    output.Color.y = colorScale.y*input.Color.y;
+    output.Color.z = colorScale.z*input.Color.z;
+    output.Color.w = colorScale.w*input.Color.w;
+
+    return output;
+}
+
+float4 PSMain(PSInputLayout input) : SV_TARGET
+{
+    return input.Color;
+}
+HLSL;
+
+//:tagCode_Starts_Here_hashdasjdah
+    {
+      success_compiling_shader: bool;
+      shader_text := DEBUG_3D_SHADER;
+      vs_bytecode: string;
+      ps_bytecode: string;
+
+      ppVS: **ID3D11VertexShader = *g_jolt_renderer.vertex_shader;
+      ppPS: **ID3D11PixelShader = *g_jolt_renderer.pixel_shader;
+
+
+
+
+      vs_bytecode, success_compiling_shader = dx11_compile_vertex_shader(shader_text, ppVS);
+      if !success_compiling_shader then {log("[ERROR] Failed to compile vs_bytecode");return false;}
+      defer free(vs_bytecode);
+
+      ps_bytecode, success_compiling_shader = dx11_compile_pixel_shader(shader_text, ppPS);
+      if !success_compiling_shader then {log("[ERROR] Failed to compile ps_bytecode");return false;}
+      defer free(ps_bytecode);
+
+      //create input_layout, I think this was only needed once, whatever.
+      success_compiling_shader = dx11_shader_create_jolt_debug_input_layout(vs_bytecode);
+
+      if !success_compiling_shader then { log("[ERROR] failed at creating input layout"); return false; }
+      log("Success compiling shader \n");
+  }
+
+  #if SPHERE_INSTANCING_ENABLED
+  {
+        success_compiling_shader: bool;
+      shader_text := DEBUG_3D_SHADER_FOR_INSTANCING;
+      vs_bytecode: string;
+      ps_bytecode: string;
+
+      ppVS: **ID3D11VertexShader = *g_jolt_renderer.vertex_shader_for_instancing;
+      ppPS: **ID3D11PixelShader = *g_jolt_renderer.pixel_shader_for_instancing;
+
+
+
+
+      vs_bytecode, success_compiling_shader = dx11_compile_vertex_shader(shader_text, ppVS);
+      if !success_compiling_shader then {log("[ERROR] Failed to compile vs_bytecode");return false;}
+      defer free(vs_bytecode);
+
+      ps_bytecode, success_compiling_shader = dx11_compile_pixel_shader(shader_text, ppPS);
+      if !success_compiling_shader then {log("[ERROR] Failed to compile ps_bytecode");return false;}
+      defer free(ps_bytecode);
+
+      //create input_layout, I think this was only needed once, whatever.
+      success_compiling_shader = dx11_shader_create_jolt_debug_input_layout(vs_bytecode);
+
+      if !success_compiling_shader then { log("[ERROR] failed at creating input layout"); return false; }
+      log("Success compiling shader \n");
+
+  }
+  return true;
+}
