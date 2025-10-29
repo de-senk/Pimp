@@ -1,7 +1,7 @@
 game_coordinates :: struct {
-    forward :: Vector3.{1,0,0};
-    left 	:: Vector3.{0,1,0};
-    up 	    :: Vector3.{0,0,1};
+    forward :: Vector3.{0,0,1};
+    left 	:: Vector3.{1,0,0};
+    up 	    :: Vector3.{0,1,0};
 }
 
 main :: () {
@@ -80,22 +80,39 @@ main :: () {
 
 
 
-		// Draw coordinate axes
-		draw_line (.{}, .{x=1}, .{x=1, w=1});
-		draw_line (.{}, .{y=1}, .{y=1, w=1});
-		draw_line (.{}, .{z=1}, .{z=1, w=1});
-        using game_coordinates;
-        offset := -10.0*forward -10.0*up;
-        doLabel("physics coordinates", WorldToScreen(offset+2.0*left));
-		draw_line (offset, offset+1.0*forward, .{x=1, w=1}); doLabel("forward", WorldToScreen(offset+forward));
-		draw_line (offset, offset+1.0*up, .{y=1, w=1});      doLabel("up", WorldToScreen(offset+up));
-		draw_line (offset, offset+1.0*left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
-		// Draw grid
-		for i : -10..10
-			draw_line (xyz (xx i, -.1, -10), xyz (xx i, -.1, 10), .{0.4, 0.4, 0.4, 1});
-		for i : -10..10
-			draw_line (xyz (-10, -.1, xx i), xyz (10, -.1, xx i), .{0.4, 0.4, 0.4, 1});
-
+		//draw_coordinate_axes, if game and physcis coordinte overlap in position and orientation, then we have the same coords!
+		{
+		  //draw opengl coordinates to the rightmost corner to the rightmost of that coordinate
+          using game_coordinates;
+          offset := -10.0*forward -10.0*up;
+          doLabel("game coordinates", WorldToScreen(offset+2.0*up));
+		  draw_line(offset, offset+forward, .{x=1, w=1}); doLabel("forward", WorldToScreen(offset+forward));
+		  draw_line(offset, offset+up, .{y=1, w=1});      doLabel("up", WorldToScreen(offset+up));
+		  draw_line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
+        }
+        {
+        	{
+		  //draw opengl coordinates to the rightmost corner
+          using game_coordinates;
+		  draw_line(.{}, .{x=1}, .{x=1, w=1});doLabel("x", WorldToScreen(.{x=1}));
+		  draw_line(.{}, .{y=1}, .{y=1, w=1});doLabel("y", WorldToScreen(.{y=1}));
+		  draw_line(.{}, .{z=1}, .{z=1, w=1});doLabel("z", WorldToScreen(.{z=1}));
+        }
+        }
+        {
+		  //draw Physics coordinates to the rightmost corner to the rightmost of that coordinate
+          using physics.physics_coordinates;
+          offset := -10.0*forward -10.0*up;
+          doLabel("physics coordinates", WorldToScreen(offset+2.0*up));
+		  draw_line(offset, offset+forward, .{x=1, w=1}); doLabel("forward", WorldToScreen(offset+forward));
+		  draw_line(offset, offset+up, .{y=1, w=1});      doLabel("up", WorldToScreen(offset+up));
+		  draw_line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
+		  // Draw grid
+		  for i : -10..10
+		  	draw_line (xyz (xx i, -.1, -10), xyz (xx i, -.1, 10), .{0.4, 0.4, 0.4, 1});
+		  for i : -10..10
+		  	draw_line (xyz (-10, -.1, xx i), xyz (10, -.1, xx i), .{0.4, 0.4, 0.4, 1});
+        }
 
         quick_sort(drawing_commands, (a, b) => compare_render_commands(a.kind, b.kind));
 		for drawing_commands {

@@ -21,7 +21,7 @@ maybe_insert_DEBUG :: () -> string
         should_debug_be_true |= options.llvm_options.machine_code_optimization_setting == .UNSET;
     }
     //TODO(tr): check if debug already exsts with #if #exists(DEBUG) and... the TODO is to figure out what to do.
-    #if #exists(DEBUG) then return ""; //early return
+    #if #exists(DEBUG) then return ""; //:tagEarlyReturn
 
     b: String_Builder;
     print_to_builder(*b, "DEBUG :: %1; //inserted by maybe_insert_DEBUG", should_debug_be_true);
