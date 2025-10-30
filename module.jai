@@ -198,6 +198,7 @@ World :: struct {
     bodies     :  Bucket_Array(type=Body , items_per_bucket=count_RigidBody_Fitted_To_PageSize );
     hashed_bodies:  Table(u64, Bucket_Locator);
     constraints:  Bucket_Array(type=Constraint, items_per_bucket=count_Constraint_Fitted_To_PageSize);
+    hashed_constraints:  Table(u64, Bucket_Locator);
 
 
     //for CCD
@@ -239,9 +240,11 @@ Shape_Kind :: enum_flags u64 {
 Body :: struct {
     bucket_locator: Bucket_Locator; //FOR BODIES, NOT CONSTRAINTS! if you want the constraint bucket, use the pointer
     shape_kind: Shape_Kind;
+    previous_world_position: Vector3;
     world_position: Vector3;
     owner_position: Vector3;
     world_velocity: Vector3;
+    inv_mass: float;
     factor_energy_loss_on_collision: float=0.68;
     radius: float;
     latest_frame_of_existence: u64; //for should_cache check
@@ -263,18 +266,58 @@ find_nearest_ball :: (world_position: Vector3, radius: float32) -> found: bool, 
 }
 
 
-create_ball :: (world_position: Vector3, radius: float32) -> *Body {
+
+
+find_or_create_hook :: (hash: u64, body: *Body, world_attach_point: Vector3, rest_length: float ) -> *Constraint {
+    using context.solver.world;
+    locator_ptr := table_find_pointer(*hashed_constraints, hash);
+
+    hook_ptr: *Constraint;
+    if locator_ptr {
+        // basic.log("Cache detected!");
+        hook_ptr = bucket_array_find_pointer(*constraints, locator_ptr.*);
+    }
+
+    if !hook_ptr {
+        basic.log("creating new Hook cosntraint");
+        hook_ptr = create_hook(body, world_attach_point, rest_length);
+        hook_ptr.hash = hash;
+        table_set(*hashed_constraints, hash, hook_ptr.bucket_locator);
+     }
+
+    return hook_ptr;
+}
+
+//assumes local_attach_on_B center of B, local_attach_on_A same as world_attach_point because A is null. If A is null we mock it as the World itself.
+create_hook :: (body: *Body, world_attach_point: Vector3, rest_length: float) -> *Constraint {
+    constraint_ptr, bucket_locator := find_and_occupy_empty_slot(*context.solver.world.constraints);
+    constraint_ptr.bucket_locator = bucket_locator;
+    constraint_ptr.kind = .DISTANCE;
+    constraint_ptr.A = null;
+    constraint_ptr.B = body;
+     constraint_ptr.world_attach_point_A = world_attach_point;
+     constraint_ptr.local_attach_point_A = world_attach_point;
+     constraint_ptr.local_attach_point_B = .{};
+     constraint_ptr.world_attach_point_B = body.world_position;
+     constraint_ptr.rest_length = rest_length;
+    return constraint_ptr;
+}
+
+
+create_ball :: (world_position: Vector3, radius: float32, mass: float32) -> *Body {
     body, bucket_locator := find_and_occupy_empty_slot(*context.solver.world.bodies);
     body.bucket_locator = bucket_locator;
     body.shape_kind = .SPHERE;
+    body.previous_world_position = world_position;
     body.world_position = world_position;
     body.owner_position = world_position;
     body.radius = radius;
+    body.inv_mass = 1/mass;
     return body;
 }
 
 
-find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float) -> *Body {
+find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float, mass: float32) -> *Body {
     using context.solver.world;
     locator_ptr := table_find_pointer(*hashed_bodies, hash);
 
@@ -286,7 +329,7 @@ find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float) -> *Bo
 
     if !ball {
         basic.log("creating new ball");
-        ball = create_ball(ball_position, radius);
+        ball = create_ball(ball_position, radius, mass);
         ball.hash = hash;
         table_set(*hashed_bodies, hash, ball.bucket_locator);
      }
@@ -311,15 +354,26 @@ combine_hashes :: (a: u64, b: u64) -> u64 #no_aoc {
     return a * KNUTH_GOLDEN_RATIO_64 + b;
 }
 
-doBall :: (transform: *Matrix4, radius: float32 = 0.1, identifier:s64=0, loc := #caller_location) {
+doHook :: (body: *Body, world_attach_point: Vector3, rest_length: float = -1, identifier:s64=0, loc := #caller_location) {
+
+    CheckInit();
+    if rest_length < 0 then rest_length = distance(body.world_position, world_attach_point);
+    hash := get_hash(loc, identifier);
+    hook := find_or_create_hook(hash, body, world_attach_point, rest_length);
+    basic.assert(hook!=null);
+    hook.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
+}
+
+doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = 1.0, identifier:s64=0, loc := #caller_location) -> *Body {
     CheckInit();
     ball_position := get_translation(transform);
     hash := get_hash(loc, identifier);
-    ball := find_or_create_ball(hash, ball_position, radius);
+    ball := find_or_create_ball(hash, ball_position, radius, mass);
     basic.assert(ball!=null);
     ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
     ball.owner_position = ball_position;
     ball.world_position = ball_position;
+    ball.previous_world_position = ball_position;
     ball.user_data = transform;
     reflect_results_callback :: (body: *Body) {
         transform := cast(*Matrix4)body.user_data;
@@ -327,21 +381,64 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, identifier:s64=0, loc := 
         translate(transform, delta_pos);
     }
     ball.end_frame_callback = reflect_results_callback;
+    return ball;
 }
 
 
 Constraint :: struct {
     Kind :: enum {
+        DISTANCE;
         COLLISION;
         JOINT;
         SPRING;
         IGNORE_COLLISION;
     }
     bucket_locator: Bucket_Locator;
+    latest_frame_of_existence: u64;
+    hash: u64;
+
     kind: Kind;
     A, B: *Body;
+    local_attach_point_A: Vector3;
+    world_attach_point_A: Vector3;
+    world_attach_point_B: Vector3;
+    local_attach_point_B: Vector3;
+    rest_length: float;
 
 
+}
+
+// lambda = -C / (wi |grad C i|**2    +alpha/dt**2)
+solve :: (using constraint: *Constraint, delta_time: float) {
+    if kind == {
+        case .DISTANCE;
+         if A == null {
+            dir := B.world_position - world_attach_point_A;
+            len := length(dir);
+            if len < 0.001 then return;
+
+            error := (len - rest_length); //this would be C evaluated = error
+            grad_C := dir/len; //gradient of C for A
+            // basic.log("l % error:% % %",len, error, world_attach_point_A, B.world_position);
+            //lambda:
+            lambda := -error; // actually we should divide by inv_massi*|grad C i|**2 BUT we dont because It gets simplified in the next step for this specific case
+            // correction_vector_for_A := lambda*B.inv_mass*grad_C; //uselss
+            // correction_vector_for_B :=         correction_vector_for_A;
+            // basic.log("n: %",dir);
+            // basic.log("B: %\n ", B.*);
+            // basic.log("error: % ",error);
+            // basic.log("l: %", len);
+            // basic.log("grad_C: %", grad_C);
+            // basic.log("correction_vector: % ", grad_C*lambda);
+            // basic.log("world_attach_point_A: % ", world_attach_point_A);
+            // basic.log("B b: %", B.world_position);
+            // B.world_position += correction_vector_for_B;
+            B.world_position += grad_C*lambda;
+            // basic.log("B a: %",B.world_position);
+
+            basic.assert(length_squared(B.world_position-world_attach_point_A) -rest_length*rest_length< 0.1);
+         }
+    }
 }
 
 Simplest_Geometric_Shape :: struct {

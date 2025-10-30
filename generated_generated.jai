@@ -13,7 +13,7 @@ Solver :: struct {
     using world: *World;
     dt := 1.0 / 60.0;
     gravity := Vector3.{0, -10, 0};
-    iterations := 10;
+    iterations := 100;
     number_of_steps_executed_so_far: u64;
 };
 

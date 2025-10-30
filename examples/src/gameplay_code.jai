@@ -6,7 +6,11 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if is_key_down(#char "D") world_model = translate(world_model, delta_time*right);;
     if is_key_down(Key_Code.SPACEBAR) world_model = translate(world_model, delta_time*up*15.0);;
 
-    if !is_key_down(#char "G") physics.doBall(*world_model);;
+    if !is_key_down(#char "G") {
+
+        ball := physics.doBall(*world_model);;
+        if is_key_down(#char "H") physics.doHook(ball, .{ball.world_position.x, up.y,ball.world_position.z}, 1.0);;
+        }
 
 	// Update the mesh if the user selected another one.
 	// Ideally we would only call table_find_pointer when we know

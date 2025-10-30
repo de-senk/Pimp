@@ -14,41 +14,32 @@ Camera :: struct
 	projection_matrix := Matrix4_Identity;
 	view_projection_matrix := Matrix4_Identity;
 }
-WorldToScreen :: (position: Vector3) -> Vector3, is_inside_frustrum: bool {
-    // Get viewport dimensions
-    vx, vy, vw, vh := get_dimensions(g_window, false);
 
-    // Transform world position to clip space
+WorldToScreen :: (position: Vector3) -> Vector3, is_inside_frustrum: bool {
+    vx, vy, vw, vh := get_dimensions(g_window, false);
     world_pos := Vector4.{position.x, position.y, position.z, 1.0};
     clip_space := g_camera.view_projection_matrix * world_pos;
 
-    // Check if behind camera (negative w or z)
-    if clip_space.w <= 0 {
-        return .{}, false;
-    }
+    is_behind_camera := clip_space.w <= 0;
+    if is_behind_camera return .{}, false;
 
-    // Perspective divide to get NDC (Normalized Device Coordinates)
     ndc := Vector3.{
         clip_space.x / clip_space.w,
         clip_space.y / clip_space.w,
         clip_space.z / clip_space.w
     };
 
-    // Check if inside frustum (NDC bounds)
     is_inside_frustrum := (
         ndc.x >= -1.0 && ndc.x <= 1.0 &&
         ndc.y >= -1.0 && ndc.y <= 1.0 &&
         ndc.z >= -1.0 && ndc.z <= 1.0
     );
 
-    // Convert NDC to screen space
-    // Don't flip Y - the view matrix already handles the camera orientation
     screen_pos := Vector3.{
         (ndc.x + 1.0) * 0.5 * vw,
-        (ndc.y + 1.0) * 0.5 * vh,  // No flip - just map [-1,1] to [0,vh]
+        (ndc.y + 1.0) * 0.5 * vh,
         ndc.z
     };
-
     return screen_pos, is_inside_frustrum;
 }
 
@@ -59,9 +50,9 @@ WorldToScreenw :: (position: Vector3) -> Vector3, is_inside_frustrum: bool {
 	camera_position := g_camera.position;
     half := Vector3.{ vw * 0.5, vh * 0.5,0 };
     // return (position - camera_position) * camera_zoom() + half;
-    _, iV := inverse(g_camera.view_projection_matrix);
-    _, iP := inverse(g_camera.projection_matrix);
-    return iP*iV*(position - camera_position), is_inside_frustrum;
+    _, inv_view := inverse(g_camera.view_projection_matrix);
+    _, inv_proj := inverse(g_camera.projection_matrix);
+    return inv_proj*inv_view*(position - camera_position), is_inside_frustrum;
 }
 
 do_touch_input := OS == .ANDROID; // kinda hacky
@@ -165,13 +156,10 @@ update_flying_camera :: (using camera : *Camera, delta_time : float)
     // ray definition
     origin := world_ray_near.xyz;
     dir := (world_ray_far.xyz - world_ray_near.xyz);
-    log("add_to_array_of_vector_lines(origin,dir);");
+    log("TODO: DRAWING? add_to_array_of_vector_lines(origin,dir);");
     dir_n := normalize(dir);
     return origin, dir_n;
 }
-
-
-
 
 ScreenToWorld :: (position: Vector3) -> Vector3 {
     vx, vy, vw, vh := get_dimensions (g_window, false);
