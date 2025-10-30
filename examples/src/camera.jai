@@ -76,19 +76,19 @@ update_flying_camera :: (using camera : *Camera, delta_time : float)
 	// There is an ugly snap when you stop free looking as we instantly teleport to the position we would be
 	// in orbit with the free look angle.
 	touch_grabbing := false;
-	orbitting := false;
+	orbitting := true;
     // if do_touch_input {
-    // 	orbitting = touch_num_pointers < 2;
+        // orbitting = touch_num_pointers < 2;
 
-    // 	// Invert the delta and scale it on touch so dragging feels how you expect.
-    // 	scale_factor := ifx orbitting  0.5 else 0.25;
-    // 	mouse_delta_x = xx (cast(float) mouse_delta_x * scale_factor);
-    // 	mouse_delta_y = xx (cast(float) mouse_delta_y * scale_factor);
+        // // Invert the delta and scale it on touch so dragging feels how you expect.
+        // scale_factor := ifx orbitting  0.5 else 0.25;
+        // mouse_delta_x = xx (cast(float) mouse_delta_x * scale_factor);
+        // mouse_delta_y = xx (cast(float) mouse_delta_y * scale_factor);
 
-    // 	if orbitting mouse_delta_y *= -1;
-    // 	else         mouse_delta_x *= -1;
+        // if orbitting mouse_delta_y *= -1;
+        // else         mouse_delta_x *= -1;
 
-    // 	touch_grabbing = !getrect.is_grabbing();
+        // touch_grabbing = !getrect.is_grabbing();
     // }
 
 	if g_control_camera || touch_grabbing {

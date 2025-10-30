@@ -1,7 +1,11 @@
-game_coordinates :: struct {
-    forward :: Vector3.{0,0,1};
+game_coordinates :: struct { //TODO: To figure it out.
     left 	:: Vector3.{1,0,0};
     up 	    :: Vector3.{0,1,0};
+    forward :: Vector3.{0,0,1};
+
+    right  :: Vector3.{-1,0,0};
+    down   :: Vector3.{0,-1,0};
+    back   :: Vector3.{0,0,-1};
 }
 
 main :: () {
@@ -31,8 +35,7 @@ main :: () {
 
 	getrect.ui_init ();
 	init_fonts ();
-	if !init_rendering_objects ()
-		return;
+	assert(init_rendering_objects());
 	find_and_load_meshes_and_animations ();
 
 
@@ -48,7 +51,7 @@ main :: () {
 
 	while g_running
 	{
-	    array_reset(*drawing_commands);
+
 		frame_start := current_time_monotonic ();
 		defer reset_temporary_storage ();
 		update_window_events ();
@@ -62,22 +65,20 @@ main :: () {
 				reinit_fonts ();	// We want the fonts to scale with the window
 			}
 		}
-		for events_this_frame
-			handle_window_event (it);
+
+		for events_this_frame handle_window_event (it);
         {
 		  update_frame (delta_time);
 		  mouse_x, mouse_y := get_mouse_pointer_position(right_handed=false);
           handle_inputs_shared_between_modes();
 
 	    }
+
 		glDepthMask (GL_TRUE);
 		glEnable (GL_DEPTH_TEST);
 		simp.update_window (g_window);
 		simp.clear_render_target (0.1, 0.1, 0.1, 1);
 		glClear (GL_DEPTH_BUFFER_BIT);
-
-
-
 
 
 		//draw_coordinate_axes, if game and physcis coordinte overlap in position and orientation, then we have the same coords!
@@ -91,13 +92,12 @@ main :: () {
 		  draw_line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
         }
         {
-        	{
+
 		  //draw opengl coordinates to the rightmost corner
           using game_coordinates;
 		  draw_line(.{}, .{x=1}, .{x=1, w=1});doLabel("x", WorldToScreen(.{x=1}));
 		  draw_line(.{}, .{y=1}, .{y=1, w=1});doLabel("y", WorldToScreen(.{y=1}));
 		  draw_line(.{}, .{z=1}, .{z=1, w=1});doLabel("z", WorldToScreen(.{z=1}));
-        }
         }
         {
 		  //draw Physics coordinates to the rightmost corner to the rightmost of that coordinate
@@ -114,12 +114,16 @@ main :: () {
 		  	draw_line (xyz (-10, -.1, xx i), xyz (10, -.1, xx i), .{0.4, 0.4, 0.4, 1});
         }
 
+        //
+        //  Here is where we are actually drawing
+        //
         quick_sort(drawing_commands, (a, b) => compare_render_commands(a.kind, b.kind));
 		for drawing_commands {
 		  actual_draw(it);
 		}
+	    array_reset(*drawing_commands);
 
-		update_ui (delta_time);
+		update_ui (delta_time); //Hopefully I will be able to get rid of this procedure in the future.
 
 		simp.swap_buffers (g_window);
 		// On android, drawing is throttled to the screen update rate, so there is no need
@@ -127,17 +131,22 @@ main :: () {
 		#if (OS != .ANDROID)  && (OS != .WASM) {
 			sleep_milliseconds (10);
 		}
+
+		//do not use defers for these, why? because having explicit control flow is always better.
 		frame_end := current_time_monotonic ();
 		delta_time = cast (float) to_float64_seconds (frame_end - frame_start);
 	}
 }
 
-all_entities: [64]Entity;
+all_entities: [..]Entity;
 Entity :: struct {
     position: Vector3;
     orientation: Vector3;
-    world_model: Matrix4;
-
+    world_model: Matrix4 = Matrix4_Identity;
+    is_player0: bool;
+    is_a_box: bool;
+    is_a_wall: bool;
+    is_a_floor_or_ceiling: bool;
     skin_mesh : *Skinned_Mesh;
 }
 
@@ -160,6 +169,9 @@ handle_inputs_shared_between_modes:: () {
     }
 }
 
+g_game_state : struct {
+    should_start_scene: bool = true;
+}
 
 update_frame :: (delta_time : float)
 {
@@ -171,75 +183,21 @@ update_frame :: (delta_time : float)
 		x, y, w, h := get_dimensions (g_window, false);
 		set_mouse_pointer_position (w / 2, h / 2);
 	}
-
+    if g_game_state.should_start_scene {
+        g_game_state.should_start_scene = false;
+        //create player0
+        player0 :Entity;
+        player0.is_player0 = true;
+        array_add(*all_entities, player0);
+    }
 	update_flying_camera (*g_camera, delta_time);
 
     for *all_entities {
-        using it;
-
-        if it_index != 0 then break; //@Prototype first entity
-    	// Update the mesh if the user selected another one.
-    	// Ideally we would only call table_find_pointer when we know
-    	// the user selected another mesh, but I can't find a way to
-    	// do that in GetRect.
-
-    	if g_params.mesh_index == 0
-    		skin_mesh = null;
-    	else
-    		skin_mesh = table_find_pointer (*g_loaded_meshes, g_params.mesh_names[g_params.mesh_index]);
-
-    	if g_mesh != skin_mesh
-    	{
-    		g_mesh = skin_mesh;
-    		// We changed the mesh, so reallocate a new pose
-    		free_pose (*g_pose);
-    		if g_mesh
-    			g_pose = make_pose_for_skeleton (g_mesh);
-    	}
-
-    	anim : *Sampled_Animation;
-    	if g_params.animation_index > 0
-    		anim = table_find_pointer (*g_loaded_animations, g_params.animation_names[g_params.animation_index]);
-    	else
-    		anim = null;
-
-    	if g_mesh
-    	{
-    		// We reset to the bind pose because the animation
-    		// might not have all of the joints our pose has.
-    		reset_to_bind_pose (*g_pose);
-    		if anim && g_params.show_animation
-    		{
-    			sample_animation (
-    				anim,
-    				g_params.animation_time,
-    				*g_pose,
-    				g_params.interpolation_mode
-    			);
-    		}
+        // using it; I don't need to use it anymore.
+        if it.is_player0 then do_player0_gamecode(it, delta_time);
 
 
-           wpos := get_world_position(*g_pose, "DEF-spine.004");
-           spos := WorldToScreen(wpos);
 
-    	   if g_params.show_mesh doLabel("GLADIATOR", spos.x, spos.y, spos.z);
-           if g_params.show_mesh Draw(g_mesh, Matrix4_Identity, g_pose.skinning_matrices);
-           if g_params.show_skeleton Draw(*g_pose, Matrix4_Identity, xyzw (g_params.skeleton_color, 1));
-
-    	}
-
-    	// Increment animation time
-    	if anim
-    	{
-    		g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
-    		g_params.animation_time = fmod_cycling (g_params.animation_time, xx anim.sample_count);
-    	}
-    	else
-    		g_params.animation_time = 0;
-
-    	// We transpose the result because OpenGL stores matrices in column-major
-    	if g_mesh
-    		generate_skinning_matrices (*g_pose, transpose_result = true);
 
 	} //for all entities
 }
@@ -340,6 +298,7 @@ physics ::#import,file"../module.jai";
 #load "src/anim.jai";
 #load "src/ui.jai";
 #load "src/draw_commands.jai";
+#load "src/gameplay_code.jai";
 
 
 

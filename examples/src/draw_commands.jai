@@ -34,8 +34,32 @@ actual_draw :: (using cmd: Draw_Command) {
     }
 }
 
+
+draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matrices : []Matrix4)
+{
+
+	glDepthMask (GL_TRUE); //:tagMaybeCache
+	glEnable (GL_DEPTH_TEST);
+	assert (skinning_matrices.count <= MAX_JOINTS, "Skinning matrices array cannot have more than % elements for now.");
+
+	// Fill the uniform buffer with the skinning data
+	glBindBuffer (GL_UNIFORM_BUFFER, g_big_data_ubo);
+	glBufferSubData (GL_UNIFORM_BUFFER, 0, size_of (Matrix4) * skinning_matrices.count, skinning_matrices.data);
+	glBindBuffer (GL_UNIFORM_BUFFER, 0);
+
+	glBindVertexArray (vao);
+	glBindBuffer (GL_ARRAY_BUFFER, vbo);
+	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
+	glUseProgram (g_mesh_shader);
+
+	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_Model_Matrix"), 1, GL_TRUE, *model_matrix.coef[0][0]);
+	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_View_Projection_Matrix"), 1, GL_TRUE, *g_camera.view_projection_matrix.coef[0][0]);
+
+	glDrawElements (GL_TRIANGLES, cast (u32) indices.count, GL_UNSIGNED_INT, null);
+}
+
 draw_ui_element :: (using uircmd : UI_RENDER_COMMAND) {
-    glDisable (GL_DEPTH_TEST);
+    glDisable (GL_DEPTH_TEST); //:tagMaybeCache
 	glDepthMask (GL_FALSE);
 	simp.set_shader_for_color ();
 
@@ -75,28 +99,6 @@ draw_pose :: (using pose : Skeleton_Pose, transform : Matrix4, color : Vector4)
 }
 
 
-draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matrices : []Matrix4)
-{
-
-	glDepthMask (GL_TRUE); //:tagMaybeCache
-	glEnable (GL_DEPTH_TEST);
-	assert (skinning_matrices.count <= MAX_JOINTS, "Skinning matrices array cannot have more than % elements for now.");
-
-	// Fill the uniform buffer with the skinning data
-	glBindBuffer (GL_UNIFORM_BUFFER, g_big_data_ubo);
-	glBufferSubData (GL_UNIFORM_BUFFER, 0, size_of (Matrix4) * skinning_matrices.count, skinning_matrices.data);
-	glBindBuffer (GL_UNIFORM_BUFFER, 0);
-
-	glBindVertexArray (vao);
-	glBindBuffer (GL_ARRAY_BUFFER, vbo);
-	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
-	glUseProgram (g_mesh_shader);
-
-	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_Model_Matrix"), 1, GL_TRUE, *model_matrix.coef[0][0]);
-	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_View_Projection_Matrix"), 1, GL_TRUE, *g_camera.view_projection_matrix.coef[0][0]);
-
-	glDrawElements (GL_TRIANGLES, cast (u32) indices.count, GL_UNSIGNED_INT, null);
-}
 
 #if 0 {
 NUM_VERTEX_OF_SPHERE :: 3072;

@@ -364,7 +364,6 @@ generate_skinning_matrices :: (using pose : *Skeleton_Pose, transpose_result : b
 }
 
 
-
 get_world_position :: (pose : *Skeleton_Pose, joint_name: string, world_model := Matrix4_Identity) -> Vector3 {
 		ok, joint_index := table_find(*pose.skeleton.name_to_joint_id, joint_name);
 		assert (ok);
