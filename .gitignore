@@ -3,6 +3,7 @@
 
 *.exp
 *.pdb
+*.rdi
 # Prerequisites
 *.d
 

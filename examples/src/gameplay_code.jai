@@ -4,9 +4,9 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if is_key_down(#char "S") world_model = translate(world_model, delta_time*(back));;
     if is_key_down(#char "A") world_model = translate(world_model, delta_time*left);;
     if is_key_down(#char "D") world_model = translate(world_model, delta_time*right);;
-    if is_key_down(Key_Code.SPACEBAR) world_model = translate(world_model, delta_time*up);;
+    if is_key_down(Key_Code.SPACEBAR) world_model = translate(world_model, delta_time*up*15.0);;
 
-    
+    physics.doBall(*world_model);
 	// Update the mesh if the user selected another one.
 	// Ideally we would only call table_find_pointer when we know
 	// the user selected another mesh, but I can't find a way to

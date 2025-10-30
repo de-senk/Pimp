@@ -73,7 +73,13 @@ main :: () {
           handle_inputs_shared_between_modes();
 
 	    }
-
+        //
+        // Physics STEP simulate
+        //
+        physics.simulate();
+        //
+        // Drawing pass
+        //
 		glDepthMask (GL_TRUE);
 		glEnable (GL_DEPTH_TEST);
 		simp.update_window (g_window);

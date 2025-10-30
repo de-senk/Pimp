@@ -8,12 +8,9 @@ physics_coordinates :: struct {
     down 	:: #run -up;
 }
 //:tagDecisionsReasonings
-#import "Math";
-b :: #import "Basic";
+
 
 #add_context solver: *Solver;
-#import,file "math.jai";
-#import "SIMD_Math";
 
 
 
@@ -111,14 +108,14 @@ deactivate_logger :: () #expand {
     }
 }
 
-#run b.log("[TODO] more robust contact caching");
+#run basic.log("[TODO] more robust contact caching");
 //EPSILON float32  0.123456789
 
 #scope_export
 
 log_TODO :: (loc:= #caller_location) {
  //this is for VSCODE |||filepath line:character|||: fk vscode I uninstalled it forever.
-  b.log("TODO % %:%", loc.fully_pathed_filename, loc.line_number, loc.character_number);
+  basic.log("TODO % %:%", loc.fully_pathed_filename, loc.line_number, loc.character_number);
 }
 
 
@@ -142,6 +139,20 @@ log_TODO :: (loc:= #caller_location) {
 //     initialize_physics_solver();
 //     context.solver.world.default_cube_shape = create_cube_hull(.{0, 0, 0}, .{1, 1, 1});
 // } @dll_export
+
+// #program_export
+create_solver_and_world :: () {
+    // Remap_Context();
+    context.solver = basic.New(Solver);
+    context.solver.world = basic.New(World);
+} @dll_export
+
+
+CheckInit :: () #expand {
+    if !context.solver  create_solver_and_world();
+    `state := context.solver;
+
+}
 
 
 //
@@ -182,10 +193,11 @@ World :: struct {
 
     //this might be pointless, but I just try to makea bucket arrays of the size of a page size of virtual memory
     count_Constraint_Fitted_To_PageSize :: 8*4096 / size_of(Constraint); // size*count=4096*8bit=bucket_size -> count=4096*8;
-    count_RigidBody_Fitted_To_PageSize :: 8*4096 / size_of(RigidBody); // size*count=4096*8bit=bucket_size -> count=4096*8;
+    count_RigidBody_Fitted_To_PageSize :: 8*4096 / size_of(Body); // size*count=4096*8bit=bucket_size -> count=4096*8;
 
-    bodies     :  Bucket_Array(type=RigidBody , items_per_bucket=count_RigidBody_Fitted_To_PageSize ); // old XAR comment: 1<<(8 +4 -1) 2048
-    constraints:  Bucket_Array(type=Constraint, items_per_bucket=count_Constraint_Fitted_To_PageSize); //old XAR comment: 8^4 = 4096
+    bodies     :  Bucket_Array(type=Body , items_per_bucket=count_RigidBody_Fitted_To_PageSize );
+    hashed_bodies:  Table(u64, Bucket_Locator);
+    constraints:  Bucket_Array(type=Constraint, items_per_bucket=count_Constraint_Fitted_To_PageSize);
 
 
     //for CCD
@@ -203,7 +215,7 @@ World :: struct {
 Solver :: struct {
     using world: *World;
     dt          := 1.0 / 60.0;
-    gravity     := Vector3.{0,0,-10};
+    gravity     := Vector3.{0,-10,0};
     iterations  := 10;
     number_of_steps_executed_so_far : u64;
 } @dll_export
@@ -224,12 +236,93 @@ Shape_Kind :: enum_flags u64 {
     CAPSULEvsPLANE :: Shape_Kind.CAPSULE | Shape_Kind.PLANE;
 }
 
-RigidBody :: struct {
+Body :: struct {
     bucket_locator: Bucket_Locator; //FOR BODIES, NOT CONSTRAINTS! if you want the constraint bucket, use the pointer
+    shape_kind: Shape_Kind;
+    world_position: Vector3;
+    owner_position: Vector3;
+    world_velocity: Vector3;
+    factor_energy_loss_on_collision: float=0.18;
+    radius: float;
+    latest_frame_of_existence: u64; //for should_cache check
+    end_frame_callback: (body: *Body)->();
+    user_data: *void;
+}
 
+//idea: [past    (pr]ese{nt) future } ||  [past  ]  (present) { future }  ||  [past   (prese ]nt) { future }  || [past  { future }  (prese ]nt)
+find_nearest_ball :: (world_position: Vector3, radius: float32) -> found: bool, ball: *Body {
+    for *context.solver.world.bodies {
+        if it.shape_kind == .SPHERE {
+            if length_squared(world_position - it.world_position) < radius*radius {
+                return true, it;
+            }
+        }
+    }
+    return false, null;
 }
 
 
+create_ball :: (world_position: Vector3, radius: float32) -> *Body {
+    body, bucket_locator := find_and_occupy_empty_slot(*context.solver.world.bodies);
+    body.bucket_locator = bucket_locator;
+    body.shape_kind = .SPHERE;
+    body.world_position = world_position;
+    body.owner_position = world_position;
+    body.radius = radius;
+    return body;
+}
+
+
+find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float) -> *Body {
+    using context.solver.world;
+    locator_ptr := table_find_pointer(*hashed_bodies, hash);
+
+    ball: *Body;
+    if locator_ptr {
+        // basic.log("Cache detected!");
+        ball = bucket_array_find_pointer(*bodies,locator_ptr.*);
+    } else {
+        basic.log("creating new ball");
+        ball = create_ball(ball_position, radius);
+        table_set(*hashed_bodies, hash, ball.bucket_locator);
+     }
+
+    return ball;
+}
+
+KNUTH_GOLDEN_RATIO_64 :: 11400714819323198485;
+
+get_hash :: (loc: Source_Code_Location, identifier: s64) -> u64 {
+    Hash :: #import "Hash";
+    // Maybe we should hash the filename pointer in order to better prevent collisions.
+    name_hash := Hash.djb2_hash(loc.fully_pathed_filename);
+    line_hash := Hash.knuth_hash(cast,no_check(u64) loc.line_number);
+    identifier_hash := Hash.knuth_hash(cast,no_check(u64) identifier);
+
+    result := combine_hashes(name_hash, combine_hashes(line_hash, identifier_hash));
+    return result;
+}
+
+combine_hashes :: (a: u64, b: u64) -> u64 #no_aoc {
+    return a * KNUTH_GOLDEN_RATIO_64 + b;
+}
+
+doBall :: (transform: *Matrix4, radius: float32 = 0.1, identifier:s64=0, loc := #caller_location) {
+    CheckInit();
+    ball_position := get_translation(transform);
+    hash := get_hash(loc, identifier);
+    ball := find_or_create_ball(hash, ball_position, radius);
+    basic.assert(ball!=null);
+    ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
+    ball.owner_position = ball_position;
+    ball.user_data = transform;
+    reflect_results_callback :: (body: *Body) {
+        transform := cast(*Matrix4)body.user_data;
+        delta_pos := body.world_position - body.owner_position;
+        translate(transform, delta_pos);
+    }
+    ball.end_frame_callback = reflect_results_callback;
+}
 
 
 Constraint :: struct {
@@ -241,7 +334,7 @@ Constraint :: struct {
     }
     bucket_locator: Bucket_Locator;
     kind: Kind;
-    A, B: *RigidBody;
+    A, B: *Body;
 
 
 }
@@ -265,10 +358,10 @@ simplex_add :: (simplex: *Simplest_Geometric_Shape, point: Vector3) {
 		simplex.points[0] = simplex.points[1];
 		simplex.points[1] = simplex.points[2];
 		simplex.points[2] = simplex.points[3];
-		#if DEBUG b.assert(simplex.count == 4, "simplex should be count 4 here.");
+		#if DEBUG basic.assert(simplex.count == 4, "simplex should be count 4 here.");
 	} else {
 		simplex.count += 1;
-		#if DEBUG b.assert(simplex.count <= 4, "simplex count is biger than 4 fix the code.");
+		#if DEBUG basic.assert(simplex.count <= 4, "simplex count is biger than 4 fix the code.");
 	}
 	simplex.points[simplex.count - 1] = point;
 }
@@ -277,6 +370,12 @@ COLLISION_MARGIN :: 0.001;
 
 #load "simulate.jai";
 
+
+#import "Math";
+#import "Hash_Table";
+#import,file "math.jai";
+#import "SIMD_Math";
+basic :: #import "Basic";
 
 #scope_module
 
