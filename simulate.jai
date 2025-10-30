@@ -7,6 +7,16 @@ simulate :: () {
     context.stack_trace = *old_stack_trace[1]; //2 of 2: maybe needs bug fix? already mailed to jon.
     using context.solver;
 
+    //cleanup cache
+    for *bodies
+    {
+       should_delete := it.latest_frame_of_existence != number_of_steps_executed_so_far;
+       if should_delete {
+        table_remove(*hashed_bodies, it.hash);
+        remove it;
+       }
+    }
+
     number_of_steps_executed_so_far += 1;
     {
     for *bodies

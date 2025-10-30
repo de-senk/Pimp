@@ -242,11 +242,12 @@ Body :: struct {
     world_position: Vector3;
     owner_position: Vector3;
     world_velocity: Vector3;
-    factor_energy_loss_on_collision: float=0.18;
+    factor_energy_loss_on_collision: float=0.68;
     radius: float;
     latest_frame_of_existence: u64; //for should_cache check
     end_frame_callback: (body: *Body)->();
     user_data: *void;
+    hash: u64; //for immediate mode caching invalidation
 }
 
 //idea: [past    (pr]ese{nt) future } ||  [past  ]  (present) { future }  ||  [past   (prese ]nt) { future }  || [past  { future }  (prese ]nt)
@@ -281,9 +282,12 @@ find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float) -> *Bo
     if locator_ptr {
         // basic.log("Cache detected!");
         ball = bucket_array_find_pointer(*bodies,locator_ptr.*);
-    } else {
+    }
+
+    if !ball {
         basic.log("creating new ball");
         ball = create_ball(ball_position, radius);
+        ball.hash = hash;
         table_set(*hashed_bodies, hash, ball.bucket_locator);
      }
 
@@ -315,6 +319,7 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, identifier:s64=0, loc := 
     basic.assert(ball!=null);
     ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
     ball.owner_position = ball_position;
+    ball.world_position = ball_position;
     ball.user_data = transform;
     reflect_results_callback :: (body: *Body) {
         transform := cast(*Matrix4)body.user_data;
