@@ -1,6 +1,7 @@
 
 .build
 
+*.joi #for code I dont want to upload
 *.exp
 *.pdb
 *.rdi
