@@ -2,7 +2,8 @@
 .build
 generated_generated.jai
 
-*.joi #for code I dont want to upload
+#for code I dont want to upload
+*.joi
 *.exp
 *.pdb
 *.rdi
