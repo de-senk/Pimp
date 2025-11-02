@@ -1,6 +1,5 @@
 
 .build
-generated_generated.jai
 
 #for code I dont want to upload
 *.joi
