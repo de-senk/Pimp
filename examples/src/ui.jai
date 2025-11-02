@@ -1,6 +1,6 @@
 g_params : struct
 {
-	mesh_names : []string;
+	mesh_names : [..]string;
 	mesh_index : s32;
 	animation_names : []string;
 	animation_index : s32;

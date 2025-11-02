@@ -1,4 +1,5 @@
 g_mesh_shader : GLuint;
+g_soft_mesh_shader : GLuint;
 g_line_shader : GLuint;
 g_line_vao, g_line_vbo : GLuint;
 g_big_data_ubo : GLuint;
@@ -124,12 +125,23 @@ init_rendering_objects :: () -> bool
 	// The source of these programs are at the end of the file.
 	ok : bool;
 	g_mesh_shader, ok = create_shader_program (MESH_VERTEX_SHADER, MESH_FRAGMENT_SHADER);
-	if !ok
-		return false;
+	if !ok return false;
 	// We need to bind the block in the mesh shader to a binding point
 	// that we define to be GL_BIG_DATA_UNIFORM_BINDING
 	big_data_uniform_index := glGetUniformBlockIndex (g_mesh_shader, "Big_Data");
 	glUniformBlockBinding (g_mesh_shader, big_data_uniform_index, GL_BIG_DATA_UNIFORM_BINDING);
+
+	// Create the shader programs we will use throughout
+	// our application to render meshes and lines.
+	// The source of these programs are at the end of the file.
+	{
+	 ok : bool;
+	 g_soft_mesh_shader, ok = create_shader_program (MESH_VERTEX_SHADER_SOFT, MESH_FRAGMENT_SHADER);
+	 if !ok return false;
+	 big_data_uniform_index := glGetUniformBlockIndex (g_mesh_shader, "Big_Data");
+	 glUniformBlockBinding (g_mesh_shader, big_data_uniform_index, GL_BIG_DATA_UNIFORM_BINDING);
+    }
+
 
 	g_line_shader, ok = create_shader_program (LINE_VERTEX_SHADER, LINE_FRAGMENT_SHADER);
 	if !ok
@@ -162,7 +174,7 @@ init_rendering_objects :: () -> bool
 	return true;
 }
 
-init_mesh_rendering_objects :: (using mesh : *Skinned_Mesh)
+init_mesh_rendering_objects :: (using mesh : *Skinned_Mesh, $dynamic := false)
 {
 	// OpenGL stuff... We need a vertex buffer, that holds
 	// all our vertices, and an index buffer, that holds
@@ -171,7 +183,9 @@ init_mesh_rendering_objects :: (using mesh : *Skinned_Mesh)
 	glGenBuffers (1, *vbo);
 	glBindBuffer (GL_ARRAY_BUFFER, vbo);
 	defer glBindBuffer (GL_ARRAY_BUFFER, 0);
-	glBufferData (GL_ARRAY_BUFFER, size_of (Vertex) * vertices.count, vertices.data, GL_STATIC_DRAW);
+    #if dynamic
+    then glBufferData (GL_ARRAY_BUFFER, size_of (Vertex) * vertices.count, vertices.data, GL_DYNAMIC_DRAW);
+	else glBufferData (GL_ARRAY_BUFFER, size_of (Vertex) * vertices.count, vertices.data, GL_STATIC_DRAW);
 
 	glGenBuffers (1, *ibo);
 	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
@@ -233,7 +247,7 @@ END
 }
 
 
-MESH_VERTEX_SHADER :: #run sprint(#string END
+MESH_VERTEX_SHADER :: #run sprint(#string GLSL
 // These will be replaced with the values we defined in the Jai source code
 const int MAX_JOINTS  = %1;
 const int MAX_WEIGHTS = %2;
@@ -283,9 +297,57 @@ void main ()
 	gl_Position = u_View_Projection_Matrix * u_Model_Matrix * vec4 (model_position, 1);
 	Normal = model_normal.xyz;
 }
-END, MAX_JOINTS, MAX_WEIGHTS);
+GLSL, MAX_JOINTS, MAX_WEIGHTS);
 
 MESH_FRAGMENT_SHADER :: #string GLSL
+
+in vec3 Normal;
+
+out vec4 Frag_Color;
+
+void main ()
+{
+	Frag_Color = vec4 (Normal, 1);
+}
+GLSL
+
+MESH_VERTEX_SHADER_SOFT :: #run sprint(#string END
+// These will be replaced with the values we defined in the Jai source code
+const int MAX_JOINTS  = %1;
+const int MAX_WEIGHTS = %2;
+
+layout (location = 0) in vec3 a_Position;
+layout (location = 1) in vec3 a_Normal;
+layout (location = 2) in vec3 a_Weights;
+layout (location = 3) in ivec4 a_Joint_Ids;
+
+uniform mat4 u_Model_Matrix;
+uniform mat4 u_View_Projection_Matrix;
+// A simple uniform variable cannot hold a lot of data,
+// so we use a uniform block to store the skinning information.
+// A uniform block can hold more data, and we check if the
+// OpenGL implementation allows us to store enough at the
+// start of the program.
+layout (std140) uniform Big_Data
+{
+	mat4 u_Skinning_Matrices[MAX_JOINTS];
+};
+
+out vec3 Normal;
+
+void main ()
+{
+	vec3 model_position = vec3 (0);
+	vec3 model_normal = vec3 (0);
+	model_position = a_Position;
+	model_normal   = a_Normal;
+
+	gl_Position = u_View_Projection_Matrix * u_Model_Matrix * vec4 (model_position, 1);
+	Normal = model_normal.xyz;
+}
+END, MAX_JOINTS, MAX_WEIGHTS);
+
+MESH_FRAGMENT_SHADER_SOFT :: #string GLSL
 
 in vec3 Normal;
 

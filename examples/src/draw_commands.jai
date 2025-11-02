@@ -50,10 +50,15 @@ draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matric
 	glBindVertexArray (vao);
 	glBindBuffer (GL_ARRAY_BUFFER, vbo);
 	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
-	glUseProgram (g_mesh_shader);
 
-	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_Model_Matrix"), 1, GL_TRUE, *model_matrix.coef[0][0]);
-	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_View_Projection_Matrix"), 1, GL_TRUE, *g_camera.view_projection_matrix.coef[0][0]);
+	shader_to_use := g_mesh_shader;
+	if mesh.joints.count == 0 then {
+	   shader_to_use = g_soft_mesh_shader;
+	   glBufferSubData (GL_ARRAY_BUFFER, 0, size_of (Vertex) * vertices.count, vertices.data);
+	}
+	glUseProgram (shader_to_use);
+	glUniformMatrix4fv (glGetUniformLocation (shader_to_use, "u_Model_Matrix"), 1, GL_TRUE, *model_matrix.coef[0][0]);
+	glUniformMatrix4fv (glGetUniformLocation (shader_to_use, "u_View_Projection_Matrix"), 1, GL_TRUE, *g_camera.view_projection_matrix.coef[0][0]);
 
 	glDrawElements (GL_TRIANGLES, cast (u32) indices.count, GL_UNSIGNED_INT, null);
 }

@@ -127,6 +127,7 @@ main :: () {
 		for drawing_commands {
 		  actual_draw(it);
 		}
+		for *context.solver.world.soft_bodies init_softbody_mesh(it, it_index);
 	    array_reset(*drawing_commands);
 
 		update_ui (delta_time); //Hopefully I will be able to get rid of this procedure in the future.
@@ -231,81 +232,6 @@ decompose_transform :: inline (mat : Matrix4) -> translation : Vector3, rotation
 }
 
 
-#import "Basic";
-#import "String";
-#import "Window_Creation";
-#import "SIMD_Math";
-using Input :: #import "Input";
-
-DEBUG :: false;
-
-#if OS == {
-    case .WINDOWS; #load "platform/windows.jai";
-}
-#load "platform/stub.jai";
-
-was_key_released:: inline (key : Key_Code) -> bool
-{
-    return (input_button_states[cast (s64) key] & .END) != 0;
-}
-
-was_key_pressed :: inline (key : Key_Code) -> bool
-{
-    return (input_button_states[cast (s64) key] & .START) != 0;
-}
-
-my_is_key_down :: inline (key : Key_Code) -> bool
-{
-    return (input_button_states[cast (s64) key] & .DOWN) != 0;
-}
-
-// Things that we define ourselves but they probably should be
-// added to the appropriate modules:
-
-is_key_down :: inline (key : Key_Code) -> bool
-{
-	return (input_button_states[cast (s64) key] & .DOWN) != 0;
-}
-
-
-// Math Matrices are row-major. In other words,
-// you have [row 0][row 1][row 2][...] in memory.
-#import "Math";
-#import "File";
-#import "File_Utilities";
-#import "System";
-#import "Hash_Table";
-
-#import "Sort";
-#import "Bucket_Array";
-
-#if OS == .ANDROID {
-    #import "Android"()(main);
-    #import "Android/File";
-    #import "Android/GLES";
-    #import "Android/Jni";
-    #import "Android/Log";
-    #import "Android/Native_App";
-} else #if OS == .WASM {
-    #import "Toolchains/Web/WebGL";
-} else {
-    #import "GL";
-}
-
-simp :: #import "Simp";
-getrect :: #import "GetRect";
-
-physics ::#import,file"../module.jai";
-
-#load "src/parse_utils.jai";
-#load "src/render.jai";
-#load "src/camera.jai";
-#load "src/mesh.jai";
-#load "src/anim.jai";
-#load "src/ui.jai";
-#load "src/draw_commands.jai";
-#load "src/gameplay_code.jai";
-
 
 
 MAX_WEIGHTS :: 4;
@@ -381,6 +307,102 @@ init_fonts :: ()
 	g_dropdown_font = g_slider_font;
 }
 
+init_softbody_mesh :: (this: *physics.Soft_Body, idx: int) {
+    if !this.is_initialized then return;
+    if this.is_graphics_initialized then return;
+
+    mesh : Skinned_Mesh;
+    populate_mesh(this, *mesh);
+    init_mesh_rendering_objects (*mesh, dynamic=true);
+    name_on_heap := sprint("softbody_%",idx);
+    table_add (*g_loaded_meshes, name_on_heap, mesh);
+    array_add(*g_params.mesh_names, (name_on_heap));
+    this.is_graphics_initialized = true;
+
+}
+
+
+// Soft_Body :: struct {
+//     is_initialized: bool;
+//     is_graphics_initialized: bool;
+//     numParticles  : s64     ;
+//     numTets       : s64     ;
+//     pos           : []float ;
+//     prevPos       : []float ;
+//     vel           : []float ;
+//     tetIds        : []u32   ;
+//     edgeIds       : []u32   ;
+//     triangleList       : []u32   ;
+//     restVol       : []float ;
+//     edgeLengths   : []float ;
+//     invMass       : []float ;
+//     edgeCompliance: float   ;
+//     volCompliance : float   ;
+//     tempp         : []float ;
+//     grads         : []float ;
+//     grabId        : s32     ;
+//     grabInvMass   : float   ;
+
+
+// 	volIdOrder: = ([3]u32).[u32.[1,3,2], u32.[0,2,3], u32.[0,3,1], u32.[0,1,2]];
+// };
+
+populate_mesh :: (this: *physics.Soft_Body, mesh: *Skinned_Mesh) {
+
+// Vertex :: struct
+// {
+// 	position : Vector3;
+// 	normal   : Vector3;
+// 	// We can have at most 4 weights, but they have to sum up
+// 	// to 1, so the last one can be calculated and we don't store it.
+// 	weights  : Vector3;
+// 	joints   : [4]s16;
+// }
+
+// Skinned_Mesh :: struct
+// {
+// 	#as using skeleton : Skeleton;
+// 	vertices : []Vertex;
+// 	indices  : []u32;
+// 	vao, vbo, ibo : GLuint;
+// }
+    // mesh.joints.count
+    mesh.vertices.count = this.numParticles;
+    mesh.indices.count = this.triangleList.count;
+
+	all_data := alloc (size_of (Skeleton.Joint) * mesh.joints.count
+		+ size_of (Vertex) * mesh.vertices.count
+		+ size_of (u32) * mesh.indices.count
+	);
+
+    //oh init table...
+	init (*mesh.name_to_joint_id, mesh.joints.count);
+	mesh.joints.data   = all_data;
+	mesh.vertices.data = cast (*Vertex) (mesh.joints.data + mesh.joints.count);
+	mesh.indices.data  = cast (*u32) (mesh.vertices.data + mesh.vertices.count);
+    // for * mesh.joints
+    // for * mesh.joints {
+    // mesh.vertices.data = this.pos.data.(*Vector3);
+    sync_positions_with_renderer(this,mesh);
+    mesh.indices.data = this.triangleList.data;
+    // for * mesh.indices {
+    //     it.* = this.triangleList[it_index];
+    // }
+}
+
+sync_positions_with_renderer :: (this: *physics.Soft_Body, mesh: *Skinned_Mesh) {
+
+    for * mesh.vertices {
+        it.position.x = this.pos[it_index*3 + 0];
+        it.position.y = this.pos[it_index*3 + 1];
+        it.position.z = this.pos[it_index*3 + 2];
+        // it.position.x = physics.bunnyMesh.verts[it_index*3 + 0];
+        // it.position.y = physics.bunnyMesh.verts[it_index*3 + 1];
+        // it.position.z = physics.bunnyMesh.verts[it_index*3 + 2];
+        it.normal = .{1,0,0};
+    }
+}
+
 find_and_load_meshes_and_animations :: inline () {
 	visitor :: (info : *File_Visit_Info, data : *void) {
 		path, basename, ext := path_decomp (info.full_name);
@@ -411,12 +433,13 @@ find_and_load_meshes_and_animations :: inline () {
     }
 	// Initialize the asset names arrays.
 	// This is used in the UI to choose the current mesh and animation.
-	g_params.mesh_names = NewArray (g_loaded_meshes.count + 1, string);
-	g_params.mesh_names[0] = "None";
+	array_reserve(*g_params.mesh_names, g_loaded_meshes.count + 2);
+	array_add(*g_params.mesh_names, copy_string("None"));
 	i := 1;
 	for val, name : g_loaded_meshes
 	{
-		g_params.mesh_names[i] = name;
+        // g_params.mesh_names[i] = name;
+        array_add(*g_params.mesh_names, copy_string(name));
 		i += 1;
 	}
 	g_params.animation_names = NewArray (g_loaded_animations.count + 1, string);
@@ -432,3 +455,81 @@ find_and_load_meshes_and_animations :: inline () {
 	g_params.mesh_index = xx (g_params.mesh_names.count - 1);
 	g_params.animation_index = xx (g_params.animation_names.count - 1);
 }
+
+
+
+
+#import "Basic";
+#import "String";
+#import "Window_Creation";
+#import "SIMD_Math";
+using Input :: #import "Input";
+
+DEBUG :: false;
+
+#if OS == {
+    case .WINDOWS; #load "platform/windows.jai";
+}
+#load "platform/stub.jai";
+
+was_key_released:: inline (key : Key_Code) -> bool
+{
+    return (input_button_states[cast (s64) key] & .END) != 0;
+}
+
+was_key_pressed :: inline (key : Key_Code) -> bool
+{
+    return (input_button_states[cast (s64) key] & .START) != 0;
+}
+
+my_is_key_down :: inline (key : Key_Code) -> bool
+{
+    return (input_button_states[cast (s64) key] & .DOWN) != 0;
+}
+
+// Things that we define ourselves but they probably should be
+// added to the appropriate modules:
+
+is_key_down :: inline (key : Key_Code) -> bool
+{
+	return (input_button_states[cast (s64) key] & .DOWN) != 0;
+}
+
+
+// Math Matrices are row-major. In other words,
+// you have [row 0][row 1][row 2][...] in memory.
+#import "Math";
+#import "File";
+#import "File_Utilities";
+#import "System";
+#import "Hash_Table";
+
+#import "Sort";
+#import "Bucket_Array";
+
+#if OS == .ANDROID {
+    #import "Android"()(main);
+    #import "Android/File";
+    #import "Android/GLES";
+    #import "Android/Jni";
+    #import "Android/Log";
+    #import "Android/Native_App";
+} else #if OS == .WASM {
+    #import "Toolchains/Web/WebGL";
+} else {
+    #import "GL";
+}
+
+simp :: #import "Simp";
+getrect :: #import "GetRect";
+
+physics ::#import,file"../module.jai";
+
+#load "src/parse_utils.jai";
+#load "src/render.jai";
+#load "src/camera.jai";
+#load "src/mesh.jai";
+#load "src/anim.jai";
+#load "src/ui.jai";
+#load "src/draw_commands.jai";
+#load "src/gameplay_code.jai";

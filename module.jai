@@ -160,12 +160,12 @@ CheckInit :: () #expand {
 //
 //this is the way
 #program_export
-l2w :: inline (world_position: Vector3,Aori: Quaternion, local_point: Vector3) -> Vector3 {
-    return  world_position + rotation_matrix(Matrix3, Aori) * local_point;
+l2w :: inline (position: Vector3,Aori: Quaternion, local_point: Vector3) -> Vector3 {
+    return  position + rotation_matrix(Matrix3, Aori) * local_point;
 } @dll_export
 
 #program_export
-l2w_rotate_only :: inline (world_position: Vector3, Aori: Quaternion, local_point: Vector3) -> Vector3 {
+l2w_rotate_only :: inline (position: Vector3, Aori: Quaternion, local_point: Vector3) -> Vector3 {
     return  rotation_matrix(Matrix3, Aori) * local_point;
 } @dll_export
 
@@ -173,8 +173,8 @@ l2w_rotate_only :: inline (world_position: Vector3, Aori: Quaternion, local_poin
 // World ---> Local
 //
 #program_export
-w2l :: inline (world_position: Vector3, orientation: Quaternion, world_point: Vector3) -> Vector3 {
-    return rotation_matrix(Matrix3, conjugate(orientation)) * (world_point - world_position);
+w2l :: inline (position: Vector3, orientation: Quaternion, world_point: Vector3) -> Vector3 {
+    return rotation_matrix(Matrix3, conjugate(orientation)) * (world_point - position);
 } @dll_export
 
 #program_export
@@ -195,6 +195,7 @@ World :: struct {
     count_Constraint_Fitted_To_PageSize :: 8*4096 / size_of(Constraint); // size*count=4096*8bit=bucket_size -> count=4096*8;
     count_RigidBody_Fitted_To_PageSize :: 8*4096 / size_of(Body); // size*count=4096*8bit=bucket_size -> count=4096*8;
 
+    soft_bodies: [1]Soft_Body;
     bodies     :  Bucket_Array(type=Body , items_per_bucket=count_RigidBody_Fitted_To_PageSize );
     hashed_bodies:  Table(u64, Bucket_Locator);
     constraints:  Bucket_Array(type=Constraint, items_per_bucket=count_Constraint_Fitted_To_PageSize);
@@ -237,27 +238,89 @@ Shape_Kind :: enum_flags u64 {
     CAPSULEvsPLANE :: Shape_Kind.CAPSULE | Shape_Kind.PLANE;
 }
 
+
+
 Body :: struct {
-    bucket_locator: Bucket_Locator; //FOR BODIES, NOT CONSTRAINTS! if you want the constraint bucket, use the pointer
+    bucket_locator: Bucket_Locator;
+
     shape_kind: Shape_Kind;
-    previous_world_position: Vector3;
-    world_position: Vector3;
-    owner_position: Vector3;
-    world_velocity: Vector3;
-    inv_mass: float;
-    factor_energy_loss_on_collision: float=0.68;
+    // shape_castable_data: Basic_Shape; //I dont 100% like this but Is good enough.
     radius: float;
+    capsule_height: float;
+
+    position: Vector3;
+    prev_position: Vector3;
+
+    owner_position: Vector3; //TODO: figure out if I really need this.
+
+    velocity: Vector3;
+    prev_velocity: Vector3;
+
+    guess_position:       Vector3; //reduces convergence time (warmstarting)
+    guess_orientation:    Quaternion; //reduces convergence time (warmstarting)
+
+    orientation:          Quaternion;
+    previous_orientation:  Quaternion;
+
+    angular_velocity:     Vector3;
+    prev_angular_velocity: Vector3;
+
+    local_center_of_mass: Vector3;
+    inv_mass: float;
+
+
+    local_moment_of_inertia:   Matrix3;
+    inv_local_moment_of_inertia:   Matrix3;
+
+    factor_energy_loss_on_collision: float=0.68;
+    friction:             float32 = 0.5;
+    elasticity:           float32 = 1.0; //half means half every collision, you might want .9
+
+    local_aabb: AABB;
+    //these fields might change based on orientation and shape kind, we try to cache them if possible.
+    inv_world_moment_of_inertia:   Matrix3;
+
+
+    //caching stuff to make immediate mode work:
     latest_frame_of_existence: u64; //for should_cache check
     end_frame_callback: (body: *Body)->();
     user_data: *void;
     hash: u64; //for immediate mode caching invalidation
 }
 
+//from realtime.jai
+AABB :: struct {
+     min: Vector3;
+     max: Vector3;
+     #place max;
+        extents: Vector3 = ---;
+
+     #place min;
+      center: Vector3 = ---;
+      half_extents: Vector3 = ---;
+
+};
+
+Basic_Shape :: struct {
+    _1, _2, _3: float;
+
+    #place _1;
+        using #as v: Vector3 = ---;
+    #place _1;
+        capsule_radius: float = ---;
+        capsule_height: float = ---;
+        capsule_unused:float = ---;
+    #place _1;
+        sphere_radius: float = ---;
+        sphere_unused: float = ---;
+        sphere_unused2: float = ---;
+}
+
 //idea: [past    (pr]ese{nt) future } ||  [past  ]  (present) { future }  ||  [past   (prese ]nt) { future }  || [past  { future }  (prese ]nt)
-find_nearest_ball :: (world_position: Vector3, radius: float32) -> found: bool, ball: *Body {
+find_nearest_ball :: (position: Vector3, radius: float32) -> found: bool, ball: *Body {
     for *context.solver.world.bodies {
         if it.shape_kind == .SPHERE {
-            if length_squared(world_position - it.world_position) < radius*radius {
+            if length_squared(position - it.position) < radius*radius {
                 return true, it;
             }
         }
@@ -298,19 +361,19 @@ create_hook :: (body: *Body, world_attach_point: Vector3, rest_length: float) ->
      constraint_ptr.world_attach_point_A = world_attach_point;
      constraint_ptr.local_attach_point_A = world_attach_point;
      constraint_ptr.local_attach_point_B = .{};
-     constraint_ptr.world_attach_point_B = body.world_position;
+     constraint_ptr.world_attach_point_B = body.position;
      constraint_ptr.rest_length = rest_length;
     return constraint_ptr;
 }
 
 
-create_ball :: (world_position: Vector3, radius: float32, mass: float32) -> *Body {
+create_ball :: (position: Vector3, radius: float32, mass: float32) -> *Body {
     body, bucket_locator := find_and_occupy_empty_slot(*context.solver.world.bodies);
     body.bucket_locator = bucket_locator;
     body.shape_kind = .SPHERE;
-    body.previous_world_position = world_position;
-    body.world_position = world_position;
-    body.owner_position = world_position;
+    body.prev_position = position;
+    body.position = position;
+    body.owner_position = position;
     body.radius = radius;
     body.inv_mass = 1/mass;
     return body;
@@ -357,7 +420,7 @@ combine_hashes :: (a: u64, b: u64) -> u64 #no_aoc {
 doHook :: (body: *Body, world_attach_point: Vector3, rest_length: float = -1, identifier:s64=0, loc := #caller_location) {
 
     CheckInit();
-    if rest_length < 0 then rest_length = distance(body.world_position, world_attach_point);
+    if rest_length < 0 then rest_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
     hook := find_or_create_hook(hash, body, world_attach_point, rest_length);
     basic.assert(hook!=null);
@@ -372,12 +435,12 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = 1.0, iden
     basic.assert(ball!=null);
     ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
     ball.owner_position = ball_position;
-    ball.world_position = ball_position;
-    ball.previous_world_position = ball_position;
+    ball.position = ball_position;
+    ball.prev_position = ball_position;
     ball.user_data = transform;
     reflect_results_callback :: (body: *Body) {
         transform := cast(*Matrix4)body.user_data;
-        delta_pos := body.world_position - body.owner_position;
+        delta_pos := body.position - body.owner_position;
         translate(transform, delta_pos);
     }
     ball.end_frame_callback = reflect_results_callback;
@@ -408,35 +471,28 @@ Constraint :: struct {
 
 }
 
+//
+// solve is an integrator and a solver at the same time
+//
 // lambda = -C / (wi |grad C i|**2    +alpha/dt**2)
 solve :: (using constraint: *Constraint, delta_time: float) {
     if kind == {
         case .DISTANCE;
          if A == null {
-            dir := B.world_position - world_attach_point_A;
+            compliance := 0.0/(delta_time*delta_time);
+            dir := B.position - world_attach_point_A;
             len := length(dir);
             if len < 0.001 then return;
 
             error := (len - rest_length); //this would be C evaluated = error
+            if error < 0 then return; //Hook is only outwards
             grad_C := dir/len; //gradient of C for A
-            // basic.log("l % error:% % %",len, error, world_attach_point_A, B.world_position);
-            //lambda:
-            lambda := -error; // actually we should divide by inv_massi*|grad C i|**2 BUT we dont because It gets simplified in the next step for this specific case
-            // correction_vector_for_A := lambda*B.inv_mass*grad_C; //uselss
-            // correction_vector_for_B :=         correction_vector_for_A;
-            // basic.log("n: %",dir);
-            // basic.log("B: %\n ", B.*);
-            // basic.log("error: % ",error);
-            // basic.log("l: %", len);
-            // basic.log("grad_C: %", grad_C);
-            // basic.log("correction_vector: % ", grad_C*lambda);
-            // basic.log("world_attach_point_A: % ", world_attach_point_A);
-            // basic.log("B b: %", B.world_position);
-            // B.world_position += correction_vector_for_B;
-            B.world_position += grad_C*lambda;
-            // basic.log("B a: %",B.world_position);
+            lambda := -error/(B.inv_mass+compliance); // actually we should divide by inv_massi*|grad C i|**2 BUT we dont because It gets simplified in the next step for this specific case
+            correction := B.inv_mass*lambda*grad_C;
+            B.position += correction;
+            // basic.log("B a: %",B.position);
 
-            basic.assert(length_squared(B.world_position-world_attach_point_A) -rest_length*rest_length< 0.1);
+            // basic.assert(length_squared(B.position-world_attach_point_A) -rest_length*rest_length< 0.1);
          }
     }
 }
@@ -470,7 +526,13 @@ simplex_add :: (simplex: *Simplest_Geometric_Shape, point: Vector3) {
 
 COLLISION_MARGIN :: 0.001;
 
+
+#run basic.log("[THIS SHOULD BE TEMP]\n\n !!! HASHhasdhhasdhashdhasdhsad\n\n");
+#load "softbody.jai";
+
 #load "simulate.jai";
+// #load "src/spatial_hashing.jai";
+
 
 
 #import "Math";

@@ -6,10 +6,28 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if is_key_down(#char "D") world_model = translate(world_model, delta_time*right);;
     if is_key_down(Key_Code.SPACEBAR) world_model = translate(world_model, delta_time*up*15.0);;
 
+    if context.solver == null then return;
+    this_soft := ifx context.solver.soft_bodies.count!=0 then *context.solver.soft_bodies[0] else null ;
+    should_update_soft := this_soft.should_try_solve;
+    if is_key_down(#char "E") {
+        physics.translate(this_soft, delta_time*up);
+        should_update_soft = true;
+    }
+    if is_key_down(#char "Q") {
+        physics.squash(this_soft);
+        should_update_soft = true;
+    }
+        // this_soft.should_try_solve = false;
+    if is_key_down(#char "R") {
+        this_soft.should_try_solve = true;
+        should_update_soft = true;
+    }
+
+    if should_update_soft sync_positions_with_renderer(this_soft,g_mesh);
     if !is_key_down(#char "G") {
 
         ball := physics.doBall(*world_model);;
-        if is_key_down(#char "H") physics.doHook(ball, .{ball.world_position.x, up.y,ball.world_position.z}, 1.0);;
+        if is_key_down(#char "H") physics.doHook(ball, ball.position + up+forward, 2.0);;
         }
 
 	// Update the mesh if the user selected another one.
@@ -52,10 +70,11 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
 		}
 
 
+       if  g_mesh.joints.count != 0 {
        wpos := get_world_position(*g_pose, "DEF-spine.004");
        spos := WorldToScreen(wpos);
-
 	   if g_params.show_mesh doLabel("GLADIATOR", spos.x, spos.y, spos.z);
+        }
        if g_params.show_mesh Draw(g_mesh, world_model, g_pose.skinning_matrices);
        if g_params.show_skeleton Draw(*g_pose, world_model, xyzw (g_params.skeleton_color, 1));
 
