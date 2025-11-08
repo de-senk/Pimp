@@ -122,7 +122,8 @@ simulate :: () {
             next_pos := it.position + it.velocity*backup_dt;
             if dot(gravity, next_pos) > 0 && dot(gravity, it.velocity) > 0
             {
-                project_upwards := - dot(it.velocity, normalize(gravity))*normalize(it.velocity);
+                grav_dir := normalize(gravity);
+                project_upwards := - dot(it.velocity, grav_dir)*grav_dir;
                 //to zero it out:
                 it.velocity += project_upwards;
                 //to bounce:

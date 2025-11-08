@@ -35,7 +35,7 @@ Linear_Compliance :: struct {
 }
 
 
-doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, linear_compliance := Linear_Compliance.STEEL_ROD, identifier:s64=0, loc := #caller_location) {
+doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, linear_compliance := Linear_Compliance.MEDIUM_SPRING, identifier:s64=0, loc := #caller_location) {
     CheckInit();
     if target_length < 0 then target_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
