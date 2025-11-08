@@ -7,11 +7,12 @@
 drawing_commands: [..]Draw_Command;
 Draw_Command :: struct {
     should_render: bool; //maybe nonsense because it is IMMEDIATE MODE, BUT, maybe some frustrum culling sets this.
-    kind: enum{TRIANGLE_MESH;DEBUG_SPHERE;SKELETON;UI;};
+    kind: enum{TRIANGLE_MESH;DEBUG_SPHERE;SKELETON;UI;LINE;};
     union { //I dont like that I have these structs sparsed around files.
         ui: UI_RENDER_COMMAND;
         mesh: MESH_RENDER_COMMAND;
         skeleton: SKELETON_RENDER_COMMAND;
+        line: LINE_RENDER_COMMAND;
         // debug_sphere: DEBUG_SPHERE_RENDER_COMMAND;
     }
 }
@@ -31,6 +32,7 @@ actual_draw :: (using cmd: Draw_Command) {
         case .TRIANGLE_MESH; draw_mesh(mesh.skinned_mesh, mesh.world_model, mesh.skinning_matrices);
         // case .DEBUG_SPHERE; draw_sphere(mesh.pose, mesh.world_model);
         case .UI; draw_ui_element(ui);
+        case .LINE; draw_line(line.start, line.end, line.color);
     }
 }
 

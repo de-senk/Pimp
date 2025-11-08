@@ -76,7 +76,7 @@ main :: () {
         //
         // Physics STEP simulate
         //
-        physics.simulate();
+        simulate();
         //
         // Drawing pass
         //
@@ -107,7 +107,7 @@ main :: () {
         }
         {
 		  //draw Physics coordinates to the rightmost corner to the rightmost of that coordinate
-          using physics.physics_coordinates;
+          using physics_coordinates;
           offset := -10.0*forward -10.0*up;
           doLabel("physics coordinates", WorldToScreen(offset+2.0*up));
 		  draw_line(offset, offset+forward, .{x=1, w=1}); doLabel("forward", WorldToScreen(offset+forward));
@@ -307,7 +307,7 @@ init_fonts :: ()
 	g_dropdown_font = g_slider_font;
 }
 
-init_softbody_mesh :: (this: *physics.Soft_Body, idx: int) {
+init_softbody_mesh :: (this: *Soft_Body, idx: int) {
     if !this.is_initialized then return;
     if this.is_graphics_initialized then return;
 
@@ -347,7 +347,7 @@ init_softbody_mesh :: (this: *physics.Soft_Body, idx: int) {
 // 	volIdOrder: = ([3]u32).[u32.[1,3,2], u32.[0,2,3], u32.[0,3,1], u32.[0,1,2]];
 // };
 
-populate_mesh :: (this: *physics.Soft_Body, mesh: *Skinned_Mesh) {
+populate_mesh :: (this: *Soft_Body, mesh: *Skinned_Mesh) {
 
 // Vertex :: struct
 // {
@@ -390,15 +390,15 @@ populate_mesh :: (this: *physics.Soft_Body, mesh: *Skinned_Mesh) {
     // }
 }
 
-sync_positions_with_renderer :: (this: *physics.Soft_Body, mesh: *Skinned_Mesh) {
+sync_positions_with_renderer :: (this: *Soft_Body, mesh: *Skinned_Mesh) {
 
     for * mesh.vertices {
         it.position.x = this.pos[it_index*3 + 0];
         it.position.y = this.pos[it_index*3 + 1];
         it.position.z = this.pos[it_index*3 + 2];
-        // it.position.x = physics.bunnyMesh.verts[it_index*3 + 0];
-        // it.position.y = physics.bunnyMesh.verts[it_index*3 + 1];
-        // it.position.z = physics.bunnyMesh.verts[it_index*3 + 2];
+        // it.position.x = bunnyMesh.verts[it_index*3 + 0];
+        // it.position.y = bunnyMesh.verts[it_index*3 + 1];
+        // it.position.z = bunnyMesh.verts[it_index*3 + 2];
         it.normal = .{1,0,0};
     }
 }
@@ -523,7 +523,8 @@ is_key_down :: inline (key : Key_Code) -> bool
 simp :: #import "Simp";
 getrect :: #import "GetRect";
 
-physics ::#import,file"../module.jai";
+// physics ::#import,file"../module.jai";
+#load "../module.jai";
 
 #load "src/parse_utils.jai";
 #load "src/render.jai";

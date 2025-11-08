@@ -1,0 +1,347 @@
+// lambda = -C / (sum(wi * |grad_Ci|^2) + alpha/dt^2)
+
+solve :: (using constraint: *Constraint, delta_time: float) {
+    if kind == {
+
+        case .HOOK;
+         if A == null {
+            compliance := 0.0/(delta_time*delta_time);
+            dir := B.position - world_attach_point_A;
+            len := length(dir);
+            if len < 0.001 then return;
+            error := (len - rest_length);
+            if error < 0 then return; // Hook is only outwards
+            grad_C := dir/len;
+            lambda := -error/(B.inv_mass + compliance);
+            correction := B.inv_mass * lambda * grad_C;
+            B.position += correction;
+         }
+
+        case .DISTANCE;
+         // Bidirectional distance constraint between two bodies
+         if A == null {
+            // One body attached to world
+            compliance := 0.01/(delta_time*delta_time); // Small compliance for stiff constraint
+            dir := B.position - world_attach_point_A;
+            len := length(dir);
+            if len < 0.001 then return;
+            error := len - rest_length;
+            grad_C := dir/len;
+            w := B.inv_mass + compliance;
+            lambda := -error / w;
+            correction := B.inv_mass * lambda * grad_C;
+            B.position += correction;
+         } else {
+            // Two bodies connected
+            compliance := 0.01/(delta_time*delta_time);
+
+            // World positions of attachment points
+            r_a := rotate(local_attach_point_A, A.orientation);
+            r_b := rotate(local_attach_point_B, B.orientation);
+            world_attach_point_A = A.position + r_a;
+            world_attach_point_B = B.position + r_b;
+
+            dir := world_attach_point_B - world_attach_point_A;
+            len := length(dir);
+            if len < 0.001 then return;
+
+            error := len - rest_length;
+            n := dir / len; // normalized direction
+
+            // Gradients for position
+            grad_C_A := -n;
+            grad_C_B := n;
+
+            // Gradients for rotation (torque contribution)
+            grad_C_theta_A := cross(r_a, -n);
+            grad_C_theta_B := cross(r_b, n);
+
+            // Generalized inverse masses
+            w := A.inv_mass + B.inv_mass + compliance;
+
+            // Add rotational contribution
+            if A.inv_mass != 0 {
+                I_inv_grad_A := multiply(A.inv_world_moment_of_inertia, grad_C_theta_A);
+                w += dot(grad_C_theta_A, I_inv_grad_A);
+            }
+            if B.inv_mass != 0 {
+                I_inv_grad_B := multiply(B.inv_world_moment_of_inertia, grad_C_theta_B);
+                w += dot(grad_C_theta_B, I_inv_grad_B);
+            }
+
+            lambda := -error / w;
+
+            // Apply position corrections
+            if A.inv_mass != 0 {
+                A.position += A.inv_mass * lambda * grad_C_A;
+            }
+            if B.inv_mass != 0 {
+                B.position += B.inv_mass * lambda * grad_C_B;
+            }
+
+            // Apply rotational corrections
+            if A.inv_mass != 0 {
+                I_inv_grad_A := multiply(A.inv_world_moment_of_inertia, grad_C_theta_A);
+                delta_theta_A := lambda * I_inv_grad_A;
+                delta_q_A := Quaternion.{delta_theta_A.x, delta_theta_A.y, delta_theta_A.z, 0.0};
+                delta_q_A = 0.5 * delta_q_A * A.orientation;
+                A.orientation = normalize(A.orientation + delta_q_A);
+            }
+            if B.inv_mass != 0 {
+                I_inv_grad_B := multiply(B.inv_world_moment_of_inertia, grad_C_theta_B);
+                delta_theta_B := lambda * I_inv_grad_B;
+                delta_q_B := Quaternion.{delta_theta_B.x, delta_theta_B.y, delta_theta_B.z, 0.0};
+                delta_q_B = 0.5 * delta_q_B * B.orientation;
+                B.orientation = normalize(B.orientation + delta_q_B);
+            }
+         }
+
+        case .SPRING;
+         // Soft distance constraint with higher compliance
+            stiffness := 0.01;
+         if A == null {
+            compliance := stiffness/(delta_time*delta_time); // stiffness is stored in rest_length for springs
+            dir := B.position - world_attach_point_A;
+            len := length(dir);
+            if len < 0.001 then return;
+            error := len - rest_length;
+            grad_C := dir/len;
+            w := B.inv_mass + compliance;
+            lambda := -error / w;
+            correction := B.inv_mass * lambda * grad_C;
+            B.position += correction;
+         } else {
+            compliance := stiffness/(delta_time*delta_time);
+
+            r_a := rotate(local_attach_point_A, A.orientation);
+            r_b := rotate(local_attach_point_B, B.orientation);
+            world_attach_point_A = A.position + r_a;
+            world_attach_point_B = B.position + r_b;
+
+            dir := world_attach_point_B - world_attach_point_A;
+            len := length(dir);
+            if len < 0.001 then return;
+
+            error := len - rest_length;
+            n := dir / len;
+
+            grad_C_A := -n;
+            grad_C_B := n;
+            grad_C_theta_A := cross(r_a, -n);
+            grad_C_theta_B := cross(r_b, n);
+
+            w := A.inv_mass + B.inv_mass + compliance;
+
+            if A.inv_mass != 0 {
+                I_inv_grad_A := multiply(A.inv_world_moment_of_inertia, grad_C_theta_A);
+                w += dot(grad_C_theta_A, I_inv_grad_A);
+            }
+            if B.inv_mass != 0 {
+                I_inv_grad_B := multiply(B.inv_world_moment_of_inertia, grad_C_theta_B);
+                w += dot(grad_C_theta_B, I_inv_grad_B);
+            }
+
+            lambda := -error / w;
+
+            if A.inv_mass != 0 then A.position += A.inv_mass * lambda * grad_C_A;
+            if B.inv_mass != 0 then B.position += B.inv_mass * lambda * grad_C_B;
+
+            if A.inv_mass != 0 {
+                I_inv_grad_A := multiply(A.inv_world_moment_of_inertia, grad_C_theta_A);
+                delta_theta_A := lambda * I_inv_grad_A;
+                delta_q_A := Quaternion.{delta_theta_A.x, delta_theta_A.y, delta_theta_A.z, 0.0};
+                delta_q_A = 0.5 * delta_q_A * A.orientation;
+                A.orientation = normalize(A.orientation + delta_q_A);
+            }
+
+            if B.inv_mass != 0 {
+                I_inv_grad_B := multiply(B.inv_world_moment_of_inertia, grad_C_theta_B);
+                delta_theta_B := lambda * I_inv_grad_B;
+                delta_q_B := Quaternion.{delta_theta_B.x, delta_theta_B.y, delta_theta_B.z, 0.0};
+                delta_q_B = 0.5 * delta_q_B * B.orientation;
+                B.orientation = normalize(B.orientation + delta_q_B);
+            }
+         }
+
+        case .JOINT;
+         // Ball-and-socket joint: C = |pB - pA| = 0
+         // This locks two attachment points together
+         if A && B {
+            compliance := 0.0/(delta_time*delta_time); // Very stiff
+
+            r_a := rotate(local_attach_point_A, A.orientation);
+            r_b := rotate(local_attach_point_B, B.orientation);
+            world_attach_point_A = A.position + r_a;
+            world_attach_point_B = B.position + r_b;
+
+            error_vec := world_attach_point_B - world_attach_point_A;
+            error := length(error_vec);
+            if error < 0.0001 then return;
+
+            n := error_vec / error;
+
+            // This is actually 3 constraints (one per axis), but we can solve them together
+            // For each axis i: C_i = (pB - pA) · e_i
+            // We'll solve the distance version for simplicity
+
+            grad_C_A := -n;
+            grad_C_B := n;
+            grad_C_theta_A := cross(r_a, -n);
+            grad_C_theta_B := cross(r_b, n);
+
+            w := A.inv_mass + B.inv_mass + compliance;
+
+            if A.inv_mass != 0 {
+                I_inv_grad_A := multiply(A.inv_world_moment_of_inertia, grad_C_theta_A);
+                w += dot(grad_C_theta_A, I_inv_grad_A);
+            }
+            if B.inv_mass != 0 {
+                I_inv_grad_B := multiply(B.inv_world_moment_of_inertia, grad_C_theta_B);
+                w += dot(grad_C_theta_B, I_inv_grad_B);
+            }
+
+            lambda := -error / w;
+
+            if A.inv_mass != 0 then A.position += A.inv_mass * lambda * grad_C_A;
+            if B.inv_mass != 0 then B.position += B.inv_mass * lambda * grad_C_B;
+
+            if A.inv_mass != 0 {
+                I_inv_grad_A := multiply(A.inv_world_moment_of_inertia, grad_C_theta_A);
+                delta_theta_A := lambda * I_inv_grad_A;
+                delta_q_A := Quaternion.{delta_theta_A.x, delta_theta_A.y, delta_theta_A.z, 0.0};
+                delta_q_A = 0.5 * delta_q_A * A.orientation;
+                A.orientation = normalize(A.orientation + delta_q_A);
+            }
+            if B.inv_mass != 0 {
+                I_inv_grad_B := multiply(B.inv_world_moment_of_inertia, grad_C_theta_B);
+                delta_theta_B := lambda * I_inv_grad_B;
+                delta_q_B := Quaternion.{delta_theta_B.x, delta_theta_B.y, delta_theta_B.z, 0.0};
+                delta_q_B = 0.5 * delta_q_B * B.orientation;
+                B.orientation = normalize(B.orientation + delta_q_B);
+            }
+         }
+
+        case .COLLISION;
+         // Contact constraint: C = d - (penetration_depth)
+         // Only push apart if penetrating
+         if A && B {
+            // Collision normal stored in local_attach_point_A
+            // Penetration depth stored in rest_length
+            normal := local_attach_point_A;
+            penetration := rest_length;
+
+            if penetration <= 0 then return; // No penetration
+
+            compliance := 0.0/(delta_time*delta_time); // Stiff collision
+
+            // Contact points stored in world_attach_points
+            r_a := world_attach_point_A - A.position;
+            r_b := world_attach_point_B - B.position;
+
+            grad_C_A := -normal;
+            grad_C_B := normal;
+            grad_C_theta_A := cross(r_a, -normal);
+            grad_C_theta_B := cross(r_b, normal);
+
+            w := A.inv_mass + B.inv_mass + compliance;
+
+            if A.inv_mass != 0 {
+                I_inv_grad_A := multiply(A.inv_world_moment_of_inertia, grad_C_theta_A);
+                w += dot(grad_C_theta_A, I_inv_grad_A);
+            }
+            if B.inv_mass != 0 {
+                I_inv_grad_B := multiply(B.inv_world_moment_of_inertia, grad_C_theta_B);
+                w += dot(grad_C_theta_B, I_inv_grad_B);
+            }
+
+            lambda := -penetration / w;
+
+            if A.inv_mass != 0 then A.position += A.inv_mass * lambda * grad_C_A;
+            if B.inv_mass != 0 then B.position += B.inv_mass * lambda * grad_C_B;
+
+            if A.inv_mass != 0 {
+                I_inv_grad_A := multiply(A.inv_world_moment_of_inertia, grad_C_theta_A);
+                delta_theta_A := lambda * I_inv_grad_A;
+                delta_q_A := Quaternion.{delta_theta_A.x, delta_theta_A.y, delta_theta_A.z, 0.0};
+                delta_q_A = 0.5 * delta_q_A * A.orientation;
+                A.orientation = normalize(A.orientation + delta_q_A);
+            }
+            if B.inv_mass != 0 {
+                I_inv_grad_B := multiply(B.inv_world_moment_of_inertia, grad_C_theta_B);
+                delta_theta_B := lambda * I_inv_grad_B;
+                delta_q_B := Quaternion.{delta_theta_B.x, delta_theta_B.y, delta_theta_B.z, 0.0};
+                delta_q_B = 0.5 * delta_q_B * B.orientation;
+                B.orientation = normalize(B.orientation + delta_q_B);
+            }
+
+            // Friction (tangential constraint)
+            friction := 0.5;
+            if friction > 0 {
+                // Relative velocity at contact point
+                v_a := A.velocity + cross(A.angular_velocity, r_a);
+                v_b := B.velocity + cross(B.angular_velocity, r_b);
+                v_rel := v_b - v_a;
+
+                // Tangential velocity
+                v_n := dot(v_rel, normal) * normal;
+                v_t := v_rel - v_n;
+                v_t_mag := length(v_t);
+
+                if v_t_mag > 0.001 {
+                    t := v_t / v_t_mag; // tangent direction
+
+                    // Friction constraint
+                    grad_C_A_t := -t;
+                    grad_C_B_t := t;
+                    grad_C_theta_A_t := cross(r_a, -t);
+                    grad_C_theta_B_t := cross(r_b, t);
+
+                    w_t := A.inv_mass + B.inv_mass;
+
+                    if A.inv_mass != 0 {
+                        I_inv_grad_A_t := multiply(A.inv_world_moment_of_inertia, grad_C_theta_A_t);
+                        w_t += dot(grad_C_theta_A_t, I_inv_grad_A_t);
+                    }
+                    if B.inv_mass != 0 {
+                        I_inv_grad_B_t := multiply(B.inv_world_moment_of_inertia, grad_C_theta_B_t);
+                        w_t += dot(grad_C_theta_B_t, I_inv_grad_B_t);
+                    }
+
+                    // Coulomb friction limit
+                    lambda_t := -v_t_mag * delta_time / w_t;
+                    lambda_t_max := friction * abs(lambda);
+                    lambda_t = basic.clamp(lambda_t, -lambda_t_max, lambda_t_max);
+
+                    if A.inv_mass != 0 then A.position += A.inv_mass * lambda_t * grad_C_A_t;
+                    if B.inv_mass != 0 then B.position += B.inv_mass * lambda_t * grad_C_B_t;
+                }
+            }
+         }
+    }
+}
+
+
+
+//
+// solve is an integrator and a solver at the same time
+//
+// lambda = -C / (wi |grad C i|**2    +alpha/dt**2)
+// solve :: (using constraint: *Constraint, delta_time: float) {
+//     if kind == {
+//         case .HOOK;
+//          if A == null { //we use null to attach to world
+//             compliance := 0.0/(delta_time*delta_time);
+//             dir := B.position - world_attach_point_A;
+//             len := length(dir);
+//             if len < 0.001 then return;
+//             error := (len - rest_length); //this would be C evaluated = error
+//             if error < 0 then return; //Hook is only outwards
+//             grad_C := dir/len; //gradient of C for A
+//             lambda := -error/(B.inv_mass+compliance); // actually we should divide by inv_massi*|grad C i|**2 BUT we dont because It gets simplified in the next step for this specific case
+//             correction := B.inv_mass*lambda*grad_C;
+//             B.position += correction;
+//          }
+//     }
+// }
+
+

@@ -1,35 +1,33 @@
 do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     using game_coordinates;
-    if is_key_down(#char "W") world_model = translate(world_model, delta_time*forward);;
-    if is_key_down(#char "S") world_model = translate(world_model, delta_time*(back));;
-    if is_key_down(#char "A") world_model = translate(world_model, delta_time*left);;
-    if is_key_down(#char "D") world_model = translate(world_model, delta_time*right);;
-    if is_key_down(Key_Code.SPACEBAR) world_model = translate(world_model, delta_time*up*15.0);;
-
     if context.solver == null then return;
     this_soft := ifx context.solver.soft_bodies.count!=0 then *context.solver.soft_bodies[0] else null ;
-    should_update_soft := this_soft.should_try_solve;
-    if is_key_down(#char "E") {
-        physics.translate(this_soft, delta_time*up);
-        should_update_soft = true;
-    }
-    if is_key_down(#char "Q") {
-        physics.squash(this_soft);
-        should_update_soft = true;
-    }
-        // this_soft.should_try_solve = false;
-    if is_key_down(#char "R") {
-        this_soft.should_try_solve = true;
-        should_update_soft = true;
-    }
 
-    if should_update_soft sync_positions_with_renderer(this_soft,g_mesh);
+    ball: *Body;
+
     if !is_key_down(#char "G") {
-
-        ball := physics.doBall(*world_model);;
-        if is_key_down(#char "H") physics.doHook(ball, ball.position + up+forward, 2.0);;
+        ball = doBall(*world_model);;
+        // log("BALL POS %", ball.position);
+        if is_key_down(#char "H") doHookDontUpdate(ball,world_attach_point=ball.position+up*2.1+forward*2.0, 2.0);;
+        if is_key_down(#char "J") doHook(ball,world_attach_point=up*2.1+forward*2.0, 1.9);;
+        if is_key_down(#char "E") doWeld(ball,world_attach_point=up*1.1+forward,weld_relative_axis=game_coordinates.right, rest_angle_radians=3.151593/2.0, target_length=.0);;
+        if is_key_down(#char "Q") doWeld(ball,world_attach_point=up*1.1+forward,weld_relative_axis=game_coordinates.up, rest_angle_radians=3.151593/2.0, target_length=.0);;
         }
 
+
+    if ball {
+        if is_key_down(#char "W") ball.velocity += 0.1*up+forward;;
+        if is_key_down(#char "S") ball.velocity += 0.1*up+back;
+        if is_key_down(#char "A") ball.velocity += 0.1*up+left;
+        if is_key_down(#char "D") ball.velocity += 0.1*up+right;
+        if is_key_down(Key_Code.SPACEBAR) ball.velocity += up*2.0;
+    } else {
+        if is_key_down(#char "W") world_model = translate(world_model, delta_time*forward);;
+        if is_key_down(#char "S") world_model = translate(world_model, delta_time*back);;
+        if is_key_down(#char "A") world_model = translate(world_model, delta_time*left);;
+        if is_key_down(#char "D") world_model = translate(world_model, delta_time*right);;
+        if is_key_down(Key_Code.SPACEBAR) world_model = translate(world_model, delta_time*up*15.0);;
+    }
 	// Update the mesh if the user selected another one.
 	// Ideally we would only call table_find_pointer when we know
 	// the user selected another mesh, but I can't find a way to
@@ -72,8 +70,8 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
 
        if  g_mesh.joints.count != 0 {
        wpos := get_world_position(*g_pose, "DEF-spine.004");
-       spos := WorldToScreen(wpos);
-	   if g_params.show_mesh doLabel("GLADIATOR", spos.x, spos.y, spos.z);
+       spos := WorldToScreen(world_model*wpos);
+	   if g_params.show_mesh doLabel("GLADIATOR", spos);
         }
        if g_params.show_mesh Draw(g_mesh, world_model, g_pose.skinning_matrices);
        if g_params.show_skeleton Draw(*g_pose, world_model, xyzw (g_params.skeleton_color, 1));

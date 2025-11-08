@@ -205,6 +205,24 @@ init_mesh_rendering_objects :: (using mesh : *Skinned_Mesh, $dynamic := false)
 	glVertexAttribIPointer (3, 4, GL_SHORT, size_of (Vertex), cast (*void) (3 * size_of (Vector3)));
 }
 
+LINE_RENDER_COMMAND :: struct {
+    start: Vector3;
+    end: Vector3;
+    color: Vector4;
+}
+
+
+push_line :: (start : Vector3, end : Vector3, color : Vector4) {
+    cmd: Draw_Command;
+    cmd.kind = .LINE;
+    cmd.should_render = true;
+    cmd.line.start = start;
+    cmd.line.end = end;
+    cmd.line.color = color;
+
+    array_add(*drawing_commands, cmd);
+}
+
 draw_line :: inline (start : Vector3, end : Vector3, color : Vector4)
 {
 	draw_line (start, end, color, color);

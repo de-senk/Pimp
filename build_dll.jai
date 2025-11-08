@@ -25,6 +25,7 @@ FILE_ENTRY_POINT :: "./module.jai";
         options.output_type            = .DYNAMIC_LIBRARY;
         options.output_executable_name = OUT_LIB_NAME;
         options.output_path            = OUTPUT_BUILD_DIR;
+        
         //
         // Maximize debug info:
         //
@@ -85,7 +86,8 @@ should_flatten_out_overload :: (header: *Code_Procedure_Header) -> bool {
 #import "File";
 
 ///
-/// I built this iterating a lot so its messy, I dont find value in reducint the entropy of this code because I prefer to spent time solving other more important problems for now. Most comments dont make sense anymore and I did not deleted them.
+/// I built this iterating a lot so its messy, I dont find value in reducing the entropy of this code because I prefer to spent time solving other more important problems for now.
+/// [IMPORTANT] Most comments dont make sense anymore and I did not deleted them.
 ///
 structs_in_existence: Table(string, Code_Declaration);
 structs_in_existence_to_print: Table(string, Code_Declaration);

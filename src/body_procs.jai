@@ -1,0 +1,380 @@
+//
+// Maybe the name of this file will be modified in the future
+// I try to put in this file all procedures that
+// 1) extracts information from bodies
+// 2) modifies information of bodies.
+
+//
+// Local ---> World
+//
+//this is the way
+#program_export
+l2w :: inline (position: Vector3,Aori: Quaternion, local_point: Vector3) -> Vector3 {
+    // v1 := position + rotate(local_point, Aori);
+    // v2 := position + rotation_matrix(Matrix3, Aori) * local_point;
+    // if v1!=v2 then log("eeheeh %", v1-v2 );
+    return  position + rotation_matrix(Matrix3, Aori) * local_point;
+} @dll_export
+
+#program_export
+l2w_rotate_only :: inline (_: Vector3, Aori: Quaternion, local_point: Vector3) -> Vector3 {
+    return  rotation_matrix(Matrix3, Aori) * local_point;
+} @dll_export
+
+//
+// World ---> Local
+//
+#program_export
+w2l :: inline (position: Vector3, orientation: Quaternion, world_point: Vector3) -> Vector3 {
+    return rotation_matrix(Matrix3, conjugate(orientation)) * (world_point - position);
+} @dll_export
+
+#program_export
+w2l_rotate_only :: inline (_: Vector3, orientation: Quaternion, world_point: Vector3) -> Vector3 {
+    //_ gets ignored, but I write it anyways, the only reason this procedure exist is because I like to iterate on soem stuff without changing parameters.
+    return  rotation_matrix(Matrix3, conjugate(orientation)) * (world_point ); //Maybe: replace with rotate() from amth mdouels.
+} @dll_export
+
+
+
+get_C_and_normal :: inline (error: Vector3) -> shold_continue: bool, C: float, normal: Vector3 {
+    dist2 := length_squared(error);
+    if dist2 == 0.0 return false, 0, .{};
+    C := sqrt(dist2);
+    normal := normalize(error);
+    return true, C, normal;
+}
+
+get_total_effective_mass_local :: inline (A: *Body, B: *Body, normal: Vector3) -> shold_continue: bool, w: float {
+    w := get_effective_mass_angular_only(A, normal);
+    if B != null w += get_effective_mass_angular_only(B, normal);
+    if w == 0.0 return false, 0.0;
+    return true, w;
+}
+
+get_total_effective_mass_world :: inline (A: *Body, B: *Body, normal: Vector3, point_of_application: Vector3) -> shold_continue: bool, w: float {
+    w := get_effective_mass(A, normal, point_of_application);
+    if B != null w += get_effective_mass(B, normal, point_of_application);
+    if w == 0.0 return false, 0.0;
+    return true, w;
+}
+
+get_lambda :: inline (dt: float, w: float,C: float, compliance: float) -> lambda: float, force_magnitude: float {
+   dt_squared := dt*dt;
+   alpha := compliance / dt_squared;
+   lambda := -C / (w + alpha);
+   return lambda, lambda / dt_squared;
+}
+
+apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, correction: Vector3, attach_position_A: Vector3, attach_position_B: Vector3) -> float
+{
+    shold_continue, C, normal := get_C_and_normal(correction);
+    if !shold_continue then return 0.0;
+
+    shold_continue=, w := get_total_effective_mass_world(A,B,normal,attach_position_A);
+    if !shold_continue then return 0.0;
+
+    lambda, force_magnitude := get_lambda(dt, w, C, compliance);
+    correction_force := - lambda * normal; //constraint linear force, not really forces, but "force impulses", but force_magnitude is a real force.
+
+
+    //
+    // Here, just passing the opposites to each body, we are applying newton 3rd law.
+    //
+    //order matters! //newest comment: after fix order doesnt matter anymore and its more stable.
+    dx_for_A := get_world_linear_position_correction(A, correction_force, attach_position_A);
+    dq_for_A := get_world_angular_position_correction(A, correction_force, attach_position_A);
+    push_line(A.position, attach_position_A,.{x=1, w=1});
+    push_line(attach_position_A, attach_position_A+correction_force,.{x=0.1, z=1});
+    push_line(attach_position_A, attach_position_B,.{x=0.1, w=1});
+
+    A.position += dx_for_A;
+    A.orientation += dq_for_A;
+    A.orientation = normalize(A.orientation);
+
+    if (B != null) {
+     dx_for_B := get_world_linear_position_correction(B,-correction_force, attach_position_B);
+     dq_for_B := get_world_angular_position_correction(B,-correction_force, attach_position_B);
+     B.position += dx_for_B;
+     B.orientation += dq_for_B;
+     B.orientation = normalize(A.orientation);
+    }
+
+
+    return force_magnitude;
+}
+
+apply_world_velocity_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, correction: Vector3, attach_position_A: Vector3, attach_position_B: Vector3) -> float
+{
+    shold_continue, C, normal := get_C_and_normal(correction);
+    if !shold_continue then return 0.0;
+
+    //effective mass is the sum of inverses of masses
+    shold_continue=, w := get_total_effective_mass_world(A,B,normal,attach_position_A);
+    if !shold_continue then return 0.0;
+
+    lambda, force_magnitude := get_lambda(dt, w, C, 0.0); //NOTE: we hardcode 0 compliance for velocity, I dont have arguments yet.
+    correction_force := - lambda * normal;
+
+    dvel_A := get_world_linear_velocity_correction(A, correction_force);
+    dang_A := get_world_angular_velocity_correction(A, correction_force, attach_position_A);
+    A.velocity += dvel_A;
+    A.angular_velocity += dang_A;
+    if (B != null) {
+     dvel_B := get_world_linear_velocity_correction(B,-correction_force);
+     dang_B := get_world_angular_velocity_correction(B,-correction_force, attach_position_B);
+     B.velocity += dvel_B;
+     B.angular_velocity += dang_B;
+    }
+    return force_magnitude;
+}
+
+
+get_world_linear_velocity_correction :: (body: Body, correction_force: Vector3) -> delta_linear_velocity: Vector3 {
+    return correction_force * body.inv_mass;
+}
+
+get_world_angular_velocity_correction :: (body: Body, correction_force: Vector3, world_point_of_application: Vector3) -> delta_angular_velocity: Vector3 {
+
+    center_of_mass := body.position;
+    lever := world_point_of_application - center_of_mass;
+    correction_torque := cross_product(lever, correction_force);
+    delta_angular_velocity := inline get_delta_angular_from_torque(body, correction_torque);
+
+    return delta_angular_velocity;
+
+}
+
+
+/*  TODO: SUBJECT[inv_local_moment_of_inertia: Vector3] figure out if we can still use this for NON symetrical objects, or we need to go back to a matrix form of moment of inertia
+    this is Angular Force / Angular Mass, is angular acceleration, just like Linear
+*/
+get_delta_angular_from_torque :: inline (inv_local_moment_of_inertia: Vector3, orientation: Quaternion , correction_torque: Vector3) -> delta_angular: Vector3 {
+    delta_angular := correction_torque;
+    delta_angular = rotate(delta_angular, conjugate(orientation));
+    delta_angular *= inv_local_moment_of_inertia;
+    delta_angular = rotate(delta_angular, orientation);
+    return delta_angular;
+}
+
+get_delta_angular_from_torque :: inline (body: Body, correction_torque: Vector3) -> delta_angular: Vector3 {
+    return get_delta_angular_from_torque(body.inv_local_moment_of_inertia, body.orientation, correction_torque);
+}
+
+//old name: apply_position_correction_to_center_of_mass
+apply_local_cm_position_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, angular_error: Vector3) -> force_magnitude: float
+{
+    shold_continue, C, normal := get_C_and_normal(angular_error);
+    if !shold_continue then return 0.0;
+
+    should_continue, w := get_total_effective_mass_local(A,B,normal);
+    if !should_continue return 0.0;
+
+    lambda, force_magnitude := get_lambda(dt, w, C, compliance);
+    correction_torque := - lambda * normal; //constraint linear force, not really forces, but "force impulses", but force_magnitude is a real force.
+
+
+    //gather deltas for A
+    delta_angular_A     := get_delta_angular_from_torque(A, correction_torque);
+    delta_orientation_A := get_stable_delta_orientation(delta_angular_A, A.orientation);
+    //apply deltas to A
+    A.orientation += delta_orientation_A;
+    A.orientation  = normalize(A.orientation);
+
+    if (B != null) {
+        //gather deltas for B
+        delta_angular_B := get_delta_angular_from_torque(B, - correction_torque);
+        delta_orientation_B := get_stable_delta_orientation(delta_angular_B, B.orientation);
+        //apply deltas to B
+        B.orientation += delta_orientation_B;
+        B.orientation = normalize(B.orientation);
+    }
+    return force_magnitude;
+}
+
+apply_local_cm_angular_velocity_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, angular_error: Vector3) -> force_magnitude: float
+{
+    shold_continue, C, normal := get_C_and_normal(angular_error);
+    if !shold_continue then return 0.0;
+
+    should_continue, w := get_total_effective_mass_local(A,B,normal);
+    if !should_continue return 0.0;
+
+    lambda, force_magnitude := get_lambda(dt, w, C, compliance);
+    correction_force := - lambda * normal; //constraint linear force, not really forces, but "force impulses", but force_magnitude is a real force.
+
+    dq_for_A := get_delta_angular_from_torque(A, correction_force);
+    A.angular_velocity += dq_for_A;
+
+    if (B != null) {
+        dq_for_B := get_delta_angular_from_torque(B,-correction_force);
+        B.angular_velocity += dq_for_B;
+    }
+
+    return force_magnitude;
+}
+
+get_stable_delta_orientation :: inline (delta_angular: Vector3, orientation: Quaternion) -> delta_orientation: Quaternion {
+    return get_small_angle_rotation_to_delta_quaternion_scaled(delta_angular, orientation, 0.5);
+}
+get_small_angle_rotation_to_delta_quaternion_scaled :: inline (delta_angular: Vector3, orientation: Quaternion, $stabilize_scale := 1.0) -> delta_orientation: Quaternion {
+    delta_orientation := 0.5*Quaternion.{delta_angular.x,delta_angular.y,delta_angular.z,0.0};
+    delta_orientation *= orientation;
+    return stabilize_scale * delta_orientation;
+}
+
+
+//DONT USE! FOR REFERENCE ONLY, OTHERWISE YOU SACRIFICE GRANULARITY, VERSATILITY AND CODE SIMPLICITY (increases levels of indirections)
+get_local_angular_velocity_correction :: (body: Body, correction_torque: Vector3) -> delta_orientation: Vector3 {
+    assert(body.inv_mass != 0.0,"[CODING ERROR] You should not call this procedure with inv_mass == 0" ) ;
+    delta_angular := get_delta_angular_from_torque(body, correction_torque);
+    return delta_angular;
+}
+
+//DONT USE! FOR REFERENCE ONLY, OTHERWISE YOU SACRIFICE GRANULARITY, VERSATILITY AND CODE SIMPLICITY (increases levels of indirections)
+get_local_angular_position_correction :: (body: Body, correction_torque: Vector3) -> delta_orientation: Quaternion {
+    assert(body.inv_mass != 0.0,"[CODING ERROR] You should not call this procedure with inv_mass == 0" ) ;
+    delta_angular := get_delta_angular_from_torque(body, correction_torque);
+    delta_orientation := get_stable_delta_orientation(delta_angular, body.orientation);
+    return delta_orientation;
+}
+
+apply_local_linear_position_correction :: (using A: *Body, correction: Vector3, unused_world_attach_point: Vector3 = .{}) {
+    //do nothing because we are at local space! but maybe I need to do some stuff with center of mass. Most likely not.
+}
+
+get_world_linear_position_correction :: inline (inv_mass: float, correction_force: Vector3, unused_world_attach_point: Vector3 = .{}) -> translation_correction: Vector3 {
+    return correction_force * inv_mass;
+}
+
+get_world_linear_position_correction :: inline (body: Body, correction_force: Vector3, unused_world_attach_point: Vector3 = .{}) -> translation_correction: Vector3 {
+    return get_world_linear_position_correction(body.inv_mass, correction_force);
+}
+
+get_world_angular_position_correction :: (body: Body, correction_force: Vector3, point_of_application: Vector3) -> delta_orientation: Quaternion {
+    // This wuld be equation 17 but for quaternions as x
+    center_of_mass := body.position;
+    lever := point_of_application - center_of_mass;
+    correction_torque := cross_product(lever, correction_force);
+    delta_angular := get_delta_angular_from_torque(body, correction_torque);
+
+    push_line(center_of_mass, center_of_mass+delta_angular,.{x=0, y=.9951, w=1});
+
+    delta_orientation := get_stable_delta_orientation(delta_angular, body.orientation);
+    return delta_orientation;
+}
+
+
+//
+// Effective masses is the mass you would believe you are dealing with when you try to move a particle at a distance (arm) in the maybe always normlaized direction (direction), Im not 100% that it is always normalized, but lets assume it for now.
+//
+get_effective_mass_angular_only :: (using body: *Body, world_lever: Vector3) -> w: float
+{
+    assert(body.inv_mass != 0.0, "[CODING ERROR] You should not call this procedure if inv_mass == 0");
+
+    local_lever := rotate(world_lever, conjugate(body.orientation));
+
+    w := local_lever.x * local_lever.x * body.inv_local_moment_of_inertia.x +
+         local_lever.y * local_lever.y * body.inv_local_moment_of_inertia.y +
+         local_lever.z * local_lever.z * body.inv_local_moment_of_inertia.z;
+    return w;
+}
+
+get_effective_mass :: (using body: *Body, world_force_direction: Vector3, world_attach_position: Vector3) -> w: float
+{
+    //assumed that world_force_direction is prenormalized.  NOTE: I use force, but its not force, its proportional to force and its way bigger than a force, its a force impulse.
+    //:tagExplanationOfWORLDeffectivemass
+    if body.inv_mass == 0.0 return 0.0;
+
+    //linear effective mass
+    w_linear := body.inv_mass;
+
+    //angular effective mass
+    center_of_mass := body.position;
+    world_lever := world_attach_position - center_of_mass;
+    world_angular_force_direction := cross_product(world_lever, world_force_direction);
+    w_angular := get_effective_mass_angular_only(body, world_angular_force_direction);
+
+    //total effective mass
+    return w_linear + w_angular;
+}
+
+
+
+//:tagExplanationOfWORLDeffectivemass
+/*
+I did not iterated a lot in this expalanation, so its not perfect:
+ Imagine you are floating in space and you try to move a very heavy steel-iron rod like one of those I-shaped beamsthat is way heavier than you, like 3 times heavier, and its very long
+ If you try to grab it from the center you would feel like it has mass 3 times as you. And when you move it a distance d, you also moved yourself a distance -3d
+ If you try to grab it from one of the tips, you will feel like its way heavier than 3 times your mass! because in the intent of trying to move the tip particles, because its a rigid body, you are forced to also move all the rest of the particles, how you calculate the relation between how much you moved the tip and its center of mass and how much you moved? That is the moment of inertia term.
+ in a steel rod,
+ at the tip you have an I of 1/3 rod_mass * length^2
+ at the center you have an I of 1/12 rod_mass * length^2
+ well I dont feel like doing the math here, but you get the idea.
+*/
+
+//
+// the code *-*- From here and below -*-*-  will be deleted.
+//
+
+//from three js, its the same as qleft*qright overload from jai modules.
+#if 0
+multiplyQuaternions :: ( a: Quaternion, b: Quaternion ) -> Quaternion {
+	// from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/code/index.htm
+	qax := a.x;
+	   qay := a.y;
+	   qaz := a.z;
+	   qaw := a.w;
+	qbx := b.x;
+	   qby := b.y;
+	   qbz := b.z;
+	   qbw := b.w;
+    this: Quaternion = ---;
+	this.x = qax * qbw + qaw * qbx + qay * qbz - qaz * qby;
+	this.y = qay * qbw + qaw * qby + qaz * qbx - qax * qbz;
+	this.z = qaz * qbw + qaw * qbz + qax * qby - qay * qbx;
+	this.w = qaw * qbw - qax * qbx - qay * qby - qaz * qbz;
+    // this._onChangeCallback();
+	return this;
+}
+
+
+
+
+//this is from my impulse solver, I only have this here as a reference.
+#if 0
+update_position_impulse :: (using body: *Body, dt: float)
+{
+        if inv_mass == 0 then return;
+        if shape_kind == .PLANE then return;
+        /*
+        current_position += current_velocity*dt
+
+        */
+        //next linear position, l2w uses this updated position, maybe I should flatten l2w here
+        body.position += body.velocity*dt;
+        //shared stuff:
+        CM_world := l2w(body.position, body.orientation, body.local_center_of_mass); //TODO: flatten out l2w
+        lever_arm := body.position - CM_world;
+
+        //angular velocity:
+        R3D := rotation_matrix(Matrix3, body.orientation);  //NOTE: moment_of_inertia_world_linear := was already applied
+        moment_of_inertia_world := R3D * body.inv_local_moment_of_inertia * transpose(R3D);
+        success, inv_I_world := inverse_m3x3(moment_of_inertia_world, EPSILON4);
+        #if DEBUG assert(success, " % failed to get inverse moment of inertia in warudo space %! %", body.shape_kind,body.inv_mass, inv_I_world);
+        omega := body.angular_velocity;
+        alpha := inv_I_world*cross_product(omega, moment_of_inertia_world*omega); //alpha is angular acceleration!
+        body.angular_velocity += alpha*dt;
+        //angular position:
+
+        angle := length(omega) * dt; //@Check, there is other way of doing this, I will use my way for now
+
+        axis := normalize(omega * dt); //the compiler can figure this out. dont confuse the compiler.
+        dq := make_quaternion_from_axis_and_angle(axis, angle);
+        body.orientation = (dq)*(body.orientation );
+        body.orientation = normalize(body.orientation); //because the above is an approximation since dq is not infty small.
+
+        //I dont get this line: //linear position again?:
+        body.position = CM_world + rotate(lever_arm, dq);
+}
+

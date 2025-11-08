@@ -14,8 +14,6 @@ physics_coordinates :: struct {
 
 
 
-
-
 //:tagIrrelevantStuffThatMaybeIShouldMOveOrDelete <- STARTS HERE
 //Why I implemented this?
 maybe_reserve :: inline (array: *[..] $T, desired_max_size: s64, overshoot_factor: float32 = 1.0) {
@@ -31,6 +29,33 @@ maybe_reserve :: inline (array: *[..] $T, desired_max_size: s64, overshoot_facto
         // reserve := max(8, 2 * array.count);
         array_reserve(array, new_max_size);
     }
+}
+
+Simplest_Geometric_Shape :: struct {
+    a: Vector3;
+    b: Vector3;
+    c: Vector3;
+    d: Vector3;
+    count: int;
+    #place a;
+        points: [4]Vector3 = ---;
+    #place count;
+        state: enum {POINT;SEGMENT;TRIANGLE;TETRAHEDRON;} = ---;
+}
+
+simplex_add :: (simplex: *Simplest_Geometric_Shape, point: Vector3) {
+    should_ring_buffer := simplex.count == 4;
+	if should_ring_buffer
+	{
+		simplex.points[0] = simplex.points[1];
+		simplex.points[1] = simplex.points[2];
+		simplex.points[2] = simplex.points[3];
+		#if DEBUG basic.assert(simplex.count == 4, "simplex should be count 4 here.");
+	} else {
+		simplex.count += 1;
+		#if DEBUG basic.assert(simplex.count <= 4, "simplex count is biger than 4 fix the code.");
+	}
+	simplex.points[simplex.count - 1] = point;
 }
 
 #scope_module
@@ -82,6 +107,10 @@ rotate90aroundx := #run make_quaternion_from_axis_and_angle(.{1,0,0}, 3.141593/2
 rotate90aroundy := #run make_quaternion_from_axis_and_angle(.{0,1,0}, 3.141593/2);
 rotate90aroundz := #run make_quaternion_from_axis_and_angle(.{0,0,1}, 3.141593/2);
 rotate45aroundx := #run make_quaternion_from_axis_and_angle(.{1,0,0}, 3.141593/4);
+
+
+DEG_TO_RAD :: 3.141593/180.0; //7 digits bec    ause float32 has a limit of 7 digits
+degrees_120_in_radians :: 120.0*DEG_TO_RAD;
 
 
 g_should_log_this_frame: bool;
@@ -155,51 +184,23 @@ CheckInit :: () #expand {
 }
 
 
-//
-// Local ---> World
-//
-//this is the way
-#program_export
-l2w :: inline (position: Vector3,Aori: Quaternion, local_point: Vector3) -> Vector3 {
-    return  position + rotation_matrix(Matrix3, Aori) * local_point;
-} @dll_export
-
-#program_export
-l2w_rotate_only :: inline (position: Vector3, Aori: Quaternion, local_point: Vector3) -> Vector3 {
-    return  rotation_matrix(Matrix3, Aori) * local_point;
-} @dll_export
-
-//
-// World ---> Local
-//
-#program_export
-w2l :: inline (position: Vector3, orientation: Quaternion, world_point: Vector3) -> Vector3 {
-    return rotation_matrix(Matrix3, conjugate(orientation)) * (world_point - position);
-} @dll_export
-
-#program_export
-w2l_rotate_only :: inline (_: Vector3, orientation: Quaternion, world_point: Vector3) -> Vector3 {
-    //_ gets ignored, but I write it anyways, the only reason this procedure exist is because I like to iterate on soem stuff without changing parameters.
-    return  rotation_matrix(Matrix3, conjugate(orientation)) * (world_point ); //Maybe: replace with rotate() from amth mdouels.
-} @dll_export
-
 
 
 
 World :: struct {
-    // drawing_list: Drawing_List;
-    VOLOR :: struct{p: Vector3;radius:float;color:Vector4;}
-    counter: u64;
+    COLLISION_MARGIN :: 0.001; //
 
-    //this might be pointless, but I just try to makea bucket arrays of the size of a page size of virtual memory
-    count_Constraint_Fitted_To_PageSize :: 8*4096 / size_of(Constraint); // size*count=4096*8bit=bucket_size -> count=4096*8;
+    //Complexity Warning:
+    //this might be pointless, but I just try to makea bucket arrays of the size of a page size of virtual memory, I did this years ago and I never measured it, so there is a very high probability that this is pointless:
+    count_joint_Constraint_Fitted_To_PageSize :: 8*4096 / size_of(Joint_Constraint); // size*count=4096*8bit=bucket_size -> count=4096*8;
     count_RigidBody_Fitted_To_PageSize :: 8*4096 / size_of(Body); // size*count=4096*8bit=bucket_size -> count=4096*8;
 
     soft_bodies: [1]Soft_Body;
     bodies     :  Bucket_Array(type=Body , items_per_bucket=count_RigidBody_Fitted_To_PageSize );
     hashed_bodies:  Table(u64, Bucket_Locator);
-    constraints:  Bucket_Array(type=Constraint, items_per_bucket=count_Constraint_Fitted_To_PageSize);
-    hashed_constraints:  Table(u64, Bucket_Locator);
+
+    joint_constraints:  Bucket_Array(type=Joint_Constraint, items_per_bucket=count_joint_Constraint_Fitted_To_PageSize);
+    hashed_joint_constraints:  Table(u64, Bucket_Locator);
 
 
     //for CCD
@@ -207,11 +208,19 @@ World :: struct {
     // possible_collisions: [..]Contact_Info; // I only use this because I want to quick_sort, and I dont have the stamina to implement quicksort for bucket arrays.
     // collision_pairs: [..]Collision_Pair; //for broadphase, maybe bucket it
 
-    // default_cube_shape: Convex_Hull;
+    // default_cube_shape: Convex_Hull; //I prefer the half edge datastructure.
 
-    //unused, maybe delete ring buffer draw
-    points_to_draw: [10]VOLOR;
-    points_to_draw_cursor: int;
+
+    //
+    // These might be removed soon
+    //
+     // drawing_list: Drawing_List;
+     VOLOR :: struct{p: Vector3;radius:float;color:Vector4;}
+     counter: u64;
+     //unused, maybe delete ring buffer draw
+     points_to_draw: [10]VOLOR;
+     points_to_draw_cursor: int;
+
 }
 
 Solver :: struct {
@@ -239,7 +248,6 @@ Shape_Kind :: enum_flags u64 {
 }
 
 
-
 Body :: struct {
     bucket_locator: Bucket_Locator;
 
@@ -260,7 +268,7 @@ Body :: struct {
     guess_orientation:    Quaternion; //reduces convergence time (warmstarting)
 
     orientation:          Quaternion;
-    previous_orientation:  Quaternion;
+    prev_orientation:     Quaternion;
 
     angular_velocity:     Vector3;
     prev_angular_velocity: Vector3;
@@ -269,8 +277,8 @@ Body :: struct {
     inv_mass: float;
 
 
-    local_moment_of_inertia:   Matrix3;
-    inv_local_moment_of_inertia:   Matrix3;
+    // local_moment_of_inertia:   Vector3;
+    inv_local_moment_of_inertia:   Vector3;
 
     factor_energy_loss_on_collision: float=0.68;
     friction:             float32 = 0.5;
@@ -331,204 +339,13 @@ find_nearest_ball :: (position: Vector3, radius: float32) -> found: bool, ball: 
 
 
 
-find_or_create_hook :: (hash: u64, body: *Body, world_attach_point: Vector3, rest_length: float ) -> *Constraint {
-    using context.solver.world;
-    locator_ptr := table_find_pointer(*hashed_constraints, hash);
-
-    hook_ptr: *Constraint;
-    if locator_ptr {
-        // basic.log("Cache detected!");
-        hook_ptr = bucket_array_find_pointer(*constraints, locator_ptr.*);
-    }
-
-    if !hook_ptr {
-        basic.log("creating new Hook cosntraint");
-        hook_ptr = create_hook(body, world_attach_point, rest_length);
-        hook_ptr.hash = hash;
-        table_set(*hashed_constraints, hash, hook_ptr.bucket_locator);
-     }
-
-    return hook_ptr;
-}
-
-//assumes local_attach_on_B center of B, local_attach_on_A same as world_attach_point because A is null. If A is null we mock it as the World itself.
-create_hook :: (body: *Body, world_attach_point: Vector3, rest_length: float) -> *Constraint {
-    constraint_ptr, bucket_locator := find_and_occupy_empty_slot(*context.solver.world.constraints);
-    constraint_ptr.bucket_locator = bucket_locator;
-    constraint_ptr.kind = .DISTANCE;
-    constraint_ptr.A = null;
-    constraint_ptr.B = body;
-     constraint_ptr.world_attach_point_A = world_attach_point;
-     constraint_ptr.local_attach_point_A = world_attach_point;
-     constraint_ptr.local_attach_point_B = .{};
-     constraint_ptr.world_attach_point_B = body.position;
-     constraint_ptr.rest_length = rest_length;
-    return constraint_ptr;
-}
 
 
-create_ball :: (position: Vector3, radius: float32, mass: float32) -> *Body {
-    body, bucket_locator := find_and_occupy_empty_slot(*context.solver.world.bodies);
-    body.bucket_locator = bucket_locator;
-    body.shape_kind = .SPHERE;
-    body.prev_position = position;
-    body.position = position;
-    body.owner_position = position;
-    body.radius = radius;
-    body.inv_mass = 1/mass;
-    return body;
-}
-
-
-find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float, mass: float32) -> *Body {
-    using context.solver.world;
-    locator_ptr := table_find_pointer(*hashed_bodies, hash);
-
-    ball: *Body;
-    if locator_ptr {
-        // basic.log("Cache detected!");
-        ball = bucket_array_find_pointer(*bodies,locator_ptr.*);
-    }
-
-    if !ball {
-        basic.log("creating new ball");
-        ball = create_ball(ball_position, radius, mass);
-        ball.hash = hash;
-        table_set(*hashed_bodies, hash, ball.bucket_locator);
-     }
-
-    return ball;
-}
-
-KNUTH_GOLDEN_RATIO_64 :: 11400714819323198485;
-
-get_hash :: (loc: Source_Code_Location, identifier: s64) -> u64 {
-    Hash :: #import "Hash";
-    // Maybe we should hash the filename pointer in order to better prevent collisions.
-    name_hash := Hash.djb2_hash(loc.fully_pathed_filename);
-    line_hash := Hash.knuth_hash(cast,no_check(u64) loc.line_number);
-    identifier_hash := Hash.knuth_hash(cast,no_check(u64) identifier);
-
-    result := combine_hashes(name_hash, combine_hashes(line_hash, identifier_hash));
-    return result;
-}
-
-combine_hashes :: (a: u64, b: u64) -> u64 #no_aoc {
-    return a * KNUTH_GOLDEN_RATIO_64 + b;
-}
-
-doHook :: (body: *Body, world_attach_point: Vector3, rest_length: float = -1, identifier:s64=0, loc := #caller_location) {
-
-    CheckInit();
-    if rest_length < 0 then rest_length = distance(body.position, world_attach_point);
-    hash := get_hash(loc, identifier);
-    hook := find_or_create_hook(hash, body, world_attach_point, rest_length);
-    basic.assert(hook!=null);
-    hook.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
-}
-
-doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = 1.0, identifier:s64=0, loc := #caller_location) -> *Body {
-    CheckInit();
-    ball_position := get_translation(transform);
-    hash := get_hash(loc, identifier);
-    ball := find_or_create_ball(hash, ball_position, radius, mass);
-    basic.assert(ball!=null);
-    ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
-    ball.owner_position = ball_position;
-    ball.position = ball_position;
-    ball.prev_position = ball_position;
-    ball.user_data = transform;
-    reflect_results_callback :: (body: *Body) {
-        transform := cast(*Matrix4)body.user_data;
-        delta_pos := body.position - body.owner_position;
-        translate(transform, delta_pos);
-    }
-    ball.end_frame_callback = reflect_results_callback;
-    return ball;
-}
-
-
-Constraint :: struct {
-    Kind :: enum {
-        DISTANCE;
-        COLLISION;
-        JOINT;
-        SPRING;
-        IGNORE_COLLISION;
-    }
-    bucket_locator: Bucket_Locator;
-    latest_frame_of_existence: u64;
-    hash: u64;
-
-    kind: Kind;
-    A, B: *Body;
-    local_attach_point_A: Vector3;
-    world_attach_point_A: Vector3;
-    world_attach_point_B: Vector3;
-    local_attach_point_B: Vector3;
-    rest_length: float;
-
-
-}
-
-//
-// solve is an integrator and a solver at the same time
-//
-// lambda = -C / (wi |grad C i|**2    +alpha/dt**2)
-solve :: (using constraint: *Constraint, delta_time: float) {
-    if kind == {
-        case .DISTANCE;
-         if A == null {
-            compliance := 0.0/(delta_time*delta_time);
-            dir := B.position - world_attach_point_A;
-            len := length(dir);
-            if len < 0.001 then return;
-
-            error := (len - rest_length); //this would be C evaluated = error
-            if error < 0 then return; //Hook is only outwards
-            grad_C := dir/len; //gradient of C for A
-            lambda := -error/(B.inv_mass+compliance); // actually we should divide by inv_massi*|grad C i|**2 BUT we dont because It gets simplified in the next step for this specific case
-            correction := B.inv_mass*lambda*grad_C;
-            B.position += correction;
-            // basic.log("B a: %",B.position);
-
-            // basic.assert(length_squared(B.position-world_attach_point_A) -rest_length*rest_length< 0.1);
-         }
-    }
-}
-
-Simplest_Geometric_Shape :: struct {
-    a: Vector3;
-    b: Vector3;
-    c: Vector3;
-    d: Vector3;
-    count: int;
-    #place a;
-        points: [4]Vector3 = ---;
-    #place count;
-        state: enum {POINT;SEGMENT;TRIANGLE;TETRAHEDRON;} = ---;
-}
-
-simplex_add :: (simplex: *Simplest_Geometric_Shape, point: Vector3) {
-    should_ring_buffer := simplex.count == 4;
-	if should_ring_buffer
-	{
-		simplex.points[0] = simplex.points[1];
-		simplex.points[1] = simplex.points[2];
-		simplex.points[2] = simplex.points[3];
-		#if DEBUG basic.assert(simplex.count == 4, "simplex should be count 4 here.");
-	} else {
-		simplex.count += 1;
-		#if DEBUG basic.assert(simplex.count <= 4, "simplex count is biger than 4 fix the code.");
-	}
-	simplex.points[simplex.count - 1] = point;
-}
-
-COLLISION_MARGIN :: 0.001;
-
-
-#run basic.log("[THIS SHOULD BE TEMP]\n\n !!! HASHhasdhhasdhashdhasdhsad\n\n");
+#run basic.log("[THIS SHOULD BE TEMP]\n\n !!! Remove SOFTBODY, dont upload to git\n\n");
 #load "softbody.jai";
+#load "src/body_procs.jai";
+#load "src/joints.jai";
+#load "src/immediate_mode_magic.jai";
 
 #load "simulate.jai";
 // #load "src/spatial_hashing.jai";
@@ -710,5 +527,16 @@ basic :: #import "Basic";
 
 
 //:tagDecisionsReasonings
+//I like to put my decisions and the reasoning behind them, just to avoid information loss.
+assume_README_PLEASE_Immediate_Mode_Misconceptions :: "Immediate mode IS usable in the release of games!! Immediate mode can be as fast OR even faster than retained mode physics. Same rule applies to Immediate mode GUI's, if an Immediate mode gui recreates everything from scratch when you do doButton or doLabel, then the author of the library is doing something wrong. The trick is to do a lot of caching and caching invalidation and naming stuff, yes, it is hard to do, but that is the way. I hope I provide enough examples to show the power of immediate mode API's. Immedate mode API's reduces user error probability drastically and allows for very fast iterations.";
+assume_What_is_this_library_for :: "Iterating gameplay|prototyping games|fearless usage and modification of the code if you need more features or anything you want (MIT + Credit Not Required but appreciated)|1 line of code to do something useful and see results on the screen|have high level primitives that allows you to use them as building blocks to do more complex things|bootstraping your physics engine";
+assume_What_is_NOT_for :: "stress testings, Even tho, I will try to make this library very fast, this is not a library to stack 400000 watermelons in a room and expect great performance results. This library is for reasonable games with interesting gameplay elements.";
+assume_I_use_simple_code :: "Because for different kind of games you need different kind of solutions, and if the physics code is too complicated, adding simple things like a callback so that on collision you want to play a sound or generate more bodies or whatever you needs are, are NOT straightforward thing to do, complicated code generates friction, decreases productiviy, In contrast, simple code allows for anyone to jump into the code and modify it to satisfy their needs.";
+assume_I_care_a_lot_about_performance_and_I_dont_care_about_performance :: "Performance is the currency, the coin, the -transactional unit- we use to BUY features. Its really hard to make decisions and maintain a balance of very simple code, easy to modify code, performant code. But, I will try my best because I want to see more interesting games, and prototyping is key to innovation.";
+assume_only_jai_for_now :: "This will not work for interop with other languages, but I think I can build a metaprogram to rewrite all the code in C99 and maintain it, but it would have a slightly different API than jai and will be less simple to use. BUT I defer this feature to near the end only if peole really like this library, if nobody uses this library I will not take that effort.";
 assume_I_use_the_context_for_solver :: "I decided to use the context, just to avoid passing a pointer to the solver, this might generate friction if you want to use multiple worlds at the same time, anyways this should be easy to change in less than a day if necessary";
-
+assume_I_dont_support_softbodies_or_clothes_YET :: "Because its so early and Im not sure how to do it performant enough, BUT, XPBD is the best solver to do these kind of stuff. I will support SoftBodies and cloths in the future in a very interesting and useful way like the other procedures, my objective is to be able to mage gameplay features easily with just 1 line of code. So, expect that in the future.";
+assume_I_did_not_implemented_multithreading_YET :: "I will, for sure Implement multithreading and all assembly SIMD code for ARM and x86 in the future, and there is a good thing and a bad thing of using scalar single threaded code, that is, measurement, If I started with multicore aproach from default, It would be harder to measure what parts of the code are slow, and the code is simpler, I think that is the complete list of all the advantages. Obviously multicore is a MUST in a game, but IDK what strategy would generate simple code and very flexible code, if you game uses softbody and clothes a lot, you might need a different multithhreading strategy of whatever I choose. So, I dont know YET, maybe I will implement 3 different multicore approaches, and another multicore approach that I've not seen anywhere that is that you use the cores to prefetch the memory and not do anything of value with these extra cores, prefetching the memory will make the singlecore version faster by how CPU's Work. SIMD is a must and I think I know how to do it with metaprogramming so, nobody has to read the SIMD code and only look at the scalar code and modify the scalar code and the metaprogramming can generate the simd, but idk, maye that is a bad idea, time will tell.";
+assume_I_only_support_sweep_and_prune :: "Because BVH or spatial hash partitioning, introduces a LOT of complexity, BVH are slow for rebuilding the trees, spatial hash partitioning I have not used them too much to give a good opinion, but for sure they introduce complexity, idk how expensive thy are to rebuild.. Sweep and Prune is the best algorithm that generates the simplest code and works really well. If you think that BVH is good, then try do it and fail with things you did not expected, and triggering a rebuild of the tree is super slow. I will try the code to make it simple to introduce another strategy anyways.";
+assume_I_only_use_SAT_for_collision_detection :: "because it is 1 solution to solve them all, requieres caching (sad) to be really useful, but same goes for gjkepa, gjkepa would be better for CCD, but I think I can do some trickery to get CCD with SAT";
+assume_MAIN_source_of_information_used_to_build_this_library :: "https://matthias-research.github.io/pages/publications/XPBD.pdf and https://www.youtube.com/watch?v=ZQ5_u8Lgvyk";

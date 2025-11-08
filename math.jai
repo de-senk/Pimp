@@ -1115,7 +1115,7 @@ get_scale :: (mat: Matrix4) -> Vector3 {
     }
 }
 
-decompose_transform :: (matrix: Matrix4) -> translation: Vector3, orientaation: Quaternion, scale: Vector3 {
+koda_decompose_transform :: (matrix: Matrix4) -> translation: Vector3, orientaation: Quaternion, scale: Vector3 {
     translation := Vector3.{matrix._14, matrix._24, matrix._34};
 
     scale := Vector3.{
