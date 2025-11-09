@@ -259,8 +259,6 @@ Body :: struct {
     position: Vector3;
     prev_position: Vector3;
 
-    owner_position: Vector3; //TODO: figure out if I really need this.
-
     velocity: Vector3;
     prev_velocity: Vector3;
 

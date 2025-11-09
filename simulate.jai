@@ -63,7 +63,7 @@ simulate :: () {
                 dq.w = 0.0;
                 dq.xyz = 0.5 * it.angular_velocity * dt;
                 dq = dq*it.orientation; //this is confusing for me
-                it.orientation += 0.5 * dq * dt;
+                it.orientation += 0.5 * dq * dt; //seriously confusing, the 0.5, why!
                 normalize(*it.orientation); //because the above is an approximation since dq is not infty small.
 
 
@@ -108,9 +108,9 @@ simulate :: () {
         // Apply velocity dampings, NOTE: I highly doubt that this is the correct way of doing this. BUT this callback strategy allows me to fix it in the future, I hope.
         //
         for *joint: joint_constraints {
-             // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
             joint.apply_linear_damping(joint, dt);
-             // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
             joint.apply_angular_damping(joint, dt);
         }
 

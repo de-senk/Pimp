@@ -66,16 +66,10 @@ doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, 
 
         if length_squared(dir) > 1 {
             dir_n := normalize(dir);
-            // hook.local_attach_position_A = w2l_rotate_only(hook.A.position, hook.A.orientation, .{0,1.5,1});
             // hook.local_attach_position_A = w2l_rotate_only(hook.A.position, hook.A.orientation, dir_n);
         }
-        // dir_n := normalize(dir);
-        // body.inv_mass = 0.01;
-        // hook.local_attach_position_A = dir;
         // hook.local_attach_position_B = world_attach_point;
-        // hook.world_attach_position_A = body.position;
         // hook.local_attach_position_B = world_attach_point - body.position;
-        // hook.world_attach_position_B = world_attach_point;
 
     basic.assert(hook!=null);
     hook.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
@@ -103,7 +97,6 @@ doHookDontUpdate :: (body: *Body, world_attach_point: Vector3,  target_length: f
 
             dir := world_attach_point - body.position;
             dir_n := normalize(dir);
-            body.inv_mass = 0.01;
             hook.local_attach_position_A = dir_n;
     }
 
@@ -162,33 +155,28 @@ doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis:
     weld.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
 }
 
-doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = 1.0, identifier:s64=0, loc := #caller_location) -> *Body {
+doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, identifier:s64=0, loc := #caller_location) -> *Body {
     CheckInit();
     ball_position := get_translation(transform);
     hash := get_hash(loc, identifier);
     ball := find_or_create_ball(hash, ball_position, radius, mass);
     basic.assert(ball!=null);
     ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
-    ball.owner_position = ball_position;
     ball.position = ball_position;
     ball.prev_position = ball_position;
     ball.user_data = transform;
     reflect_results_callback :: (body: *Body) {
         transform := cast(*Matrix4)body.user_data;
+        previous_t, previous_q, previous_s := koda_decompose_transform(transform);
 
-        delta_pos := body.position - body.owner_position;
+        delta_pos := body.position - previous_t;
 
         next_q := body.orientation;
-        previous_t, previous_q, previous_s := koda_decompose_transform(transform);
         next_q_minus_previous := next_q*conjugate(previous_q);
-
-        // test_q: Quaternion;
-        // set_from_axis_and_angle(*test_q, .{0,1,0}, 0.02);
 
         MODEL := Matrix4_Identity;
         MODEL = translate(MODEL, previous_t + delta_pos);
-        // MODEL = rotate(MODEL, test_q*previous_q);
-        MODEL = rotate(MODEL, next_q);
+        MODEL = rotate(MODEL, normalize(next_q_minus_previous*previous_q));
         transform.* = MODEL;
 
     }
@@ -262,10 +250,11 @@ create_ball :: (position: Vector3, radius: float32, mass: float32) -> *Body {
     body.shape_kind = .SPHERE;
     body.prev_position = position;
     body.position = position;
-    body.owner_position = position;
     body.radius = radius;
-    body.inv_mass = 1/mass;
-    body.inv_local_moment_of_inertia = .{body.inv_mass, body.inv_mass, body.inv_mass};
+    if mass > 0 {
+        body.inv_mass = 1/mass;
+        body.inv_local_moment_of_inertia = .{1/mass, 1/mass, 1/mass};
+    }
     return body;
 }
 

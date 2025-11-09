@@ -52,9 +52,9 @@ get_total_effective_mass_local :: inline (A: *Body, B: *Body, normal: Vector3) -
     return true, w;
 }
 
-get_total_effective_mass_world :: inline (A: *Body, B: *Body, normal: Vector3, point_of_application: Vector3) -> shold_continue: bool, w: float {
-    w := get_effective_mass(A, normal, point_of_application);
-    if B != null w += get_effective_mass(B, normal, point_of_application);
+get_total_effective_mass_world :: inline (A: *Body, B: *Body, normal: Vector3, point_of_application_A: Vector3, point_of_application_B: Vector3) -> shold_continue: bool, w: float {
+    w := get_effective_mass(A, normal, point_of_application_A);
+    if B != null w += get_effective_mass(B, normal, point_of_application_B);
     if w == 0.0 return false, 0.0;
     return true, w;
 }
@@ -71,8 +71,9 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
     shold_continue, C, normal := get_C_and_normal(correction);
     if !shold_continue then return 0.0;
 
-    shold_continue=, w := get_total_effective_mass_world(A,B,normal,attach_position_A);
+    shold_continue=, w := get_total_effective_mass_world(A,B,normal,attach_position_A, attach_position_B);
     if !shold_continue then return 0.0;
+
 
     lambda, force_magnitude := get_lambda(dt, w, C, compliance);
     correction_force := - lambda * normal; //constraint linear force, not really forces, but "force impulses", but force_magnitude is a real force.
@@ -110,7 +111,7 @@ apply_world_velocity_correction :: (A: *Body, B: *Body, dt: float, compliance: f
     if !shold_continue then return 0.0;
 
     //effective mass is the sum of inverses of masses
-    shold_continue=, w := get_total_effective_mass_world(A,B,normal,attach_position_A);
+    shold_continue=, w := get_total_effective_mass_world(A,B,normal,attach_position_A, attach_position_B);
     if !shold_continue then return 0.0;
 
     lambda, force_magnitude := get_lambda(dt, w, C, 0.0); //NOTE: we hardcode 0 compliance for velocity, I dont have arguments yet.
@@ -278,6 +279,7 @@ get_effective_mass_angular_only :: (using body: *Body, world_lever: Vector3) -> 
     w := local_lever.x * local_lever.x * body.inv_local_moment_of_inertia.x +
          local_lever.y * local_lever.y * body.inv_local_moment_of_inertia.y +
          local_lever.z * local_lever.z * body.inv_local_moment_of_inertia.z;
+    assert(w >= 0.0, "error w is 0 %", w);
     return w;
 }
 

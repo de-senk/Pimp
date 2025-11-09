@@ -489,7 +489,7 @@ solveOrientation :: (using joint: *Joint_Constraint, dt: float)
 
 get_velocity_at_position :: (body: *Body, position: Vector3) -> Vector3 {
     velocity_at_point: Vector3;
-    if body.inv_mass > 0.0
+    if body.inv_mass != 0.0
     {
         center_of_mass := body.position;
         lever := position - center_of_mass;
@@ -520,7 +520,7 @@ default_angular_damping_cb :: (using joint: *Joint_Constraint, dt: float)
     velocity_diff := A.angular_velocity;
     if B != null then velocity_diff -= B.angular_velocity;
     damping_force := - min(joint.angularDampingCoeff * dt, 1.0) * velocity_diff;
-    apply_local_cm_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force); 
+    apply_local_cm_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
 
 }
 
