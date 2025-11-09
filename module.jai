@@ -538,3 +538,7 @@ assume_I_did_not_implemented_multithreading_YET :: "I will, for sure Implement m
 assume_I_only_support_sweep_and_prune :: "Because BVH or spatial hash partitioning, introduces a LOT of complexity, BVH are slow for rebuilding the trees, spatial hash partitioning I have not used them too much to give a good opinion, but for sure they introduce complexity, idk how expensive thy are to rebuild.. Sweep and Prune is the best algorithm that generates the simplest code and works really well. If you think that BVH is good, then try do it and fail with things you did not expected, and triggering a rebuild of the tree is super slow. I will try the code to make it simple to introduce another strategy anyways.";
 assume_I_only_use_SAT_for_collision_detection :: "because it is 1 solution to solve them all, requieres caching (sad) to be really useful, but same goes for gjkepa, gjkepa would be better for CCD, but I think I can do some trickery to get CCD with SAT";
 assume_MAIN_source_of_information_used_to_build_this_library :: "https://matthias-research.github.io/pages/publications/XPBD.pdf and https://www.youtube.com/watch?v=ZQ5_u8Lgvyk";
+
+
+//In the beginning you always want Results.
+//In the end all you want is Control.

@@ -76,7 +76,7 @@ simulate :: () {
             }
         }
 
-
+        //NOTE IMPORTANT: :tagIm99percentSureThatThisIsWrongBUTitworks
         for *joint: joint_constraints {
             //solve(it, dt); FLATTENED OUT:
              //these are callbacks of procedures stored inside each joint, I think this strategy is better than a switch statement.
