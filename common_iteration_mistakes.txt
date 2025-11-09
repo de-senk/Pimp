@@ -1,0 +1,2 @@
+- If I change the mass, the compliance needed to see effects like weak spring also needs to change
+

@@ -74,7 +74,6 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
     shold_continue=, w := get_total_effective_mass_world(A,B,normal,attach_position_A, attach_position_B);
     if !shold_continue then return 0.0;
 
-
     lambda, force_magnitude := get_lambda(dt, w, C, compliance);
     correction_force := - lambda * normal; //constraint linear force, not really forces, but "force impulses", but force_magnitude is a real force.
 
@@ -84,11 +83,11 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
     //
     //order matters! //newest comment: after fix order doesnt matter anymore and its more stable.
     dx_for_A := get_world_linear_position_correction(A, correction_force, attach_position_A);
-    dq_for_A := get_world_angular_position_correction(A, correction_force, attach_position_A);
+    dq_for_A := get_world_angular_position_correction(A, correction_force, attach_position_A); //ORIGINAL
+    // dq_for_A := get_local_angular_position_correction(A, correction_force);
 
     A.position += dx_for_A;
-    A.orientation += dq_for_A;
-    A.orientation = normalize(A.orientation);
+    A.orientation = normalize(dq_for_A + A.orientation);
 
     push_line(A.position, attach_position_A,.{x=1, w=1});
     push_line(attach_position_A, attach_position_A+correction_force,.{x=0.1, z=1});
@@ -96,10 +95,10 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
 
     if (B != null) {
      dx_for_B := get_world_linear_position_correction(B,-correction_force, attach_position_B);
-     dq_for_B := get_world_angular_position_correction(B,-correction_force, attach_position_B);
+     dq_for_B := get_world_angular_position_correction(B,-correction_force, attach_position_B); //ORIGINAL
+    //  dq_for_B := get_local_angular_position_correction(B,-correction_force);
      B.position += dx_for_B;
-     B.orientation += dq_for_B;
-     B.orientation = normalize(A.orientation);
+     B.orientation = normalize(dq_for_B + A.orientation);
     }
 
     return force_magnitude;
@@ -154,7 +153,7 @@ get_delta_angular_from_torque :: inline (inv_local_moment_of_inertia: Vector3, o
     delta_angular := correction_torque;
     delta_angular = rotate(delta_angular, conjugate(orientation));
     delta_angular *= inv_local_moment_of_inertia;
-    delta_angular = rotate(delta_angular, orientation);
+    delta_angular = rotate(delta_angular, (orientation));
     return delta_angular;
 }
 
@@ -226,21 +225,6 @@ get_small_angle_rotation_to_delta_quaternion_scaled :: inline (delta_angular: Ve
 }
 
 
-//DONT USE! FOR REFERENCE ONLY, OTHERWISE YOU SACRIFICE GRANULARITY, VERSATILITY AND CODE SIMPLICITY (increases levels of indirections)
-get_local_angular_velocity_correction :: (body: Body, correction_torque: Vector3) -> delta_orientation: Vector3 {
-    assert(body.inv_mass != 0.0,"[CODING ERROR] You should not call this procedure with inv_mass == 0" ) ;
-    delta_angular := get_delta_angular_from_torque(body, correction_torque);
-    return delta_angular;
-}
-
-//DONT USE! FOR REFERENCE ONLY, OTHERWISE YOU SACRIFICE GRANULARITY, VERSATILITY AND CODE SIMPLICITY (increases levels of indirections)
-get_local_angular_position_correction :: (body: Body, correction_torque: Vector3) -> delta_orientation: Quaternion {
-    assert(body.inv_mass != 0.0,"[CODING ERROR] You should not call this procedure with inv_mass == 0" ) ;
-    delta_angular := get_delta_angular_from_torque(body, correction_torque);
-    delta_orientation := get_stable_delta_orientation(delta_angular, body.orientation);
-    return delta_orientation;
-}
-
 apply_local_linear_position_correction :: (using A: *Body, correction: Vector3, unused_world_attach_point: Vector3 = .{}) {
     //do nothing because we are at local space! but maybe I need to do some stuff with center of mass. Most likely not.
 }
@@ -265,6 +249,23 @@ get_world_angular_position_correction :: (body: Body, correction_force: Vector3,
     delta_orientation := get_stable_delta_orientation(delta_angular, body.orientation);
     return delta_orientation;
 }
+
+
+
+// //DONT USE! FOR REFERENCE ONLY, OTHERWISE YOU SACRIFICE GRANULARITY, VERSATILITY AND CODE SIMPLICITY (increases levels of indirections)
+// get_local_angular_velocity_correction :: (body: Body, correction_torque: Vector3) -> delta_orientation: Vector3 {
+//     assert(body.inv_mass != 0.0,"[CODING ERROR] You should not call this procedure with inv_mass == 0" ) ;
+//     delta_angular := get_delta_angular_from_torque(body, correction_torque);
+//     return delta_angular;
+// }
+
+// //DONT USE! FOR REFERENCE ONLY, OTHERWISE YOU SACRIFICE GRANULARITY, VERSATILITY AND CODE SIMPLICITY (increases levels of indirections)
+// get_local_angular_position_correction :: (body: Body, correction_torque: Vector3) -> delta_orientation: Quaternion {
+//     assert(body.inv_mass != 0.0,"[CODING ERROR] You should not call this procedure with inv_mass == 0" ) ;
+//     delta_angular := get_delta_angular_from_torque(body, correction_torque);
+//     delta_orientation := get_stable_delta_orientation(delta_angular, body.orientation);
+//     return delta_orientation;
+// }
 
 
 //
