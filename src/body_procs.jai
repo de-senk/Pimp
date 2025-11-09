@@ -84,13 +84,14 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
     //order matters! //newest comment: after fix order doesnt matter anymore and its more stable.
     dx_for_A := get_world_linear_position_correction(A, correction_force, attach_position_A);
     dq_for_A := get_world_angular_position_correction(A, correction_force, attach_position_A);
-    push_line(A.position, attach_position_A,.{x=1, w=1});
-    push_line(attach_position_A, attach_position_A+correction_force,.{x=0.1, z=1});
-    push_line(attach_position_A, attach_position_B,.{x=0.1, w=1});
 
     A.position += dx_for_A;
     A.orientation += dq_for_A;
     A.orientation = normalize(A.orientation);
+
+    push_line(A.position, attach_position_A,.{x=1, w=1});
+    push_line(attach_position_A, attach_position_A+correction_force,.{x=0.1, z=1});
+    push_line(attach_position_A, attach_position_B,.{x=0.1, w=1});
 
     if (B != null) {
      dx_for_B := get_world_linear_position_correction(B,-correction_force, attach_position_B);
@@ -99,7 +100,6 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
      B.orientation += dq_for_B;
      B.orientation = normalize(A.orientation);
     }
-
 
     return force_magnitude;
 }
@@ -214,6 +214,7 @@ apply_local_cm_angular_velocity_correction :: (A: *Body, B: *Body, dt: float, co
     return force_magnitude;
 }
 
+//I think this smooths the rotation correction too much, and maybe 2.0 instead of 0.5 is the way, will test with 5 to see what happens, 5 goes crazy, I think even 1.0 goes a little bit crazy on big corrections (highly violated onstraints).
 get_stable_delta_orientation :: inline (delta_angular: Vector3, orientation: Quaternion) -> delta_orientation: Quaternion {
     return get_small_angle_rotation_to_delta_quaternion_scaled(delta_angular, orientation, 0.5);
 }
@@ -258,7 +259,7 @@ get_world_angular_position_correction :: (body: Body, correction_force: Vector3,
     correction_torque := cross_product(lever, correction_force);
     delta_angular := get_delta_angular_from_torque(body, correction_torque);
 
-    push_line(center_of_mass, center_of_mass+delta_angular,.{x=0, y=.9951, w=1});
+    push_line(center_of_mass, center_of_mass+delta_angular*5000,.{x=0, y=.9951, w=1});
 
     delta_orientation := get_stable_delta_orientation(delta_angular, body.orientation);
     return delta_orientation;

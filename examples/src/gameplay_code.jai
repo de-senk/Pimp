@@ -8,25 +8,25 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if !is_key_down(#char "G") {
         ball = doBall(*world_model);;
         // log("BALL POS %", ball.position);
-        if is_key_down(#char "H") doHookDontUpdate(ball,world_attach_point=ball.position+up*2.1+forward*2.0, 2.0);;
-        if is_key_down(#char "J") doHook(ball,world_attach_point=up*2.1+forward*2.0, 1.9);;
+        if is_key_down(#char "H") doHookDontUpdate(ball,world_attach_point=ball.position+up*4.1+forward*2.0, 2.0);;
+        if is_key_down(#char "J") doHook(ball,world_attach_point=up*4.1+forward*2.0, 1.9);;
         if is_key_down(#char "E") doWeld(ball,world_attach_point=up*1.1+forward,weld_relative_axis=game_coordinates.right, rest_angle_radians=3.151593/2.0, target_length=.0);;
         if is_key_down(#char "Q") doWeld(ball,world_attach_point=up*1.1+forward,weld_relative_axis=game_coordinates.up, rest_angle_radians=3.151593/2.0, target_length=.0);;
         }
 
+    move_direction: Vector3;
 
+    if is_key_down(#char "W") move_direction += game_coordinates.forward;
+    if is_key_down(#char "S") move_direction += game_coordinates.back;
+    if is_key_down(#char "A") move_direction += game_coordinates.left;
+    if is_key_down(#char "D") move_direction += game_coordinates.right;
+    if is_key_down(Key_Code.SPACEBAR) move_direction += game_coordinates.up;;
+
+    normalize(*move_direction);
     if ball {
-        if is_key_down(#char "W") ball.velocity += 0.1*up+forward;;
-        if is_key_down(#char "S") ball.velocity += 0.1*up+back;
-        if is_key_down(#char "A") ball.velocity += 0.1*up+left;
-        if is_key_down(#char "D") ball.velocity += 0.1*up+right;
-        if is_key_down(Key_Code.SPACEBAR) ball.velocity += up*2.0;
+        ball.velocity +=  0.5*move_direction;
     } else {
-        if is_key_down(#char "W") world_model = translate(world_model, delta_time*forward);;
-        if is_key_down(#char "S") world_model = translate(world_model, delta_time*back);;
-        if is_key_down(#char "A") world_model = translate(world_model, delta_time*left);;
-        if is_key_down(#char "D") world_model = translate(world_model, delta_time*right);;
-        if is_key_down(Key_Code.SPACEBAR) world_model = translate(world_model, delta_time*up*15.0);;
+        if is_key_down(#char "W") world_model = translate(world_model, delta_time*move_direction);;
     }
 	// Update the mesh if the user selected another one.
 	// Ideally we would only call table_find_pointer when we know

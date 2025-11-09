@@ -181,11 +181,13 @@ applyTorque :: (using joint: *Joint_Constraint,dt: float, torque: float)
 //UNUSED; I flattened this out to reduce levels of indirections.
 solve :: (using joint: *Joint_Constraint, dt: float)
 {
+    //COMMENTTED OUT BECAUSE UNUSED AND I GOT CONFUSED ONCE
     //these are callbacks of procedures stored inside each joint, I think this strategy is better than a switch statement.
-    joint.pre_solve(joint, dt);
-    recalculate_world_attach_pos_and_ori(joint);
-    joint.solve_position(joint, dt);
-    joint.solve_orientation(joint, dt);
+    // joint.pre_solve(joint, dt);
+    // recalculate_world_attach_pos_and_ori(joint);
+    // joint.solve_orientation(joint, dt);
+    // recalculate_world_attach_pos_and_ori(joint);
+    // joint.solve_position(joint, dt);
 }
 
 mostly_shared_presolve_default_cb :: (using joint: *Joint_Constraint, dt: float) {
@@ -518,7 +520,7 @@ default_angular_damping_cb :: (using joint: *Joint_Constraint, dt: float)
     velocity_diff := A.angular_velocity;
     if B != null then velocity_diff -= B.angular_velocity;
     damping_force := - min(joint.angularDampingCoeff * dt, 1.0) * velocity_diff;
-    apply_local_cm_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
+    apply_local_cm_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force); 
 
 }
 

@@ -35,7 +35,7 @@ Linear_Compliance :: struct {
 }
 
 
-doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, linear_compliance := Linear_Compliance.MEDIUM_SPRING, identifier:s64=0, loc := #caller_location) {
+doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, linear_compliance := Linear_Compliance.STEEL_ROD, identifier:s64=0, loc := #caller_location) {
     CheckInit();
     if target_length < 0 then target_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
@@ -45,13 +45,13 @@ doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, 
     //update hook with relevant data for this new frame
     if did_just_created_a_new_one //just comment out this line
     {
-        hook.solve_position = solve_position_for_distance_constraint_cb; //maybe redundant! but whatever
         hook.solve_position = solve_position_for_one_way_distance_constraint_cb; //maybe redundant! but whatever
+        hook.solve_position = solve_position_for_distance_constraint_cb; //maybe redundant! but whatever
         hook.target_length = target_length;
         basic.log("world_attach_point %", world_attach_point);
         hook.linear_compliance = basic.clamp(linear_compliance, 0.0, 1.0);
 
-        // hook.local_attach_position_A = .{0,0,.1};
+        hook.local_attach_position_A = .{0,1.5,1};
         hook.local_attach_position_B = world_attach_point;
 
         //cpmmented out debug code to be deleted
@@ -66,10 +66,11 @@ doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, 
 
         if length_squared(dir) > 1 {
             dir_n := normalize(dir);
-            hook.local_attach_position_A = w2l_rotate_only(hook.A.position, hook.A.orientation, dir_n);
+            // hook.local_attach_position_A = w2l_rotate_only(hook.A.position, hook.A.orientation, .{0,1.5,1});
+            // hook.local_attach_position_A = w2l_rotate_only(hook.A.position, hook.A.orientation, dir_n);
         }
         // dir_n := normalize(dir);
-        body.inv_mass = 0.01;
+        // body.inv_mass = 0.01;
         // hook.local_attach_position_A = dir;
         // hook.local_attach_position_B = world_attach_point;
         // hook.world_attach_position_A = body.position;
@@ -82,7 +83,7 @@ doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, 
 
 
 //same as doHook but 1 line of code less, maybe I should do a masterHook and make a lot of procedures using #bake_arguments, BUT. that is code complexity...
-doHookDontUpdate :: (body: *Body, world_attach_point: Vector3,  target_length: float = -1, linear_compliance := Linear_Compliance.MEDIUM_SPRING, identifier: s64 = 0, loc := #caller_location) {
+doHookDontUpdate :: (body: *Body, world_attach_point: Vector3,  target_length: float = -1, linear_compliance := Linear_Compliance.STEEL_ROD, identifier: s64 = 0, loc := #caller_location) {
     CheckInit();
     if target_length < 0 then target_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
@@ -181,8 +182,8 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = 1.0, iden
         previous_t, previous_q, previous_s := koda_decompose_transform(transform);
         next_q_minus_previous := next_q*conjugate(previous_q);
 
-        test_q: Quaternion;
-        set_from_axis_and_angle(*test_q, .{0,1,0}, 0.02);
+        // test_q: Quaternion;
+        // set_from_axis_and_angle(*test_q, .{0,1,0}, 0.02);
 
         MODEL := Matrix4_Identity;
         MODEL = translate(MODEL, previous_t + delta_pos);
