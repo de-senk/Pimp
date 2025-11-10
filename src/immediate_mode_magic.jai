@@ -35,7 +35,7 @@ Linear_Compliance :: struct {
 }
 
 
-doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, linear_compliance := Linear_Compliance.STEEL_ROD, identifier:s64=0, loc := #caller_location) {
+doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, linear_compliance := Linear_Compliance.WEAK_SPRING, identifier:s64=0, loc := #caller_location) {
     CheckInit();
     if target_length < 0 then target_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
@@ -45,8 +45,8 @@ doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, 
     //update hook with relevant data for this new frame
     if did_just_created_a_new_one //just comment out this line
     {
-        hook.solve_position = solve_position_for_one_way_distance_constraint_cb; //maybe redundant! but whatever
         hook.solve_position = solve_position_for_distance_constraint_cb; //maybe redundant! but whatever
+        hook.solve_position = solve_position_for_one_way_distance_constraint_cb; //maybe redundant! but whatever
         hook.target_length = target_length;
         basic.log("world_attach_point %", world_attach_point);
         hook.linear_compliance = basic.clamp(linear_compliance, 0.0, 1.0);
@@ -77,7 +77,7 @@ doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, 
 
 
 //same as doHook but 1 line of code less, maybe I should do a masterHook and make a lot of procedures using #bake_arguments, BUT. that is code complexity...
-doHookDontUpdate :: (body: *Body, world_attach_point: Vector3,  target_length: float = -1, linear_compliance := Linear_Compliance.STEEL_ROD, identifier: s64 = 0, loc := #caller_location) {
+doHookDontUpdate :: (body: *Body, world_attach_point: Vector3,  target_length: float = -1, linear_compliance := Linear_Compliance.WEAK_SPRING, identifier: s64 = 0, loc := #caller_location) {
     CheckInit();
     if target_length < 0 then target_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
@@ -87,8 +87,8 @@ doHookDontUpdate :: (body: *Body, world_attach_point: Vector3,  target_length: f
     //update hook with relevant data for this new frame
     if did_just_created_a_new_one
     {
-        hook.solve_position = solve_position_for_one_way_distance_constraint_cb;
         hook.solve_position = solve_position_for_distance_constraint_cb;
+        hook.solve_position = solve_position_for_one_way_distance_constraint_cb;
         hook.target_length = target_length;
         hook.local_attach_position_A = .{};
         hook.local_attach_position_B = world_attach_point;
@@ -155,7 +155,7 @@ doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis:
     weld.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
 }
 
-doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = 5.1, identifier:s64=0, loc := #caller_location) -> *Body {
+doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = 1.1, identifier:s64=0, loc := #caller_location) -> *Body {
     CheckInit();
     ball_position := get_translation(transform);
     hash := get_hash(loc, identifier);

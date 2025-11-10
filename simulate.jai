@@ -50,7 +50,7 @@ simulate :: () {
             {
 
                 //
-                // Semi-Implicit Euler integration (3 lines of code)
+                // Integration      Semi-Implicit Euler  (3 lines of code)
                 //
                 //linear
                 it.velocity += gravity*dt;
@@ -59,9 +59,7 @@ simulate :: () {
 
                 //angular usable fields are:  .orientation|.prev_orientation|.angular_velocity|.prev_angular_velocity
                 it.prev_orientation = it.orientation;
-                dq : Quaternion = ---;
-                dq.w = 0.0;
-                dq.xyz = 0.5 * it.angular_velocity * dt;
+                dq :=  Quaternion.{it.angular_velocity.x, it.angular_velocity.y, it.angular_velocity.z, 0.0};
                 dq = dq*it.orientation; //this is confusing for me
                 it.orientation += 0.5 * dq * dt; //seriously confusing, the 0.5, why!
                 normalize(*it.orientation); //because the above is an approximation since dq is not infty small.
@@ -71,8 +69,8 @@ simulate :: () {
                 // if it.position.y<0.0 {
                 //     it.position = it.prev_position;
                 // }
-                basic.assert(is_valid(it.position));
-                basic.assert(is_valid(it.velocity));
+                basic.assert(is_valid(it.position), "your body exploded");
+                basic.assert(is_valid(it.velocity), "your body tried to explode");
             }
         }
 
@@ -88,7 +86,7 @@ simulate :: () {
         }
 
         //
-        // update linear and angular velocities
+        // VELOCITIES           update linear and angular velocities
         //
         for *bodies
         {
@@ -99,35 +97,33 @@ simulate :: () {
                 //angualar
                 dq := it.orientation * conjugate(it.prev_orientation);
                 it.angular_velocity = 2.0* dq.xyz / dt;
+                if length_squared(it.angular_velocity) > 100 then it.angular_velocity = .{};
                 if dq.w < 0 then it.angular_velocity *= -1.0;
 
             }
         }
 
         //
-        // Apply velocity dampings, NOTE: I highly doubt that this is the correct way of doing this. BUT this callback strategy allows me to fix it in the future, I hope.
+        // Dampings          Apply velocity dampings, NOTE: I highly doubt that this is the correct way of doing this. BUT this callback strategy allows me to fix it in the future, I hope.
         //
         for *joint: joint_constraints {
-             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+             // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
             joint.apply_linear_damping(joint, dt);
-             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+             // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
             joint.apply_angular_damping(joint, dt);
         }
 
         //
-        // Faked out floor, not perfect! TODO: Collision constraints!
+        // FLOOR            Faked out floor, not perfect! TODO: Collision constraints!
         //
         for *bodies
         {
             next_pos := it.position + it.velocity*backup_dt;
             if dot(gravity, next_pos) > 0 && dot(gravity, it.velocity) > 0
             {
-                grav_dir := normalize(gravity);
-                project_upwards := - dot(it.velocity, grav_dir)*grav_dir;
-                //to zero it out:
-                it.velocity += project_upwards;
-                //to bounce:
-                it.velocity += it.factor_energy_loss_on_collision*project_upwards;
+                grav_dir := normalize(gravity); project_upwards := - dot(it.velocity, grav_dir)*grav_dir;
+                it.velocity += project_upwards; //to zero it out
+                it.velocity += it.factor_energy_loss_on_collision*project_upwards;  //to bounce
             }
 
         }
