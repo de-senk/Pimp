@@ -91,14 +91,14 @@ get_total_effective_mass_world :: inline (A: *Body, B: *Body, normal: Vector3, p
 //
 get_effective_mass_angular_only :: (using body: Body, world_lever: Vector3) -> w: float
 {
-    assert(body.inv_mass != 0.0, "[CODING ERROR] You should not call this procedure if inv_mass == 0");
+    basic.assert(body.inv_mass != 0.0, "[CODING ERROR] You should not call this procedure if inv_mass == 0");
 
     local_lever := rotate(world_lever, conjugate(body.orientation));
 
     w := local_lever.x * local_lever.x * body.inv_local_moment_of_inertia.x +
          local_lever.y * local_lever.y * body.inv_local_moment_of_inertia.y +
          local_lever.z * local_lever.z * body.inv_local_moment_of_inertia.z;
-    assert(w >= 0.0, "error w is 0 %", w);
+    basic.assert(w >= 0.0, "error w is 0 %", w);
     return w;
 }
 
@@ -196,7 +196,7 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
     A.position += dx_for_A;
     A.orientation = normalize(dq_for_A + A.orientation);  //OLD; DOESNT WORK PROPERLY //is kinda slow! it rotates bodies too slow.
 
-        push_line(A.position, attach_position_A,.{x=1, w=1});
+    push_line(A.position, attach_position_A,.{x=1, w=1});
     push_line(attach_position_A, attach_position_A+correction_force,.{x=0.1, z=1});
     push_line(attach_position_A, attach_position_B,.{x=0.1, w=1});
 
@@ -297,7 +297,7 @@ get_delta_angular_from_torque :: inline (body: Body, correction_torque: Vector3)
 
 
 //old name: apply_position_correction_to_center_of_mass
-apply_local_cm_position_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, angular_error: Vector3) -> force_magnitude: float
+apply_angular_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, angular_error: Vector3) -> force_magnitude: float
 {
     shold_continue, C, normal := get_C_and_normal(angular_error);
     if !shold_continue then return 0.0;

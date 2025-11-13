@@ -66,9 +66,9 @@ simulate :: () {
 
 
                 //Fake floor, temporary.
-                // if it.position.y<0.0 {
-                //     it.position = it.prev_position;
-                // }
+                if it.position.y<0.0 {
+                    it.position = it.prev_position;
+                }
                 basic.assert(is_valid(it.position), "your body exploded");
                 basic.assert(is_valid(it.velocity), "your body tried to explode");
             }
@@ -97,8 +97,14 @@ simulate :: () {
                 //angualar
                 dq := it.orientation * conjugate(it.prev_orientation);
                 it.angular_velocity = 2.0* dq.xyz / dt;
-                if length_squared(it.angular_velocity) > 100 then it.angular_velocity = .{};
                 if dq.w < 0 then it.angular_velocity *= -1.0;
+
+
+                push_vector(it.position, it.angular_velocity, Vector4.{.5,.5,.1,1.0});
+                if length_squared(it.angular_velocity) > 200 {
+                    basic.log("MAX ANG VEL REACHED; CLAMPING");
+                    // clamp_length(*it.angular_velocity, 5);
+                 }
 
             }
         }

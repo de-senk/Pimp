@@ -49,7 +49,10 @@ doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, 
         hook.solve_position = solve_position_for_one_way_distance_constraint_cb; //maybe redundant! but whatever
         hook.target_length = target_length;
         basic.log("world_attach_point %", world_attach_point);
-        hook.linear_compliance = basic.clamp(linear_compliance, 0.0, 1.0);
+        rescaled_comliance := linear_compliance;
+        if body.inv_mass != 0.0 //actually the user should not attach this to a body with no mass
+            rescaled_comliance = rescaled_comliance*body.inv_mass;
+        hook.linear_compliance = basic.clamp(rescaled_comliance, 0.0, 1.0);
 
         hook.local_attach_position_A = .{0,1.5,1};
         hook.local_attach_position_B = world_attach_point;
@@ -115,47 +118,69 @@ doWeld :: (body: *Body, world_attach_point: Vector3, weld_relative_axis: Vector3
     CheckInit();
     if target_length < 0 then target_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
-    weld := find_or_create_weld(hash, body, world_attach_point, target_length);
+    weld, did_just_created_a_new_one := find_or_create_joint_constraint(hash, A=body);
 
-    //update weld with relevant data for this new frame
-    {
-        // constraint.world_attach_position_A = body.position;
-        weld.world_attach_position_A = body.position;
-        weld.world_attach_position_B = world_attach_point;
+    if did_just_created_a_new_one {
+        //unused yet weld.target_length
+        weld.solve_position = solve_position_for_fixed_constraint_cb;
+        weld.solve_orientation = solve_orientation_for_fixed_constraint_cb;
+        weld.local_attach_position_A = .{};
+        weld.local_attach_position_B = world_attach_point;
 
-        // midgard := 0.5*(world_attach_point + body.position);
-        // dir := normalize(midgard - body.position);
         set_from_axis_and_angle(*weld.local_attach_orientation_A, weld_relative_axis, rest_angle_radians);
-        // set_from_axis_and_angle(*weld.local_attach_orientation_B, .{1,0,0}, 1.3);
     }
 
     basic.assert(weld!=null);
     weld.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
 }
 
-#if 0
-doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis: Vector3 = physics_coordinates.up, min_angle_radians: float = 0.0*DEG_TO_RAD, max_angle_radians: float = 120.0*DEG_TO_RAD, reverse_opening_direction: bool=false, identifier:s64=0, loc := #caller_location) {
+
+doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis: Vector3, world_door_close_axis: Vector3, min_angle_radians: float = -20.0*DEG_TO_RAD, max_angle_radians: float = 90.0*DEG_TO_RAD, reverse_opening_direction: bool=false, identifier:s64=0, loc := #caller_location) {
     CheckInit();
     // if target_length < 0 then target_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
-    weld := find_or_create_weld(hash, body, world_attach_point, target_length);
+    door, did_just_created_a_new_one := find_or_create_joint_constraint(hash, A=body);
 
-    //update weld with relevant data for this new frame
-    {
-     weld.world_attach_position_A = body.position;
-     weld.world_attach_position_B = world_attach_point;
+    //update door with relevant data for this new frame
+    if did_just_created_a_new_one {
+        //we do nothing for position yet.
+        door.solve_orientation = solve_orientation_for_door_constraint_cb;
+        // door.apply_angular_damping = hinge_angular_damping_cb;
+        door.swingMin = min_angle_radians;
+        door.swingMax = max_angle_radians;
 
-     // midgard := 0.5*(world_attach_point + body.position);
-     // dir := normalize(midgard - body.position);
-     set_from_axis_and_angle(*weld.local_attach_orientation_A, weld_relative_axis, rest_angle_radians);
-     // set_from_axis_and_angle(*weld.local_attach_orientation_B, .{1,0,0}, 1.3);
+        //this took me 2 days to get right.
+        {
+            door.solve_orientation = solve_orientation_for_door_constraint_cb;
+            //we convert the axis to a local space local to A
+            local_hinge_axis_A := w2l_rotate_only(.{}, body.orientation, normalize(world_hinge_axis));
+            door.local_ref_A = normalize(local_hinge_axis_A);
+            door.local_ref_B = normalize(world_hinge_axis); //because when B is null we use world
+
+            // we make sure that local_front_dir is orthonormal to the other user parameter world_hinge_axis (in local to A spcae)
+            // local_front_dir=, other_axis :=make_an_orthonormal_basis(local_hinge_axis_A, local_front_dir);
+            world_door_close_n := normalize(world_door_close_axis);
+            local_front_dir_A := w2l_rotate_only(.{}, body.orientation, world_door_close_n);
+            local_front_dir_B := w2l_rotate_only(.{}, .{}, world_door_close_n); //unnecesary.
+
+            //I think we store more info than needed, but whatever.
+            dq_A := shortest_arc(door.local_ref_A,local_front_dir_A );
+            dq_B := shortest_arc(door.local_ref_B,local_front_dir_B );
+
+            door.local_attach_orientation_A = dq_A;
+            door.local_attach_orientation_B = dq_B;
+            //so in the orientation solver we can recover that info to do some stuff.
+
+        
+        }
+
     }
 
-    basic.assert(weld!=null);
-    weld.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
+    basic.assert(door!=null);
+    door.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
 }
 
-doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = 1.1, identifier:s64=0, loc := #caller_location) -> *Body {
+doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, identifier:s64=0, loc := #caller_location) -> *Body {
     CheckInit();
     ball_position := get_translation(transform);
     hash := get_hash(loc, identifier);
@@ -185,64 +210,13 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = 1.1, iden
 }
 
 
+//maybe spiderman
 
-//
-// Here goes the procedures that the Layer_0 use.
-//
 //NOTE(to myself): :tagReadTheEnd maybe, I should make a typechecked way of adding stuff here and implementing code in the solver OR do a general abstraction in the code directly. Because, there is a high probability that if I modify or add stuff here that I will forget that in order for it to work, I need to modify other code that should be in sync with code here. :tagReadTheEnd
 
 //
 // Layer_1: Retained mode exposed procedures: Im not fully supporting retained mode yet! I prefer to support Layer_0 first. BUT, layer_0 uses layer_1.
 //
-
-//these create_[something] are also exposed when the user wants to use a retained mode feature,
-//NOTE: It is still so early, I did not implemented all remove() and disable() procedures that the user has to manually call.
-
-//maybe spiderman
-create_hook :: (body: *Body, world_attach_point: Vector3, target_length: float) -> *Joint_Constraint {
-    constraint := create_joint_constraint(A=body);
-    constraint.target_length = target_length;
-    constraint.linear_compliance = 0.01;
-    constraint.linearDampingCoeff = 0.0;
-
-    constraint.solve_position = solve_position_for_one_way_distance_constraint_cb;
-    // constraint.solve_orientation = ; use default callback that does nothing
-     constraint.local_attach_position_A = .{};
-     // constraint.world_attach_position_A = body.position;
-     constraint.local_attach_position_B = world_attach_point;
-     // constraint.world_attach_position_B = world_attach_point;
-    return constraint;
-}
-
-create_steel_rod :: (body: *Body, world_attach_point: Vector3, target_length: float) -> *Joint_Constraint {
-    constraint := create_joint_constraint(A=body);
-    constraint.target_length = target_length;
-    constraint.linear_compliance = 0.0;
-    constraint.linearDampingCoeff = 0.0;
-
-    constraint.solve_position = solve_position_for_distance_constraint_cb;
-    // constraint.solve_orientation = ; //Maybe add rotation solver? steel "rod" tho. so you might need a triangle of steel rods if you want orientation rigidity (or a quad) TODO(tr): add a cool example usign steel rods.
-     constraint.local_attach_position_A = .{};
-     // constraint.world_attach_position_A = body.position;
-     constraint.local_attach_position_B = world_attach_point;
-     // constraint.world_attach_position_B = world_attach_point;
-    return constraint;
-}
-
-create_weld :: (body: *Body, world_attach_point: Vector3, target_length: float) -> *Joint_Constraint {
-    constraint := create_joint_constraint(A=body);
-    constraint.target_length = target_length;
-    constraint.linear_compliance = 0.0;
-    constraint.linearDampingCoeff = 0.0;
-
-    constraint.solve_position = solve_position_for_fixed_constraint_cb;
-    constraint.solve_orientation = solve_orientation_for_fixed_constraint_cb;
-     constraint.local_attach_position_A = .{};
-     // constraint.world_attach_position_A = body.position;
-     constraint.local_attach_position_B = world_attach_point;
-     // constraint.world_attach_position_B = world_attach_point;
-    return constraint;
-}
 
 
 create_ball :: (position: Vector3, radius: float32, mass: float32) -> *Body {
@@ -277,35 +251,9 @@ create_body :: () -> *Body {
     return body_ptr;
 }
 
-
 //
-// Layer_0_Auxiliary: Find Or create, if hash not found, create one constraint.
+// Layer_0_Auxiliary: Find Or create, if hash not found, create one constraint. These are only used by layer 0 procs
 //
-//NOTE FOR READER: Im sorry about the triple and quadruple levels of indirections (of code jumpings to get you to code that does something)!
-//I know one complicated way of abstracting these :tagComplicatedWayOfReducingLinesOfCode but idk if people would find it easy to follow, will see.
-// find_or_create_hook :: (hash: u64, body: *Body, world_attach_point: Vector3, target_length: float ) -> *Joint_Constraint {
-find_or_create_hook :: (hash: u64, body: *Body, world_attach_point: Vector3, target_length: float ) -> *Joint_Constraint, created_one_this_frame: bool {
-    using context.solver.world;
-    did_just_created_a_new_one: bool;
-    locator_ptr := table_find_pointer(*hashed_joint_constraints, hash);
-
-    hook_ptr: *Joint_Constraint;
-    if locator_ptr {
-        // basic.log("Cache detected!");
-        hook_ptr = bucket_array_find_pointer(*joint_constraints, locator_ptr.*);
-    }
-
-    if !hook_ptr {
-        basic.log("creating new Hook cosntraint");
-        did_just_created_a_new_one = true;
-        hook_ptr = create_hook(body, world_attach_point, target_length);
-        hook_ptr.hash = hash;
-        table_set(*hashed_joint_constraints, hash, hook_ptr.bucket_locator);
-     }
-    return hook_ptr, did_just_created_a_new_one;
-}
-
-
 find_or_create_joint_constraint :: (hash: u64, A: *Body, B: *Body = null ) -> *Joint_Constraint, did_just_created_a_new_one: bool {
     using context.solver.world;
     locator_ptr := table_find_pointer(*hashed_joint_constraints, hash);
@@ -326,38 +274,6 @@ find_or_create_joint_constraint :: (hash: u64, A: *Body, B: *Body = null ) -> *J
      }
     return joint_ptr, did_just_created_a_new_one;
 }
-
-/* //START OF:tagComplicatedWayOfReducingLinesOfCode
-
-the problem is that thse parameters might vary depending on procedure idea
-find_or_create_hook :: (hash: u64, body: *Body, world_attach_point: Vector3, target_length: float ) -> *Joint_Constraint {
-find_or_create_hook :: (hash: u64, body: *Body, world_attach_point: Vector3, target_length: float ) -> *Joint_Constraint {
-find_or_create_door :: (hash: u64, body: *Body, world_attach_point: Vector3, target_length: float ) -> *Joint_Constraint {
-
-
-
-*/ //END OF :tagComplicatedWayOfReducingLinesOfCode
-
-find_or_create_weld :: (hash: u64, body: *Body, world_attach_point: Vector3, target_length: float ) -> *Joint_Constraint {
-    using context.solver.world;
-    locator_ptr := table_find_pointer(*hashed_joint_constraints, hash);
-
-    hook_ptr: *Joint_Constraint;
-    if locator_ptr {
-        // basic.log("Cache detected!");
-        hook_ptr = bucket_array_find_pointer(*joint_constraints, locator_ptr.*);
-    }
-
-    if !hook_ptr {
-        basic.log("creating new Weld cosntraint");
-        hook_ptr = create_weld(body, world_attach_point, target_length);
-        hook_ptr.hash = hash;
-        table_set(*hashed_joint_constraints, hash, hook_ptr.bucket_locator);
-     }
-    return hook_ptr;
-}
-
-
 
 find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float, mass: float32) -> *Body {
     using context.solver.world;

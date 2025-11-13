@@ -1,5 +1,5 @@
 physics_coordinates :: struct {
-    forward :: Vector3.{1,0,0};
+    forward :: Vector3.{1,0,0}; front :: forward;
     left 	:: Vector3.{0,1,0};
     up 	    :: Vector3.{0,0,1};
 
@@ -11,6 +11,16 @@ physics_coordinates :: struct {
 
 
 #add_context solver: *Solver;
+
+
+#if !#exists(push_line)
+push_line :: (start : Vector3, end : Vector3, color : Vector4) {};
+
+#if !#exists(push_vector)
+push_vector :: (start : Vector3, end : Vector3, color : Vector4) {};
+
+#if !#exists(push_grid)
+push_grid :: (plane_origin: Vector3, plane_normal: Vector3, min_for: s64, max_for: s64 , density:float=1.0, color := Vector4.{0.4, 0.4, 0.4, 1}) {};
 
 
 
@@ -137,13 +147,11 @@ deactivate_logger :: () #expand {
     }
 }
 
-#run basic.log("[TODO] more robust contact caching");
-//EPSILON float32  0.123456789
 
 #scope_export
 
 log_TODO :: (loc:= #caller_location) {
- //this is for VSCODE |||filepath line:character|||: fk vscode I uninstalled it forever.
+ //this is for VSCODE |||filepath line:character|||:
   basic.log("TODO % %:%", loc.fully_pathed_filename, loc.line_number, loc.character_number);
 }
 
@@ -228,7 +236,7 @@ Solver :: struct {
     dt          := 1.0 / 60.0;
     gravity     := Vector3.{0,-10,0};
     iterations  := 10;
-    number_of_steps_executed_so_far : u64;
+    number_of_steps_executed_so_far : u64; //<- used for immediate mode.
 } @dll_export
 
 
@@ -247,7 +255,7 @@ Shape_Kind :: enum_flags u64 {
     CAPSULEvsPLANE :: Shape_Kind.CAPSULE | Shape_Kind.PLANE;
 }
 
-
+//For XPBD, not all these fields are used.
 Body :: struct {
     bucket_locator: Bucket_Locator;
 
@@ -283,6 +291,7 @@ Body :: struct {
     elasticity:           float32 = 1.0; //half means half every collision, you might want .9
 
     local_aabb: AABB;
+    
     //these fields might change based on orientation and shape kind, we try to cache them if possible.
     inv_world_moment_of_inertia:   Matrix3;
 

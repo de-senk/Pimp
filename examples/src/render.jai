@@ -212,6 +212,7 @@ LINE_RENDER_COMMAND :: struct {
 }
 
 
+
 push_line :: (start : Vector3, end : Vector3, color : Vector4) {
     cmd: Draw_Command;
     cmd.kind = .LINE;
@@ -221,6 +222,32 @@ push_line :: (start : Vector3, end : Vector3, color : Vector4) {
     cmd.line.color = color;
 
     array_add(*drawing_commands, cmd);
+}
+
+push_vector :: (start: Vector3, vector: Vector3, color: Vector4) {
+    push_line(start, start + vector, color);
+}
+
+push_grid :: (plane_origin: Vector3, plane_normal: Vector3, min_for: s64, max_for: s64 , density:float=1.0, color := Vector4.{0.4, 0.4, 0.4, 1}) {
+    horizontal := get_normal_from_normal(plane_normal);
+    vertical := cross_product(plane_normal, horizontal);
+    for i : min_for*density.(s64)..max_for*density.(s64) {
+        {
+            start := plane_origin + horizontal * i.(float)/density + min_for.(float)*vertical;
+            end :=  plane_origin + horizontal * i.(float)/density + max_for.(float)*vertical;
+  	     push_line(start, end, color);
+  	    }
+        {
+            start := plane_origin + vertical * i.(float)/density + min_for.(float)*horizontal;
+            end :=  plane_origin + vertical * i.(float)/density + max_for.(float)*horizontal;
+  	     push_line(start, end, color);
+  	    }
+
+    }
+}
+
+push_grid :: (plane_origin: Vector3, plane_normal: Vector3, area_length: s64 = 10, density:float=1.0, color := Vector4.{0.4, 0.4, 0.4, 1}) {
+    push_grid(plane_origin, plane_normal,-area_length, area_length , density, color);
 }
 
 draw_line :: inline (start : Vector3, end : Vector3, color : Vector4)
