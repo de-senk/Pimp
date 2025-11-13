@@ -324,7 +324,7 @@ apply_angular_correction :: (A: *Body, B: *Body, dt: float, compliance: float32,
     return force_magnitude;
 }
 
-apply_local_cm_angular_velocity_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, angular_error: Vector3) -> force_magnitude: float
+apply_angular_velocity_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, angular_error: Vector3) -> force_magnitude: float
 {
     shold_continue, C, normal := get_C_and_normal(angular_error);
     if !shold_continue then return 0.0;

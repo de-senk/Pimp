@@ -1,3 +1,7 @@
+//In the beginning you always want Results.
+//In the end all you want is Control.
+//:tagDecisionsReasonings
+
 physics_coordinates :: struct {
     forward :: Vector3.{1,0,0}; front :: forward;
     left 	:: Vector3.{0,1,0};
@@ -7,12 +11,10 @@ physics_coordinates :: struct {
     right 	:: #run -left;
     down 	:: #run -up;
 }
-//:tagDecisionsReasonings
-
 
 #add_context solver: *Solver;
 
-
+//mock drawing procedures
 #if !#exists(push_line)
 push_line :: (start : Vector3, end : Vector3, color : Vector4) {};
 
@@ -94,25 +96,6 @@ maybe_insert_DEBUG :: () -> string
 }
 #scope_export
 
-/*
-I never liked pitch yaw and roll names.
-Im tempted to use others but idk which ones
-like, imagine a character in T pose
-pitch->arms, so youse the arms direction as the rotational axis
-yaw->eyeline, so you use the eyeline as the rotational axis
-roll->spine, so you use the spine axis as the rotational axis
-I like arms and spine, but I dont like eyeline name. But at least it takes me very little effort to know what axis Im rotating using these naems.
-*/
-
-/* copy the two lines
-::\s*struct\s*(\{(?:[^{}]|)*?\bWWORDTOFINDWWW\b(?:[^{}]|)*\})
-
-
-::\s*struct\s*\{([^{}]*(\{[^{}]*\}[^{}]*)*?\bWWORDTOFINDWWW\b[^{}]*)
-
-
-*/
-
 rotate90aroundx := #run make_quaternion_from_axis_and_angle(.{1,0,0}, 3.141593/2);
 rotate90aroundy := #run make_quaternion_from_axis_and_angle(.{0,1,0}, 3.141593/2);
 rotate90aroundz := #run make_quaternion_from_axis_and_angle(.{0,0,1}, 3.141593/2);
@@ -190,10 +173,6 @@ CheckInit :: () #expand {
     `state := context.solver;
 
 }
-
-
-
-
 
 World :: struct {
     COLLISION_MARGIN :: 0.001; //
@@ -291,7 +270,7 @@ Body :: struct {
     elasticity:           float32 = 1.0; //half means half every collision, you might want .9
 
     local_aabb: AABB;
-    
+
     //these fields might change based on orientation and shape kind, we try to cache them if possible.
     inv_world_moment_of_inertia:   Matrix3;
 
@@ -331,22 +310,6 @@ Basic_Shape :: struct {
         sphere_unused2: float = ---;
 }
 
-//idea: [past    (pr]ese{nt) future } ||  [past  ]  (present) { future }  ||  [past   (prese ]nt) { future }  || [past  { future }  (prese ]nt)
-find_nearest_ball :: (position: Vector3, radius: float32) -> found: bool, ball: *Body {
-    for *context.solver.world.bodies {
-        if it.shape_kind == .SPHERE {
-            if length_squared(position - it.position) < radius*radius {
-                return true, it;
-            }
-        }
-    }
-    return false, null;
-}
-
-
-
-
-
 
 #run basic.log("[THIS SHOULD BE TEMP]\n\n !!! Remove SOFTBODY, dont upload to git\n\n");
 #load "softbody.jai";
@@ -356,8 +319,6 @@ find_nearest_ball :: (position: Vector3, radius: float32) -> found: bool, ball: 
 
 #load "simulate.jai";
 // #load "src/spatial_hashing.jai";
-
-
 
 #import "Math";
 #import "Hash_Table";
@@ -549,5 +510,3 @@ assume_I_only_use_SAT_for_collision_detection :: "because it is 1 solution to so
 assume_MAIN_source_of_information_used_to_build_this_library :: "https://matthias-research.github.io/pages/publications/XPBD.pdf and https://www.youtube.com/watch?v=ZQ5_u8Lgvyk";
 
 
-//In the beginning you always want Results.
-//In the end all you want is Control.

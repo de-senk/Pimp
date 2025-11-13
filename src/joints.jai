@@ -74,83 +74,9 @@ Joint_Constraint :: struct {
     // motor
     velocity := 0.0;
 
-
-
 }
 
-initHingeJoint :: ( joint: *Joint_Constraint, swingMin: float, swingMax: float, hasTargetAngle: float, targetAngle: float, compliance: float, damping: float)
-{
-    // joint.kind = .HINGE;
-    joint.target_length = 0.0;
-    joint.swingMin = swingMin;
-    joint.swingMax = swingMax;
-    // joint.hasTargetAngle = hasTargetAngle;
-    joint.targetAngle = targetAngle;
-    joint.angular_compliance = compliance;
-    joint.angularDampingCoeff = damping;
-}
-
-initServo :: ( joint: *Joint_Constraint, swingMin: float, swingMax: float)
-{
-    // joint.kind = .SERVO;
-    joint.target_length = 0.0;
-    joint.swingMin = swingMin;
-    joint.swingMax = swingMax;
-    joint.hasTargetAngle = true;
-    joint.targetAngle = 0.0;
-    joint.angular_compliance = 0.0;
-}
-initMotor :: ( joint: *Joint_Constraint, velocity: Vector3)
-{
-    // joint.kind = .MOTOR;
-    joint.target_length = 0.0;
-    // joint.velocity = velocity;
-    joint.hasTargetAngle = true;
-    joint.targetAngle = 0.0;
-    joint.angular_compliance = 0.0;
-}
-
-initBallJoint :: ( joint: *Joint_Constraint, swingMax: float, twistMin: float, twistMax: float, damping: float)
-{
-    // joint.kind = .BALL;
-    joint.target_length = 0.0;
-    joint.swingMin = 0.0;
-    joint.swingMax = swingMax;
-    joint.twistMin = twistMin;
-    joint.twistMax = twistMax;
-    joint.angularDampingCoeff = damping;
-}
-
-initPrismaticJoint :: ( joint: *Joint_Constraint, distanceMin: float, distanceMax: float, twistMin: float, twistMax: float, hasTarget: float, target_length: float, targetCompliance: float, damping: float)
-{
-    // joint.kind = .PRISMATIC;
-    joint.distanceMin = distanceMin;
-    joint.distanceMax = distanceMax;
-    joint.swingMin = 0.0;
-    joint.swingMax = 0.0;
-    joint.twistMin = twistMin;
-    joint.twistMax = twistMax;
-    // joint.hasTargetDistance = hasTarget;
-    joint.target_length = target_length;
-    joint.linear_compliance = targetCompliance;
-    joint.linearDampingCoeff = damping;
-}
-
-initCylinderJoint :: ( joint: *Joint_Constraint, distanceMin: float, distanceMax: float, twistMin: float, twistMax: float, hasTargetDistance: float, restDistance: float, compliance: float, damping: float)
-{
-    // joint.kind = .CYLINDER;
-    // joint.distaceMin = distanceMin;
-    joint.distanceMax = distanceMax;
-    joint.swingMin = 0.0;
-    joint.swingMax = 0.0;
-    joint.twistMin = twistMin;
-    joint.twistMax = twistMax;
-    joint.linear_compliance = 0.0;
-}
-
-
-
-recalculate_world_attach_pos_and_ori :: (using joint: *Joint_Constraint)
+recalculate_world_attach_pos_and_ori :: inline (using joint: *Joint_Constraint)
 {
     if A {
         world_attach_position_A = l2w(A.position, A.orientation, local_attach_position_A);
@@ -209,16 +135,7 @@ solve_position_for_distance_constraint_cb :: (using joint: *Joint_Constraint, dt
     apply_world_position_correction(A, B, dt, linear_compliance, error, world_attach_position_A, world_attach_position_B);
 }
 
-// solve_position_for_one_way_distance_constraint_cb :: (using joint: *Joint_Constraint, dt: float) {
-//     error := world_attach_position_B - world_attach_position_A;
-//     distance := length(error);
-//     if (distance == 0.0) then return; //another option is to select a default direction
-//     if (target_length - distance) >= 0 then return;
-//     normalize(*error);
-//     error *= target_length - distance;
-//     error *= -1.0;
-//     apply_world_position_correction(A, B, dt, linear_compliance, error, world_attach_position_A, world_attach_position_B);
-// }
+
 solve_position_for_one_way_distance_constraint_cb :: (using joint: *Joint_Constraint, dt: float) {
     error := world_attach_position_B - world_attach_position_A;
     distance := length(error);
@@ -253,7 +170,6 @@ solve_position_for_fixed_constraint_cb :: (using joint: *Joint_Constraint, dt: f
 
     //     }
 }
-
 
 solve_orientation_for_fixed_constraint_cb :: (using joint: *Joint_Constraint, dt: float) {
     // align orientations
@@ -321,213 +237,7 @@ solve_orientation_for_door_constraint_cb :: (using joint: *Joint_Constraint, dt:
         error := cross_product(a0, a1);
         push_vector(ss+physics_coordinates.left, error, .{1,0.2,0.1,1}); doLabel("ERROR", WorldToScreen(ss +physics_coordinates.left+error));
 
-        maybe_apply_angle_limit(joint, dt, axis_normal, a0, a1, joint.swingMin, joint.swingMax, 0.0);
-    }
-}
-
-solve_orientation_for_door_constraint_cbBAD :: (using joint: *Joint_Constraint, dt: float)
-{
-    // oriA := joint.world_attach_orientation_A;
-    oriA := joint.world_attach_orientation_A;
-    oriB := joint.world_attach_orientation_B;
-    hardCompliance := 0.0;
-    recalculate_world_attach_pos_and_ori(joint);
-
-    a0 := rotate(physics_coordinates.forward, oriA);
-    a1 := rotate(physics_coordinates.forward, oriB);
-    error := cross_product(a0, a1);
-    apply_angular_correction(A, B, dt, hardCompliance, error );
-
-
-    //     if (joint.hasTargetAngle)
-    //     {
-    //         recalculate_world_attach_pos_and_ori(joint);
-    //         n.copy(axis0);
-    //         n.applyQuaternion(oriA);
-    //         a0.copy(axis1);
-    //         a0.applyQuaternion(oriA);
-    //         a1.copy(axis1);
-    //         a1.applyQuaternion(joint.globalRot1);
-    //         joint.limitAngle(n, a0, a1, joint.targetAngle, joint.targetAngle, joint.angular_compliance);
-    //     }
-    if (joint.swingMin > -FLOAT32_MAX || joint.swingMax < FLOAT32_MAX) //because defaults are set to max, but we should not use values beyond 2pi?
-    {
-        // recalculate_world_attach_pos_and_ori(joint);
-
-        axis_normal := rotate(physics_coordinates.forward, oriA);
-        a0 := rotate(physics_coordinates.left, oriA);
-        a1 := rotate(physics_coordinates.left, oriB);
-        // limitAngle(joint,dt, axis_normal, a0, a1, joint.swingMin, joint.swingMax, hardCompliance);
-    }
-    // }
-
-}
-#if 0
-solvePosition :: (using joint: *Joint_Constraint, dt: float)
-{
-    hardCompliance := 0.0;
-
-    if disabled || kind == .NONE return;
-
-
-    corr: Vector3;
-
-    // align
-
-    if (kind == .PRISMATIC || kind == .CYLINDER)
-    {
-        target_length = basic.max(distanceMin, basic.min(target_length, distanceMax));
-        hardCompliance := 0.0;
-
-        corr := world_attach_position_B - world_attach_position_A;
-
-        // rotate(*corr, conjugate(world_attach_orientation_A));
-        // if (kind == .CYLINDER)
-        //     corr.x -= target_length;
-        // else if (corr.x > distanceMax)
-        //     corr.x -= distanceMax;
-        // else if (corr.x < distanceMin)
-        //     corr.x -= distanceMin;
-        // else
-        //     corr.x = 0.0;
-
-        // rotate(*corr, joint.world_attach_orientation_A);
-        apply_world_position_correction(A, B, dt, hardCompliance, corr, world_attach_position_A, world_attach_position_B);
-    }
-
-    // solve distance
-
-    if (kind != .CYLINDER && hasTargetDistance)
-    {
-        corr := world_attach_position_B - world_attach_position_A;
-        distance := length(corr);
-        if (distance == 0.0) then return;
-        //another option is to select a default direction
-        // if (distance == 0.0)
-        // {
-        //     corr = .{0.0, 0.0, 1.0};
-        //     rotate(*corr, world_attach_orientation_A);
-        // }
-        // else
-            normalize(*corr);
-
-        corr *= target_length - distance;
-        corr *= -1.0;
-        apply_world_position_correction(A, B, dt, linear_compliance, corr, world_attach_position_A, world_attach_position_B);
-
-    }
-}
-
-#if 0
-solveOrientation :: (using joint: *Joint_Constraint, dt: float)
-{
-    // #run basic.log("if joint.disabled || joint.kind == .NONE || joint.kind == .DISTANCE return;");
-    // if joint.disabled || joint.kind == .NONE  return;
-
-    // if joint.kind == .MOTOR
-    // {
-    //     aAngle := basic.min(basic.max(joint.velocity * dt, -1.0), 1.0);
-    //     joint.targetAngle += aAngle;
-    // }
-
-    hardCompliance := 0.0;
-    axis0 := Vector3.{1.0, 0.0, 0.0};
-    axis1 := Vector3.{0.0, 1.0, 0.0};
-    a0 := Vector3.{};
-    a1 := Vector3.{};
-    n := Vector3.{};
-    corr := Vector3.{};
-
-    // if joint.kind == .HINGE || joint.kind == .SERVO || joint.kind == .MOTOR
-    // {
-    //     // align axes
-
-    //     recalculate_world_attach_pos_and_ori(joint);
-
-    //     a0.copy(axis0);
-    //     a0.applyQuaternion(joint.world_attach_orientation_A);
-    //     a1.copy(axis0);
-    //     a1.applyQuaternion(joint.globalRot1);
-    //     corr.crossVectors(a0, a1);
-    //     joint.body0.applyCorrection(hardCompliance, corr, null, joint.body1, null);
-
-    //     if (joint.hasTargetAngle)
-    //     {
-    //         recalculate_world_attach_pos_and_ori(joint);
-    //         n.copy(axis0);
-    //         n.applyQuaternion(joint.world_attach_orientation_A);
-    //         a0.copy(axis1);
-    //         a0.applyQuaternion(joint.world_attach_orientation_A);
-    //         a1.copy(axis1);
-    //         a1.applyQuaternion(joint.globalRot1);
-    //         joint.limitAngle(n, a0, a1, joint.targetAngle, joint.targetAngle, joint.angular_compliance);
-    //     }
-
-    //     // joint limits
-
-    //     if (joint.swingMin > -Number.MAX_VALUE || joint.swingMax < Number.MAX_VALUE)
-    //     {
-    //         recalculate_world_attach_pos_and_ori(joint);
-
-    //         n.copy(axis0);
-    //         n.applyQuaternion(joint.world_attach_orientation_A);
-    //         a0.copy(axis1);
-    //         a0.applyQuaternion(joint.world_attach_orientation_A);
-    //         a1.copy(axis1);
-    //         a1.applyQuaternion(joint.globalRot1);
-    //         joint.limitAngle(n, a0, a1, joint.swingMin, joint.swingMax, hardCompliance);
-    //     }
-    // }
-    // else if (joint.kind == .BALL || joint.kind == .PRISMATIC || joint.kind == .CYLINDER)
-    // {
-    //     // swing limit
-
-    //     recalculate_world_attach_pos_and_ori(joint);
-
-    //     a0.copy(axis0);
-    //     a0.applyQuaternion(joint.world_attach_orientation_A);
-    //     a1.copy(axis0);
-    //     a1.applyQuaternion(joint.globalRot1);
-    //     n.crossVectors(a0, a1);
-    //     n.normalize();
-    //     joint.limitAngle(n, a0, a1, joint.swingMin, joint.swingMax, hardCompliance);
-
-    //     // twist limit
-
-    //     recalculate_world_attach_pos_and_ori(joint);
-
-    //     a0.copy(axis0);
-    //     a0.applyQuaternion(joint.world_attach_orientation_A);
-    //     a1.copy(axis0);
-    //     a1.applyQuaternion(joint.globalRot1);
-    //     n.addVectors(a0, a1);
-    //     n.normalize();
-
-    //     a0.copy(axis1);
-    //     a0.applyQuaternion(joint.world_attach_orientation_A);
-    //     a1.copy(axis1);
-    //     a1.applyQuaternion(joint.globalRot1);
-
-    //     a0.addScaledVector(n, -n.dot(a0));
-    //     a0.normalize();
-    //     a1.addScaledVector(n, -n.dot(a1));
-    //     a1.normalize();
-    //     joint.limitAngle(n, a0, a1, joint.twistMin, joint.twistMax, hardCompliance);
-    // }
-    // else
-    // if (joint.kind == .FIXED)
-    {
-        // align orientations
-
-
-        dq := Quaternion.{};
-        // dq.multiplyQuaternions(joint.world_attach_orientation_A, joint.globalRot1.conjugate());
-        dq = joint.world_attach_orientation_A * conjugate(joint.world_attach_orientation_B);
-        error = .{2.0 * dq.x, 2.0 * dq.y, 2.0 * dq.z};
-        if dq.w > 0.0
-            error *= -1.0;
-        // applyCorrection(A, hardCompliance, error, null, joint.body1, null);
-        apply_angular_correction(A, B, dt, hardCompliance, error );
+        maybe_apply_angle_limit(joint, dt, axis_normal, a0, a1, joint.swingMin, joint.swingMax, 0.01);
     }
 }
 
@@ -543,7 +253,6 @@ get_velocity_at_position :: (body: *Body, position: Vector3) -> Vector3 {
     }
     return velocity_at_point;
 }
-
 
 //
 // NOTE IMPORTANT: I think I need to store "contribution_to_A_this_frame" and same for B, so I can damp only if the cosntraint contributed to the bodies. Because right now, I think its wrong.
@@ -565,7 +274,7 @@ default_angular_damping_cb :: (using joint: *Joint_Constraint, dt: float)
     velocity_diff := A.angular_velocity;
     if B != null then velocity_diff -= B.angular_velocity;
     damping_force := - basic.min(joint.angularDampingCoeff * dt, 1.0) * velocity_diff;
-    apply_local_cm_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
+    apply_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
 
 }
 
@@ -574,7 +283,7 @@ max_angular_damping_cb :: (using joint: *Joint_Constraint, dt: float)
     damping_force := A.angular_velocity;
     if B != null damping_force -= B.angular_velocity;
     damping_force = -damping_force;
-    apply_local_cm_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
+    apply_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
 
 }
 
@@ -590,7 +299,7 @@ hinge_angular_damping_cb :: (using joint: *Joint_Constraint, dt: float)
     damping_force = - basic.min(joint.angularDampingCoeff * dt, 1.0) * projected_velocity;
 
 
-    apply_local_cm_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
+    apply_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
 
 }
 
@@ -598,7 +307,7 @@ hinge_angular_damping_cb :: (using joint: *Joint_Constraint, dt: float)
 getAngle :: (using joint: *Joint_Constraint, n: Vector3, a: Vector3, b: Vector3) -> float
 {
     c := cross_product(a, b);
-    h := clamp(dot(c, n), -1.0, 1.0);
+    h := basic.clamp(dot(c, n), -1.0, 1.0);
     phi := asin(h);
     are_in_opposite_dirs := dot(a, b) < 0.0;
     if are_in_opposite_dirs
@@ -609,116 +318,6 @@ getAngle :: (using joint: *Joint_Constraint, n: Vector3, a: Vector3, b: Vector3)
     if phi < -PI
         phi += 2.0 * PI;
     return phi;
-}
-
-limitAngle3:: (using joint: *Joint_Constraint, dt:float, n: Vector3, axis_A: Vector3, axis_B: Vector3, minAngle: float, maxAngle: float, compliance: float)
-{
-    phi := getAngle(joint, n, axis_A, axis_B);
-    between_allowed_range := phi >= minAngle && phi <= maxAngle;
-    phi = basic.max(minAngle, basic.min(phi, maxAngle));
-    sign := 1.5;
-    if phi == minAngle sign = -1.0;
-
-
-    // for drawing
-    r := Vector4.{1, 0, 0, 0.9};g := Vector4.{0, 1, 0, 0.9};b := Vector4.{0, 0, 1, 0.9};
-    start:= A.position+physics_coordinates.forward+physics_coordinates.left;
-    //
-
-    // for rotating
-    lq := joint.local_attach_orientation_A;
-    // lq.w = -lq.w;
-    clq := conjugate(joint.local_attach_orientation_A);
-    //
-
-    dq: Quaternion;
-    set_from_axis_and_angle(*dq, n, phi);
-    rotated_A := rotate(axis_A, dq);
-    angular_correction := cross_product(rotated_A, axis_B);
-
-    // Get the reference "left" axis from the LOCAL constraint frame
-    local_reference := physics_coordinates.left;
-
-    // Transform to world space using the body's orientation AND the local attachment
-    world_reference := rotate(local_reference, lq);
-
-    // Now rotate by the limit angles around the hinge axis
-    dqmin: Quaternion;
-    set_from_axis_and_angle(*dqmin, n, -minAngle - PI/2);
-    dqmax: Quaternion;
-    set_from_axis_and_angle(*dqmax, n, -maxAngle - PI/2);
-
-    world_reference1 := rotate(world_reference, Quaternion.{});
-    world_reference2 := rotate(world_reference, Quaternion.{});
-
-    limit_normal_min := rotate(world_reference1, dqmin );
-    limit_normal_max := rotate(world_reference2, dqmax);
-    // limit_normal_min = rotate(world_reference, conjugate(A.orientation));
-    // limit_normal_max = rotate(world_reference, conjugate(A.orientation));
-
-    grid_color := ifx between_allowed_range then Vector4.{0.2, 0.2, 0.2, 0.3} else Vector4.{1, 1, 1, 0.9};
-
-
-    push_vector(start,  world_reference, r);
-    push_vector(start,  limit_normal_min, g);
-    push_vector(start,  limit_normal_max, g);
-    // push_grid(joint.world_attach_position_A, limit_normal_min, min_for=-1, max_for=1, density=4, grid_color);
-    // push_grid(joint.world_attach_position_A, limit_normal_max, min_for=-1, max_for=1, density=4, grid_color);
-
-    if between_allowed_range return;
-    apply_angular_correction(A, B, dt, compliance, angular_correction);
-}
-
-//NOTE for (tr): check milton diagram, this is hard, seems easy because small LOC but it is easy to get wrong.
-limitAngleBAD :: (using joint: *Joint_Constraint, dt:float, n: Vector3, axis_A: Vector3, axis_B: Vector3, minAngle: float, maxAngle: float, compliance: float)
-{
-    phi := getAngle(joint, n, axis_A, axis_B);
-    between_allowed_range  := phi >= minAngle && phi <= maxAngle;
-
-    phi = basic.max(minAngle, basic.min(phi, maxAngle));
-    sign := 1.5;
-    if phi == minAngle sign = -1.0;
-    dq: Quaternion; // ---
-    set_from_axis_and_angle(*dq, n, phi);
-    n_for_grids := n;
-
-    rotated_A := rotate(axis_A, dq);
-    angular_correction := cross_product(rotated_A, axis_B);
-    nana := get_normal_from_normal(n_for_grids);
-
-    lq := joint.local_attach_orientation_A;
-    // lq.w = -lq.w;
-    clq := conjugate(joint.local_attach_orientation_A);
-    n_for_grids = rotate(n_for_grids, lq);
-    nana = rotate(nana, lq);
-    a_cross_b := cross_product(n_for_grids, nana);
-
-        // n_for_grids = rotate(a_cross_b1, clq);
-
-    dqmin: Quaternion; // ---
-    set_from_axis_and_angle(*dqmin, n, minAngle - PI/7);
-
-    dqmax: Quaternion; // ---
-    set_from_axis_and_angle(*dqmax, n, maxAngle - PI/1);
-
-    a_cross_b1 := rotate(a_cross_b, conjugate(dqmin));
-    a_cross_b2 := rotate(a_cross_b, conjugate(dqmax));
-    // rotate(*a_cross_b1, lq);
-    // rotate(*a_cross_b2, lq);
-    //these two dont work because then the grid follows the character, and I dont want that.
-    // a_cross_b2 = rotate(a_cross_b2, lq);
-    grid_color := ifx between_allowed_range then Vector4.{0.2, 0.2, 0.2, 0.3} else Vector4.{1, 1, 1, 0.9};
-    r := Vector4.{1, 0, 0, 0.9};g := Vector4.{0, 1, 0, 0.9};b := Vector4.{0, 0, 1, 0.9};
-    start:= A.position+physics_coordinates.forward+physics_coordinates.left;
-
-    // push_grid(A.position + axis_A + 0.2*sign*nana, nana, area_length=1, density=4, grid_color);
-    // push_grid(A.position, a_cross_b1, min_for=-1, max_for=1, density=4, grid_color);
-    // push_grid(A.position, a_cross_b2, min_for=-1, max_for=1, density=4, grid_color);
-    push_vector(start,  n_for_grids, r);
-    push_vector(start,  nana, g);
-    // push_grid(A.position, a_cross_b2, min_for=-1, max_for=1, density=4, grid_color);
-    if between_allowed_range return; //early return
-    apply_angular_correction(A, B, dt, compliance, angular_correction );
 }
 
 maybe_apply_angle_limit :: (using joint: *Joint_Constraint, dt:float, n: Vector3, axis_A: Vector3, axis_B: Vector3, minAngle: float, maxAngle: float, compliance: float)
