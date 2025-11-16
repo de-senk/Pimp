@@ -3,76 +3,7 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if context.solver == null then return;
     this_soft := ifx context.solver.soft_bodies.count!=0 then *context.solver.soft_bodies[0] else null ;
 
-    ball: *Body;
 
-    if !is_key_down(#char "G") {
-        // ball = doBall(*world_model);;
-        ball = doBall(world_model, *g_pose);;
-        }
-
-    move_direction: Vector3;
-    is_ctrl_down := is_key_down(Key_Code.CTRL);
-    if is_key_down(#char "W") move_direction += game_coordinates.forward;
-    if is_key_down(#char "S") move_direction += game_coordinates.back;
-    if is_key_down(#char "A") move_direction += game_coordinates.left;
-    if is_key_down(#char "D") move_direction += game_coordinates.right;
-
-    if is_key_down(Key_Code.SPACEBAR) move_direction += game_coordinates.up;;
-
-    normalize(*move_direction);
-    if ball {
-
-    if !is_ctrl_down
-        ball.angular_velocity +=  0.2*move_direction;
-    else
-        ball.velocity +=  0.5*move_direction;
-
-
-        // log("BALL POS %", ball.position);
-        // if is_key_down(#char "H") doHookDontUpdate(ball,world_attach_point=ball.position+up*4.1+forward*2.0, 2.0);;
-        if is_key_down(#char "J") doHook(ball,world_attach_point=up*4.1+forward*2.0, 1.9);;
-        // if is_key_down(#char "E") doWeld(ball,world_attach_point=up*1.1+forward,weld_relative_axis=game_coordinates.right, rest_angle_radians=3.151593/2.0, target_length=.0);;
-        // if is_key_down(#char "Q") doWeld(ball,world_attach_point=up*1.1+forward,weld_relative_axis=game_coordinates.up, rest_angle_radians=3.151593/2.0, target_length=.0);;
-if is_key_down(#char "Q") doDoor(ball,world_hinge_attach_position=up*1.1+forward,
-world_hinge_axis=game_coordinates.up, game_coordinates.left);;
-
-        // Hinge on RIGHT axis - door swings forward/back
-if is_key_down(#char "E") doDoor(ball,
-    world_hinge_attach_position = up*1.1+forward,
-    world_hinge_axis = game_coordinates.up+ game_coordinates.right,
-    game_coordinates.right  // Faces forward at angle=0
-);
-
-// Hinge on FORWARD axis - door swings left/right
-if is_key_down(#char "R") doDoor(ball,
-    world_hinge_attach_position = up*1.1+forward,
-    world_hinge_axis = game_coordinates.down,
-    game_coordinates.left   // Faces right at angle=0
-);
-
-// Hinge on BACK axis - door swings left/right (opposite direction)
-if is_key_down(#char "T") doDoor(ball,
-    world_hinge_attach_position = up*1.1+forward,
-    world_hinge_axis = game_coordinates.right,
-    game_coordinates.forward    // Faces left at angle=0
-);
-
-// Hinge on UP axis (vertical) - door swings in horizontal plane
-if is_key_down(#char "C") doDoor(ball,
-    world_hinge_attach_position = up*1.1+forward,
-    world_hinge_axis = game_coordinates.up,
-    game_coordinates.right // Faces forward at angle=0
-);
-
-// Hinge on DOWN axis (vertical, opposite) - door swings in horizontal plane
-if is_key_down(#char "V") doDoor(ball,
-    world_hinge_attach_position = up*1.1+forward,
-    world_hinge_axis = game_coordinates.down,
-    game_coordinates.back    // Faces back at angle=0
-);
-    } else {
-        world_model = translate(world_model, delta_time*move_direction);;
-    }
 	// Update the mesh if the user selected another one.
 	// Ideally we would only call table_find_pointer when we know
 	// the user selected another mesh, but I can't find a way to
@@ -138,4 +69,46 @@ if is_key_down(#char "V") doDoor(ball,
 	   // We transpose the result because OpenGL stores matrices in column-major
         // if g_mesh
         // 	generate_skinning_matrices (*g_pose, transpose_result = true);
+
+
+
+    ball: *Body;
+
+    if !is_key_down(#char "G") {
+        // ball = doBall(*world_model);;
+        ball = doBall(world_model, *g_pose);;
+        }
+
+    move_direction: Vector3;
+    is_ctrl_down := is_key_down(Key_Code.CTRL);
+    if is_key_down(#char "W") move_direction += game_coordinates.forward;
+    if is_key_down(#char "S") move_direction += game_coordinates.back;
+    if is_key_down(#char "A") move_direction += game_coordinates.left;
+    if is_key_down(#char "D") move_direction += game_coordinates.right;
+
+    if is_key_down(Key_Code.SPACEBAR) move_direction += game_coordinates.up;;
+
+    normalize(*move_direction);
+    if ball {
+
+    if !is_ctrl_down
+        ball.angular_velocity +=  0.2*move_direction;
+    else
+        ball.velocity +=  0.5*move_direction;
+
+
+        // log("BALL POS %", ball.position);
+        // if is_key_down(#char "H") doHookDontUpdate(ball,world_attach_point=ball.position+up*4.1+forward*2.0, 2.0);;
+        if is_key_down(#char "J") doHook(ball,world_attach_point=up*4.1+forward*2.0, 1.9);;
+        // if is_key_down(#char "E") doWeld(ball,world_attach_point=up*1.1+forward,weld_relative_axis=game_coordinates.right, rest_angle_radians=3.151593/2.0, target_length=.0);;
+        // if is_key_down(#char "Q") doWeld(ball,world_attach_point=up*1.1+forward,weld_relative_axis=game_coordinates.up, rest_angle_radians=3.151593/2.0, target_length=.0);;
+    if is_key_down(#char "Q") doDoor(ball,world_hinge_attach_position=up*1.1+forward, world_hinge_axis=game_coordinates.up, game_coordinates.left);;
+    if is_key_down(#char "E") doDoor(ball, world_hinge_attach_position = up*1.1+forward, world_hinge_axis = game_coordinates.up+ game_coordinates.right, game_coordinates.right);
+    if is_key_down(#char "R") doDoor(ball, world_hinge_attach_position = up*1.1+forward, world_hinge_axis = game_coordinates.down, game_coordinates.left);
+    if is_key_down(#char "T") doDoor(ball, world_hinge_attach_position = up*1.1+forward, world_hinge_axis = game_coordinates.right, game_coordinates.forward);
+    if is_key_down(#char "C") doDoor(ball, world_hinge_attach_position = up*1.1+forward, world_hinge_axis = game_coordinates.up, game_coordinates.right);
+    if is_key_down(#char "V") doDoor(ball,    world_hinge_attach_position = up*1.1+forward,world_hinge_axis = game_coordinates.down,game_coordinates.back);
+    } else {
+        world_model = translate(world_model, delta_time*move_direction);;
+    }
 }

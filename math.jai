@@ -467,6 +467,25 @@ get_scale :: (mat: Matrix4) -> Vector3 {
     }
 }
 
+compose_transform :: (local_position: Vector3, local_orientation: Vector3, local_scale: Vector3) -> Matrix4 {
+    transform: Matrix4;
+    // translation := Vector3.{matrix._14, matrix._24, matrix._34};
+
+    // scale := Vector3.{
+    //     length(Vector3.{matrix._11, matrix._21, matrix._31}),
+    //     length(Vector3.{matrix._12, matrix._22, matrix._32}),
+    //     length(Vector3.{matrix._13, matrix._23, matrix._33}),
+    // };
+
+    // rotation_matrix := Matrix3.{
+    //     matrix._11 / scale.x, matrix._12 / scale.y, matrix._13 / scale.z,
+    //     matrix._21 / scale.x, matrix._22 / scale.y, matrix._23 / scale.z,
+    //     matrix._31 / scale.x, matrix._32 / scale.y, matrix._33 / scale.z,
+    // };
+    // rotation := get_rotation(rotation_matrix);
+    return transform;
+}
+
 koda_decompose_transform :: (matrix: Matrix4) -> translation: Vector3, orientaation: Quaternion, scale: Vector3 {
     translation := Vector3.{matrix._14, matrix._24, matrix._34};
 

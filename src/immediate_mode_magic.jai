@@ -184,11 +184,13 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, iden
     CheckInit();
     ball_position := get_translation(transform);
     hash := get_hash(loc, identifier);
-    ball := find_or_create_ball(hash, ball_position, radius, mass);
-    basic.assert(ball!=null);
-    ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
+    ball, did_just_created_a_new_one := find_or_create_ball(hash, ball_position, radius, mass);
+
+    if did_just_created_a_new_one {
+
+    }
     ball.position = ball_position;
-    ball.prev_position = ball_position;
+    ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
     ball.user_data = transform;
     reflect_results_callback :: (body: *Body) {
         transform := cast(*Matrix4)body.user_data;
@@ -226,13 +228,9 @@ apply_ragdoll_to_pose :: (pose: Skeleton_Pose)
     parent_transform := get_parent_world_transform(joint);
     _, inv_parent := inverse(parent_transform);
 
-    // Create world transform from ragdoll data
     ragdoll_world_transform := translate(Matrix4_Identity, ragdoll_world_position) * rotation_matrix(Matrix4, ragdoll_world_orientation);
-
-    // Convert to local space relative to parent
     local_transform := inv_parent * ragdoll_world_transform;
 
-    // Apply to joint
     joint.local_position, joint.local_orientation, joint.local_scale = decompose_transform(local_transform);
     if ragdoll_idx != 0
     {
@@ -243,25 +241,43 @@ apply_ragdoll_to_pose :: (pose: Skeleton_Pose)
 
 }
 
+RED :: Vector4.{1,0,0,1};
+GREEN :: Vector4.{0,1,0,1};
+BLUE :: Vector4.{0,0,1,1};
+
 doBall :: (transform: Matrix4, pose: *Skeleton_Pose, bone_id: int = 2, radius: float32 = 0.1, mass: float32 = .01, identifier:s64=0, loc := #caller_location) -> *Body {
     CheckInit();
-    if pose.joints.count <= bone_id then return null;;
+    if pose.joints.count <= bone_id then return null;
     joint := *pose.joints[bone_id];
 
     _, inv_parent := inverse(transform);
-    bone_world_model := get_parent_world_transform(joint) * joint.model_space_transform;;
+    parent_transform := get_parent_world_transform(joint);
+    bone_world_model :=  joint.model_space_transform;;
     current_pos, current_ori, current_scale := koda_decompose_transform(bone_world_model);
+
+     {
+        T, R, S := koda_decompose_transform(transform*bone_world_model);
+        push_vector(.{},T,RED);
+     }
+     {
+        T, R, S := koda_decompose_transform(inv_parent*bone_world_model);
+        push_vector(.{},T,GREEN);
+     }
+
     ball_position := current_pos;
     hash := get_hash(loc, identifier);
-    ball := find_or_create_ball(hash, ball_position, radius, mass);
-    basic.assert(ball!=null);
+    ball, did_just_created_a_new_one := find_or_create_ball(hash, ball_position, radius, mass);
+    // if did_just_created_a_new_one 
+    {
+        ball.position = ball_position;
+        ball.orientation = current_ori;
+    }
+
     ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
-    // ball.position = ball_position;
-    // ball.prev_position = ball_position;
-    ball.prev_orientation = current_ori;
-    // ball.orientation = current_ori;
     ball.user_data = pose;
+
     reflect_results_callback :: (body: *Body) {
+
         pose := cast(*Skeleton_Pose)body.user_data;
 
         for *joint: pose.joints {
@@ -274,10 +290,11 @@ doBall :: (transform: Matrix4, pose: *Skeleton_Pose, bone_id: int = 2, radius: f
          _, inv_parent := inverse(parent_transform);
 
 
-         world_transform := parent_transform * joint.model_space_transform;
+         world_transform := joint.model_space_transform;
 
 
          previous_t, previous_q, previous_s := koda_decompose_transform(world_transform);
+
 
          delta_pos := body.position - previous_t;
 
@@ -286,15 +303,18 @@ doBall :: (transform: Matrix4, pose: *Skeleton_Pose, bone_id: int = 2, radius: f
          next_q_minus_previous := next_q*conjugate(previous_q);
 
          MODEL := Matrix4_Identity;
-         MODEL = translate(MODEL, previous_t + delta_pos);
+         MODEL = translate(MODEL, body.position);  //this is correct, the below is bad. (I think)
+         // MODEL = translate(MODEL, previous_t + delta_pos);
+         MODEL = rotate(MODEL, normalize(next_q)); //this is correct, the below is bad. (I m pretty sure)
          // MODEL = rotate(MODEL, normalize(next_q_minus_previous*previous_q));
-         MODEL = rotate(MODEL, normalize(next_q));
 
+         // new_local_model := MODEL; //phantasmagorical behavior
          new_local_model := inv_parent*MODEL;
 
 
          joint.local_position, joint.local_orientation, joint.local_scale = koda_decompose_transform(new_local_model);
          // joint.local_position = local_position_backup;
+         // joint.local_orientation = local_orientation_backup;
         }
 
     }
@@ -368,7 +388,7 @@ find_or_create_joint_constraint :: (hash: u64, A: *Body, B: *Body = null ) -> *J
     return joint_ptr, did_just_created_a_new_one;
 }
 
-find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float, mass: float32) -> *Body {
+find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float, mass: float32) -> *Body, did_just_created_a_new_one: bool {
     using context.solver.world;
     locator_ptr := table_find_pointer(*hashed_bodies, hash);
 
@@ -378,12 +398,14 @@ find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float, mass: 
         ball = bucket_array_find_pointer(*bodies,locator_ptr.*);
     }
 
+    did_just_created_a_new_one: bool;
     if !ball {
+        did_just_created_a_new_one = true;
         basic.log("creating new ball");
         ball = create_ball(ball_position, radius, mass);
         ball.hash = hash;
         table_set(*hashed_bodies, hash, ball.bucket_locator);
      }
 
-    return ball;
+    return ball, did_just_created_a_new_one;
 }
