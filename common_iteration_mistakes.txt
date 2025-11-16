@@ -1,6 +1,7 @@
-- If I change the mass, the compliance needed to see effects like weak spring also needs to change
+-HACK FIX -> If I change the mass, the compliance needed to see effects like weak spring also needs to change -> Solution: compliance*inv_mass = useful words but dangerois for deisng
 
-- If I use double direction distance, when it is changing diection around the geodesic, these seems to be big forces for a little short period of time.
+- If I use double direction distance, when it is changing diection around the geodesic, these seems to be big forces for a little short period of time
 
-[BIGGEST PROBLEM RN]
+
+FIXED -> [BIGGEST PROBLEM RN] -> SOLUTION WAS: Bug on dt in integration angular step. I was multiplying *dt on one line, and accidentally doit it again in 2 lines below.
 There is a problem with moment of inertia and angular corrections. maybe I should defer it. But if a steel rod moves a big heavy object, it should also rotate it with ease, even if its moment of inertia is big. Maybe  I should go towars matrix of moments of inertia.
