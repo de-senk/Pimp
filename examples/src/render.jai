@@ -205,6 +205,141 @@ init_mesh_rendering_objects :: (using mesh : *Skinned_Mesh, $dynamic := false)
 	glVertexAttribIPointer (3, 4, GL_SHORT, size_of (Vertex), cast (*void) (3 * size_of (Vector3)));
 }
 
+upload_mesh_to_gpu :: (using mesh: *Skinned_Mesh, $dynamic := false) -> bool {
+    if mesh.is_already_on_gpu_mem return true;
+    if !mesh.vertices.count || !mesh.indices.count return false;
+
+	glGenBuffers (1, *vbo);
+	glBindBuffer (GL_ARRAY_BUFFER, vbo);
+	defer glBindBuffer (GL_ARRAY_BUFFER, 0);
+    #if dynamic
+    then glBufferData (GL_ARRAY_BUFFER, size_of (Vertex) * vertices.count, vertices.data, GL_DYNAMIC_DRAW);
+	else glBufferData (GL_ARRAY_BUFFER, size_of (Vertex) * vertices.count, vertices.data, GL_STATIC_DRAW);
+
+	glGenBuffers (1, *ibo);
+	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
+	defer glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+	glBufferData (GL_ELEMENT_ARRAY_BUFFER, size_of (u32) * indices.count, indices.data, GL_STATIC_DRAW);
+
+    // for *mesh.vertices
+    // {
+    //     it.texture_albedo  = 8;
+    //     it.texture_normal = 9;
+    //     it.texture_specular = 10;
+    // }
+
+// #run offset_of(Vertex, "position")
+// #run offset_of(Vertex, "normal")
+// #run offset_of(Vertex, "tangent")
+// #run offset_of(Vertex, "texcoord_0")
+// #run offset_of(Vertex, "colorScale")
+// #run offset_of(Vertex, "material_index")
+// #run offset_of(Vertex, "weights")
+// #run offset_of(Vertex, "joints")
+
+
+    glGenVertexArrays (1, *vao);
+	glBindVertexArray (vao);
+	defer glBindVertexArray (0);
+	glEnableVertexAttribArray (0);
+	glVertexAttribPointer (0, 3, GL_FLOAT, GL_FALSE, size_of (Vertex), cast (*void)#run offset_of(Vertex, "position"));
+	glEnableVertexAttribArray (1);
+	glVertexAttribPointer (1, 3, GL_FLOAT, GL_FALSE, size_of (Vertex), cast (*void)#run offset_of(Vertex, "normal"));
+	glEnableVertexAttribArray (2);
+	glVertexAttribPointer (2, 4, GL_FLOAT, GL_FALSE, size_of (Vertex), cast (*void)#run offset_of(Vertex, "weights"));
+	glEnableVertexAttribArray (3);
+	glVertexAttribIPointer (3, 4, GL_SHORT, size_of (Vertex), cast (*void)#run offset_of(Vertex, "joints"));
+
+    mesh.vertex_count = xx mesh.vertices.count;
+    mesh.index_count = xx mesh.indices.count;
+    mesh.is_already_on_gpu_mem = true;
+
+    return true;
+}
+
+/*
+
+dx11_shader_create_skinnedshader_input_layout_for_compute :: (CS_bytecode:string) -> bool
+{
+    input_desc := D3D11_INPUT_ELEMENT_DESC .[
+    .{ "POSITION",    0, .R32G32B32_FLOAT, 0,  #run offset_of(Vertex, "position"),  .VERTEX_DATA, 0 },
+    .{ "NORMAL",      0, .R32G32B32_FLOAT, 0, #run offset_of(Vertex, "normal"), .VERTEX_DATA, 0 },
+    .{ "TANGENT",     0, .R32G32B32A32_FLOAT, 0, #run offset_of(Vertex, "tangent"), .VERTEX_DATA, 0 },
+    .{ "TEXCOORD",    0, .R32G32_FLOAT, 0, #run offset_of(Vertex, "texcoord_0"), .VERTEX_DATA, 0 },
+    .{ "COLOR",       0, .R8G8B8A8_UINT, 0, #run offset_of(Vertex, "colorScale"), .VERTEX_DATA, 0 },
+    .{ "MATERIAL_INDEX",       0, .R8G8B8A8_UINT, 0, #run offset_of(Vertex, "material_index"), .VERTEX_DATA, 0 },
+    .{ "BLENDWEIGHT", 0, .R32G32B32A32_FLOAT, 0, #run offset_of(Vertex, "weights"), .VERTEX_DATA, 0 },
+    .{ "BLENDINDICES", 0, .R32G32B32A32_SINT, 0, #run offset_of(Vertex, "joints"), .VERTEX_DATA, 0 },
+    ];
+
+    result := ID3D11Device_CreateInputLayout(
+        d3d11_device,
+        input_desc.data, input_desc.count,
+        CS_bytecode.data,
+        xx CS_bytecode.count,
+        *d3d11_input_for_compute_layout
+    );
+
+    if result != S_OK {
+        log_error("------Failed to create input layout-------");
+        return false;
+    }
+
+    return true;
+}
+*/
+//dx11
+// upload_mesh_to_gpu :: (mesh: *Skinned_Mesh) -> bool {
+//     if mesh.is_already_on_gpu_mem return true;
+//     if !mesh.vertices.count || !mesh.indices.count return false;
+//     // Create vertex buffer
+//     vertex_buffer_desc: D3D11_BUFFER_DESC;
+//     vertex_buffer_desc.ByteWidth = xx (mesh.vertices.count * size_of(Vertex));
+//     vertex_buffer_desc.Usage = .DYNAMIC;
+//     vertex_buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_FLAG.WRITE;;
+//     vertex_buffer_desc.BindFlags = xx D3D11_BIND_FLAG.VERTEX_BUFFER;
+
+//     // for *mesh.vertices
+//     // {
+//     //     it.texture_albedo  = 8;
+//     //     it.texture_normal = 9;
+//     //     it.texture_specular = 10;
+//     // }
+//     vertex_buffer_data: D3D11_SUBRESOURCE_DATA;
+//     vertex_buffer_data.pSysMem = mesh.vertices.data;
+
+//     log("UPLOADING mesh 45 :\n% ",mesh.vertices[45]);
+//     result := ID3D11Device_CreateBuffer(d3d11_device, *vertex_buffer_desc, *vertex_buffer_data, *mesh.vertex_buffer);
+//     if result != S_OK {
+//         log_error("Failed to create vertex buffer");
+//         return false;
+//     }
+
+//     // Create index buffer
+//     index_buffer_desc: D3D11_BUFFER_DESC;
+//     index_buffer_desc.ByteWidth = xx (mesh.indices.count * size_of(u32));
+//     index_buffer_desc.Usage = .IMMUTABLE;
+//     index_buffer_desc.BindFlags = xx D3D11_BIND_FLAG.INDEX_BUFFER;
+
+//     index_buffer_data: D3D11_SUBRESOURCE_DATA;
+//     index_buffer_data.pSysMem = mesh.indices.data;
+
+//     result = ID3D11Device_CreateBuffer(d3d11_device, *index_buffer_desc, *index_buffer_data, *mesh.index_buffer);
+//     if result != S_OK {
+//         log_error("Failed to create index buffer");
+//         IUnknown_Release(mesh.vertex_buffer);
+//         mesh.vertex_buffer = null;
+//         return false;
+//     }
+
+//     mesh.vertex_count = xx mesh.vertices.count;
+//     mesh.index_count = xx mesh.indices.count;
+//     mesh.is_already_on_gpu_mem = true;
+
+//     return true;
+// }
+
+
 LINE_RENDER_COMMAND :: struct {
     start: Vector3;
     end: Vector3;
@@ -299,7 +434,7 @@ const int MAX_WEIGHTS = %2;
 
 layout (location = 0) in vec3 a_Position;
 layout (location = 1) in vec3 a_Normal;
-layout (location = 2) in vec3 a_Weights;
+layout (location = 2) in vec4 a_Weights;
 layout (location = 3) in ivec4 a_Joint_Ids;
 
 uniform mat4 u_Model_Matrix;

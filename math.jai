@@ -606,7 +606,7 @@ Solve ::  (a: Matrix6, b: Vector6) -> Vector6 {
 
     // Backward substitution: Solve L^T x = z
     x: Vector6;
-    for #v2 < i: 0..5 {
+    for < i: 0..5 {
         // assert(false);
         sum := 0.0;
         for j: i+1..5 {

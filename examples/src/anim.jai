@@ -70,6 +70,11 @@ Skeleton_Pose :: struct
 	skinning_matrices : []Matrix4;
 }
 
+get_parent_world_transform :: (joint: *Skeleton_Pose.Joint) -> Matrix4 {
+	if !joint.parent return Matrix4_Identity;
+	return joint.parent.model_space_transform;
+}
+
 load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bool
 {
 	parse_joint :: (
@@ -130,7 +135,7 @@ load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bo
 	if handler.failed
 		return false;
 
-	if handler.version != 1
+	if handler.version > 3
 		return error_out (handler, "Invalid version number.");
 
 	ok : bool;

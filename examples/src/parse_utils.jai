@@ -1,4 +1,5 @@
 #import "Text_File_Handler";
+str :: #import "String";
 
 error_out :: inline (handler : Text_File_Handler, str : string, args : ..Any) -> bool
 {
@@ -136,5 +137,53 @@ parse_matrix4 :: (handler : *Text_File_Handler) -> Matrix4, bool
 			return .{}, false;
 		result.coef[row] = components;
 	}
+	return result, true;
+}
+
+
+
+parse_float :: (handler : *Text_File_Handler) -> float32, bool
+{
+	line, ok := consume_next_line (handler);
+	if !ok
+		return 0, error_out (handler, "Unexpected EOF.");
+	val : float64;
+	val, ok, line = string_to_float (line);
+	if !ok
+		return 0, error_out (handler, "Expected an integer.");
+	// @Cleanup: This will fail if the integer is out of bounds, but
+	// we probably should check for overflow ourselves
+	result := cast (float32) val;
+	line = str.trim_left (line);
+	if line.count > 0
+		return 0, error_out (handler, "Expected end of line.");
+	return result, true;
+}
+
+parse_u32_dont_consume :: (handler : *Text_File_Handler, in_line: string) -> u32, bool
+{
+	line :string = in_line;
+	val : s64;
+	ok := false;
+	val, ok, line = string_to_int (line);
+	if !ok
+		return 0, error_out (handler, "Expected an integer.");
+	// @Cleanup: This will fail if the integer is out of bounds, but
+	// we probably should check for overflow ourselves
+	result := cast (u32) val;
+	line = str.trim_left (line);
+	if line.count > 0
+		return 0, error_out (handler, "Expected end of line.");
+	return result, true;
+}
+
+
+parse_vector2 :: (handler : *Text_File_Handler) -> Vector2, bool
+{
+	components, ok := parse_float_tuple (handler, 2);
+	if !ok
+		return .{}, false;
+	result : Vector2 = ---;
+	result.component = components;
 	return result, true;
 }

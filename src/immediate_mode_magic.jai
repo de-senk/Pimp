@@ -171,7 +171,7 @@ doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis:
             door.local_attach_orientation_B = dq_B;
             //so in the orientation solver we can recover that info to do some stuff.
 
-        
+
         }
 
     }
@@ -203,6 +203,99 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, iden
         MODEL = translate(MODEL, previous_t + delta_pos);
         MODEL = rotate(MODEL, normalize(next_q_minus_previous*previous_q));
         transform.* = MODEL;
+
+    }
+    ball.end_frame_callback = reflect_results_callback;
+    return ball;
+}
+
+
+
+//to be deleted
+#if 0
+apply_ragdoll_to_pose :: (pose: Skeleton_Pose)
+{
+
+    joint := *pose.joints[1];
+    local_orientation_backup := joint.local_orientation;
+    local_position_backup := joint.local_position;
+
+    ragdoll_world_position := it.position;
+    ragdoll_world_orientation := it.rotation;
+
+    parent_transform := get_parent_world_transform(joint);
+    _, inv_parent := inverse(parent_transform);
+
+    // Create world transform from ragdoll data
+    ragdoll_world_transform := translate(Matrix4_Identity, ragdoll_world_position) * rotation_matrix(Matrix4, ragdoll_world_orientation);
+
+    // Convert to local space relative to parent
+    local_transform := inv_parent * ragdoll_world_transform;
+
+    // Apply to joint
+    joint.local_position, joint.local_orientation, joint.local_scale = decompose_transform(local_transform);
+    if ragdoll_idx != 0
+    {
+    if ragdoll_idx != 1 && g_should_apply_rotation_only_L then joint.local_position=local_position_backup;
+    }
+
+    joint.model_space_transform = parent_transform * local_transform;
+
+}
+
+doBall :: (transform: Matrix4, pose: *Skeleton_Pose, bone_id: int = 2, radius: float32 = 0.1, mass: float32 = .01, identifier:s64=0, loc := #caller_location) -> *Body {
+    CheckInit();
+    if pose.joints.count <= bone_id then return null;;
+    joint := *pose.joints[bone_id];
+
+    _, inv_parent := inverse(transform);
+    bone_world_model := get_parent_world_transform(joint) * joint.model_space_transform;;
+    current_pos, current_ori, current_scale := koda_decompose_transform(bone_world_model);
+    ball_position := current_pos;
+    hash := get_hash(loc, identifier);
+    ball := find_or_create_ball(hash, ball_position, radius, mass);
+    basic.assert(ball!=null);
+    ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
+    // ball.position = ball_position;
+    // ball.prev_position = ball_position;
+    ball.prev_orientation = current_ori;
+    // ball.orientation = current_ori;
+    ball.user_data = pose;
+    reflect_results_callback :: (body: *Body) {
+        pose := cast(*Skeleton_Pose)body.user_data;
+
+        for *joint: pose.joints {
+           if it_index != 2 continue;
+         // joint := *pose.joints[1];
+         local_orientation_backup := joint.local_orientation;
+         local_position_backup := joint.local_position;
+
+         parent_transform := get_parent_world_transform(joint);
+         _, inv_parent := inverse(parent_transform);
+
+
+         world_transform := parent_transform * joint.model_space_transform;
+
+
+         previous_t, previous_q, previous_s := koda_decompose_transform(world_transform);
+
+         delta_pos := body.position - previous_t;
+
+         // delta_pos = .{}; // !!!!!!!! translation nullifieds
+         next_q := body.orientation;
+         next_q_minus_previous := next_q*conjugate(previous_q);
+
+         MODEL := Matrix4_Identity;
+         MODEL = translate(MODEL, previous_t + delta_pos);
+         // MODEL = rotate(MODEL, normalize(next_q_minus_previous*previous_q));
+         MODEL = rotate(MODEL, normalize(next_q));
+
+         new_local_model := inv_parent*MODEL;
+
+
+         joint.local_position, joint.local_orientation, joint.local_scale = koda_decompose_transform(new_local_model);
+         // joint.local_position = local_position_backup;
+        }
 
     }
     ball.end_frame_callback = reflect_results_callback;

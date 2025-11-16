@@ -65,6 +65,7 @@ draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matric
 	glDrawElements (GL_TRIANGLES, cast (u32) indices.count, GL_UNSIGNED_INT, null);
 }
 
+
 draw_ui_element :: (using uircmd : UI_RENDER_COMMAND) {
     glDisable (GL_DEPTH_TEST); //:tagMaybeCache
 	glDepthMask (GL_FALSE);
@@ -729,5 +730,16 @@ Draw :: (using mesh : *Skinned_Mesh, world_model : Matrix4 = Matrix4_Identity, s
     cmd.mesh.skinned_mesh = mesh;
     cmd.mesh.skinning_matrices = skinning_matrices;
     array_add(*drawing_commands, cmd);
+}
+
+Draw_Dun_Cmds :: (mcmds: []MESH_RENDER_COMMAND) {
+    for mcmds {
+        cmd: Draw_Command;
+        cmd.kind = .TRIANGLE_MESH;
+        cmd.should_render = true;
+        cmd.mesh = it;
+
+        array_add(*drawing_commands, cmd);
+    }
 }
 

@@ -5,7 +5,7 @@ MESH_RENDER_COMMAND :: struct {
     skinning_matrices : []Matrix4;
 }
 
-Vertex :: struct
+VertexV1 :: struct
 {
 	position : Vector3;
 	normal   : Vector3;
@@ -15,13 +15,98 @@ Vertex :: struct
 	joints   : [4]s16;
 }
 
-Skinned_Mesh :: struct
+
+Vertex :: struct
+{
+	position  : Vector3; _:float32; //16
+	normal    : Vector3; _:float32; //16
+	tangent   : Vector3 = Vector3.{1,0,0}; tangentw: float32 = 1.0; //16
+	texcoord_0: Vector2; //8
+    colorScale: u32; //4
+    material_index: u32; //4, sum with above is  16
+	weights  : Vector4; // _:float32; //16
+    //sum so far is 80, print says it is 88 so I need to add 8 bytes of padding
+	joints   : [4]s16; //16 //why using 16? breaks compatibility with windows 8.
+
+}
+
+
+VertexOutput :: struct
+{
+	position  : Vector3; _:float32; //16
+	normal    : Vector3; _:float32; //16
+	tangent   : Vector3 = Vector3.{1,0,0}; tangentw: float32 = 1.0; //16
+	texcoord_0: Vector2; //8
+    colorScale: u32; //4
+    material_index: u32; //4, sum with above is  16
+
+}
+
+
+VertexStatic :: struct
+{
+	position  : Vector3; _:float32;
+	normal    : Vector3; _:float32;
+	tangent   : Vector3 = Vector3.{1,0,0}; tangentw: float32 = 1.0;
+	texcoord_0: Vector2;
+    colorScale: u32;_:float32;
+    texture_albedo: u32 = 8;
+    texture_normal: u32= 9;
+    texture_specular: u32= 10;
+
+}
+
+
+Skinned_Mesh2 :: struct
 {
 	#as using skeleton : Skeleton;
 	vertices : []Vertex;
 	indices  : []u32;
 	vao, vbo, ibo : GLuint;
 }
+
+
+#if !#exists(ID3D11Buffer)
+ID3D11Buffer :: u64;
+
+Skinned_Mesh :: struct
+{
+	#as using skeleton : Skeleton; @NoSerialize
+	vertices : []Vertex; @NoSerialize
+	vertices_dirty : bool; @NoSerialize
+	indices  : []u32; @NoSerialize
+	model_name: string;
+    // world_model := Matrix4_Identity;
+
+    _padding_render_res: bool=  ---;
+    #place _padding_render_res; // OpenGL resources
+	vao, vbo, ibo : GLuint; @NoSerialize
+    #place _padding_render_res; // D3D11 resources
+    vertex_buffer: *ID3D11Buffer; @NoSerialize
+    index_buffer: *ID3D11Buffer; @NoSerialize
+    vertex_count: u32; @NoSerialize
+    index_count: u32; @NoSerialize
+    is_already_on_gpu_mem: bool; @NoSerialize
+}
+
+
+Static_Mesh :: struct
+{
+	vertices : []VertexStatic;
+	indices  : []u32;
+	model_name: string;
+	material_guid: string;
+	world_model := Matrix4_Identity;
+
+    // D3D11 resources
+    vertex_buffer: *ID3D11Buffer; @NoSerialize
+    index_buffer: *ID3D11Buffer; @NoSerialize
+    vertex_count: u32;
+    index_count: u32;
+    is_already_on_gpu_mem: bool; @NoSerialize
+}
+
+
 
 #assert MAX_JOINTS <= 0x7fff "MAX_JOINTS can't exceed the max of an s16, since we use that for joint ids.";
 
@@ -39,6 +124,7 @@ Skeleton :: struct
 		// Why we have this matrix is explained in anim.jai:generate_skinning_matrices
 		inverse_bind_transform : Matrix4;
 		parent : *Joint;
+		name:string; //maybe delete
 	}
 
 	name_to_joint_id : Table (string, s16);
@@ -88,7 +174,7 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool {
 		vertex.normal, ok = parse_vector3 (handler);
 		if !ok
 			return false;
-		vertex.weights, ok = parse_vector3 (handler);
+		vertex.weights, ok = parse_vector4 (handler);
 		if !ok
 			return false;
 		vertex.joints, ok = parse_int_tuple (handler, 4, s16);

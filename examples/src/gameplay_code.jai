@@ -6,7 +6,8 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     ball: *Body;
 
     if !is_key_down(#char "G") {
-        ball = doBall(*world_model);;
+        // ball = doBall(*world_model);;
+        ball = doBall(world_model, *g_pose);;
         }
 
     move_direction: Vector3;
@@ -96,11 +97,13 @@ if is_key_down(#char "V") doDoor(ball,
 	else
 		anim = null;
 
+
 	if g_mesh
 	{
 		// We reset to the bind pose because the animation
 		// might not have all of the joints our pose has.
 		reset_to_bind_pose (*g_pose);
+
 		if anim && g_params.show_animation
 		{
 			sample_animation (
@@ -113,9 +116,9 @@ if is_key_down(#char "V") doDoor(ball,
 
 
        if  g_mesh.joints.count != 0 {
-       wpos := get_world_position(*g_pose, "DEF-spine.004");
-       spos := WorldToScreen(world_model*wpos);
-	   if g_params.show_mesh doLabel("GLADIATOR", spos);
+       // wpos := get_world_position(*g_pose, "DEF-spine.004");
+       // spos := WorldToScreen(world_model*wpos);
+       // if g_params.show_mesh doLabel("GLADIATOR", spos);
         }
        if g_params.show_mesh Draw(g_mesh, world_model, g_pose.skinning_matrices);
        if g_params.show_skeleton Draw(*g_pose, world_model, xyzw (g_params.skeleton_color, 1));
@@ -131,7 +134,8 @@ if is_key_down(#char "V") doDoor(ball,
 	else
 		g_params.animation_time = 0;
 
-	// We transpose the result because OpenGL stores matrices in column-major
-	if g_mesh
-		generate_skinning_matrices (*g_pose, transpose_result = true);
+	//:tagMovedHereBecausePhysics
+	   // We transpose the result because OpenGL stores matrices in column-major
+        // if g_mesh
+        // 	generate_skinning_matrices (*g_pose, transpose_result = true);
 }

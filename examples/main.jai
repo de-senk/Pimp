@@ -8,6 +8,22 @@ game_coordinates :: struct { //TODO: To figure it out.
     back   :: Vector3.{0,0,-1};
 }
 
+
+make_rotation_matrix4 :: inline (axis: Vector3, angle: float) -> Matrix4 {
+    q: Quaternion = ---;
+    set_from_axis_and_angle(*q, axis, angle);
+    return rotation_matrix(Matrix4, q);
+}
+
+offset_of :: ($T: Type, $member: string) -> int {
+    for type_info(T).members {
+        if it.name == member return it.offset_in_bytes;
+    }
+
+    assert(false, "Type '%' does not have member '%'", T, member);
+    return -1;
+}
+
 main :: () {
 	// This is here because on Windows, segfaults and stuff are silent.
 	// If the program ends without printing this message, then something bad happened.
@@ -49,6 +65,7 @@ main :: () {
 	glEnable (GL_BLEND);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+
 	while g_running
 	{
 
@@ -67,6 +84,8 @@ main :: () {
 		}
 
 		for events_this_frame handle_window_event (it);
+
+
         {
 		  update_frame (delta_time);
 		  mouse_x, mouse_y := get_mouse_pointer_position(right_handed=false);
@@ -78,6 +97,10 @@ main :: () {
         //
         simulate();
 
+    	//:tagMovedHereBecausePhysics
+	   // We transpose the result because OpenGL stores matrices in column-major
+        if g_mesh
+        	generate_skinning_matrices (*g_pose, transpose_result = true);
         //
         // Drawing pass
         //
@@ -87,6 +110,8 @@ main :: () {
 		simp.clear_render_target (0.1, 0.1, 0.1, 1);
 		glClear (GL_DEPTH_BUFFER_BIT);
 
+
+        // update_instance_animation(*dungeon, door_instance_idx, door_animation);
 
 		//draw_coordinate_axes, if game and physcis coordinte overlap in position and orientation, then we have the same coords!
 		{
@@ -406,7 +431,8 @@ sync_positions_with_renderer :: (this: *Soft_Body, mesh: *Skinned_Mesh) {
 find_and_load_meshes_and_animations :: inline () {
 	visitor :: (info : *File_Visit_Info, data : *void) {
 		path, basename, ext := path_decomp (info.full_name);
-		if ext == "mesh" {
+		if ext == {
+		  case "mesh";
 			mesh : Skinned_Mesh;
 			loaded := load_mesh_from_file (*mesh, info.full_name);
 			if loaded {
@@ -415,8 +441,19 @@ find_and_load_meshes_and_animations :: inline () {
 			} else {
 				log_error ("Could not load % mesh.", basename);
             }
-		} else if ext == "anim" {
-			anim : Sampled_Animation;
+		  case "skinned_mesh";
+			mesh : Skinned_Mesh;
+			loaded := load_custom_skinned_mesh_from_file(*mesh, info.full_name);
+			if loaded {
+			     upload_mesh_to_gpu (*mesh);
+                // init_mesh_rendering_objects (*mesh);
+				table_add (*g_loaded_meshes, copy_string (basename), mesh);
+			} else {
+				log_error ("Could not load % mesh.", basename);
+            }
+		case"skinned_anim"; #through;
+		case"anim";
+		    anim : Sampled_Animation;
 			loaded := load_animation_from_file (*anim, info.full_name);
 			if loaded {
 				table_add (*g_loaded_animations, copy_string (basename), anim);
@@ -534,3 +571,5 @@ getrect :: #import "GetRect";
 #load "src/ui.jai";
 #load "src/draw_commands.jai";
 #load "src/gameplay_code.jai";
+
+#load "src/asset_manager.jai";
