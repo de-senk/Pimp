@@ -183,6 +183,7 @@ World :: struct {
     count_RigidBody_Fitted_To_PageSize :: 8*4096 / size_of(Body); // size*count=4096*8bit=bucket_size -> count=4096*8;
 
     soft_bodies: [1]Soft_Body;
+    stub_world_body: Body; //to avoid null check everywhere on the code and maybe soem easi paralellization without masks and branching.
     bodies     :  Bucket_Array(type=Body , items_per_bucket=count_RigidBody_Fitted_To_PageSize );
     hashed_bodies:  Table(u64, Bucket_Locator);
 

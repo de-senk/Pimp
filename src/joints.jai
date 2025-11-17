@@ -24,7 +24,7 @@ Two_Body_Constraint_Shared :: struct {
     world_position: Vector3; //idk what to do with this yet
     //not all fields are shared, so there is a little bit of wasted memory
 
-    //local -
+    //local - yo
     local_attach_position_A: Vector3;
     local_attach_position_B: Vector3;
     local_attach_orientation_A: Quaternion;
@@ -78,18 +78,10 @@ Joint_Constraint :: struct {
 
 recalculate_world_attach_pos_and_ori :: inline (using joint: *Joint_Constraint)
 {
-    if A {
-        world_attach_position_A = l2w(A.position, A.orientation, local_attach_position_A);
-        world_attach_orientation_A = normalize(A.orientation * joint.local_attach_orientation_A);
-    }
-
-    if B {
-        world_attach_position_B = l2w(B.position, B.orientation, local_attach_position_B);
-        world_attach_orientation_B = normalize(B.orientation * joint.local_attach_orientation_B);
-    } else {
-        world_attach_position_B = local_attach_position_B;
-        world_attach_orientation_B = local_attach_orientation_B;
-    }
+    world_attach_position_A = l2w(A.position, A.orientation, local_attach_position_A);
+    world_attach_orientation_A = normalize(A.orientation * joint.local_attach_orientation_A);
+    world_attach_position_B = l2w(B.position, B.orientation, local_attach_position_B);
+    world_attach_orientation_B = normalize(B.orientation * joint.local_attach_orientation_B);
 }
 
 #if 0
@@ -192,10 +184,9 @@ solve_orientation_for_door_constraint_cb :: (using joint: *Joint_Constraint, dt:
     // Weld the two Non-Free axis
     //
     world_hinge_axis_A := rotate(joint.local_ref_A, A.orientation);
-    world_hinge_axis_B := rotate(joint.local_ref_B, ifx B B.orientation else .{});
+    world_hinge_axis_B := rotate(joint.local_ref_B, B.orientation);
     angular_error := cross_product(world_hinge_axis_A, world_hinge_axis_B);  //these axis should be aligned! Otherwise too bad, so error is this.
     apply_angular_correction(A, B, dt, hardCompliance, angular_error);
-    //OK AFTER ITERATING; EVERYTHING ABOVE WORKS!
 
     //
     // Angle limits for free axis
@@ -258,10 +249,8 @@ get_velocity_at_position :: (body: *Body, position: Vector3) -> Vector3 {
 // NOTE IMPORTANT: I think I need to store "contribution_to_A_this_frame" and same for B, so I can damp only if the cosntraint contributed to the bodies. Because right now, I think its wrong.
 //
 default_linear_damping_cb :: (using joint: *Joint_Constraint, dt: float) {
-    // this.recalculate_world_attach_pos_and_ori();
     dVel := get_velocity_at_position(A, world_attach_position_A);
-    if B != null
-        dVel -= get_velocity_at_position(B, world_attach_position_B);
+    dVel -= get_velocity_at_position(B, world_attach_position_B);
 
     n := normalize(world_attach_position_B - world_attach_position_A);
     projected_velocity := dot(-dVel, n) * n;
@@ -272,7 +261,7 @@ default_linear_damping_cb :: (using joint: *Joint_Constraint, dt: float) {
 default_angular_damping_cb :: (using joint: *Joint_Constraint, dt: float)
 {
     velocity_diff := A.angular_velocity;
-    if B != null then velocity_diff -= B.angular_velocity;
+    velocity_diff -= B.angular_velocity;
     damping_force := - basic.min(joint.angularDampingCoeff * dt, 1.0) * velocity_diff;
     apply_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
 
@@ -280,23 +269,22 @@ default_angular_damping_cb :: (using joint: *Joint_Constraint, dt: float)
 
 max_angular_damping_cb :: (using joint: *Joint_Constraint, dt: float)
 {
-    damping_force := A.angular_velocity;
-    if B != null damping_force -= B.angular_velocity;
-    damping_force = -damping_force;
+    velocity_diff := A.angular_velocity;
+    velocity_diff -= B.angular_velocity;
+    damping_force := -velocity_diff;
     apply_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
 
 }
 
 hinge_angular_damping_cb :: (using joint: *Joint_Constraint, dt: float)
 {
-    damping_force := A.angular_velocity;
-    if B != null
-        damping_force -= B.angular_velocity;
+    velocity_diff := A.angular_velocity;
+    velocity_diff -= B.angular_velocity;
 
     n := Vector3.{1.0, 0.0, 0.0}; //im not sure about this, why not other defautl normal?
     n = rotate(n, world_attach_orientation_A);
-    projected_velocity := dot(damping_force, n) * n;
-    damping_force = - basic.min(joint.angularDampingCoeff * dt, 1.0) * projected_velocity;
+    projected_velocity := dot(velocity_diff, n) * n;
+    damping_force := - basic.min(joint.angularDampingCoeff * dt, 1.0) * projected_velocity;
 
 
     apply_angular_velocity_correction(A, B, dt,compliance=0.0, damping_force);
@@ -327,12 +315,11 @@ maybe_apply_angle_limit :: (using joint: *Joint_Constraint, dt:float, n: Vector3
     if between_allowed_range return;
     clamped_angle := basic.max(minAngle, basic.min(current_angle, maxAngle));
 
-    // Create quaternion to rotate axis_A to the clamped position
+    //change names of rotated_A and others to better ones.
     dq: Quaternion;
     set_from_axis_and_angle(*dq, n, clamped_angle);
     rotated_A := rotate(axis_A, dq);
     angular_error := cross_product(rotated_A, axis_B);
 
-    // Apply correction
     apply_angular_correction(A, B, dt, compliance, angular_error);
 }

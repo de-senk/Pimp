@@ -9,9 +9,9 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
 	// the user selected another mesh, but I can't find a way to
 	// do that in GetRect.
    	if g_params.mesh_index == 0
-	skin_mesh = null;
+	   skin_mesh = null;
 	else
-		skin_mesh = table_find_pointer (*g_loaded_meshes, g_params.mesh_names[g_params.mesh_index]);
+	   skin_mesh = table_find_pointer (*g_loaded_meshes, g_params.mesh_names[g_params.mesh_index]);
 
 	if g_mesh != skin_mesh
 	{
@@ -28,7 +28,6 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
 	else
 		anim = null;
 
-
 	if g_mesh
 	{
 		// We reset to the bind pose because the animation
@@ -37,20 +36,16 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
 
 		if anim && g_params.show_animation
 		{
-			sample_animation (
-				anim,
-				g_params.animation_time,
-				*g_pose,
-				g_params.interpolation_mode
-			);
+			sample_animation ( anim, g_params.animation_time, *g_pose, g_params.interpolation_mode );
 		}
 
 
-       if  g_mesh.joints.count != 0 {
+       if  g_mesh.joints.count != 0
+       {
        // wpos := get_world_position(*g_pose, "DEF-spine.004");
        // spos := WorldToScreen(world_model*wpos);
        // if g_params.show_mesh doLabel("GLADIATOR", spos);
-        }
+       }
        if g_params.show_mesh Draw(g_mesh, world_model, g_pose.skinning_matrices);
        if g_params.show_skeleton Draw(*g_pose, world_model, xyzw (g_params.skeleton_color, 1));
 
@@ -65,7 +60,7 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
 	else
 		g_params.animation_time = 0;
 
-	//:tagMovedHereBecausePhysics
+	//:tagMovedHereBecausePhysics this commented out stuff is the old one, go to tag for new.
 	   // We transpose the result because OpenGL stores matrices in column-major
         // if g_mesh
         // 	generate_skinning_matrices (*g_pose, transpose_result = true);
@@ -86,7 +81,7 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if is_key_down(#char "A") move_direction += game_coordinates.left;
     if is_key_down(#char "D") move_direction += game_coordinates.right;
 
-    if is_key_down(Key_Code.SPACEBAR) move_direction += game_coordinates.up;;
+    if is_key_down(Key_Code.SPACEBAR) move_direction += 10.0*game_coordinates.up;;
 
     normalize(*move_direction);
     if ball {
@@ -94,7 +89,7 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if !is_ctrl_down
         ball.angular_velocity +=  0.2*move_direction;
     else
-        ball.velocity +=  0.5*move_direction;
+        ball.velocity +=  0.2*move_direction;
 
 
         // log("BALL POS %", ball.position);

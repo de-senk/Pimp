@@ -267,7 +267,7 @@ doBall :: (transform: Matrix4, pose: *Skeleton_Pose, bone_id: int = 2, radius: f
     ball_position := current_pos;
     hash := get_hash(loc, identifier);
     ball, did_just_created_a_new_one := find_or_create_ball(hash, ball_position, radius, mass);
-    // if did_just_created_a_new_one 
+    // if did_just_created_a_new_one
     {
         ball.position = ball_position;
         ball.orientation = current_ori;
@@ -354,7 +354,7 @@ create_joint_constraint :: (A: *Body, B: *Body = null) -> *Joint_Constraint {
     constraint_ptr, bucket_locator := find_and_occupy_empty_slot(*context.solver.world.joint_constraints);
     constraint_ptr.bucket_locator = bucket_locator;
     constraint_ptr.A = A;
-    constraint_ptr.B = B; //if B is null, it means that we attach it to the WORLD itself.
+    constraint_ptr.B = ifx B then B else *context.solver.world.stub_world_body; //if B is null, it means that we attach it to the WORLD itself.
     return constraint_ptr;
 }
 
