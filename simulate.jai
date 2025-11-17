@@ -46,32 +46,31 @@ simulate :: () {
     {
         for *bodies
         {
-            if it.inv_mass != 0
-            {
+            mask := (it.inv_mass != 0.0).(float);
+            dt_m := dt*mask;
 
-                //
-                // Integration      Semi-Implicit Euler  (3 lines of code)
-                //
-                //linear
-                it.velocity += gravity*dt;
-                it.prev_position = it.position;
-                it.position += it.velocity*dt;
+            //
+            // Integration      Semi-Implicit Euler  (3 lines of code)
+            //
+            //linear
+            it.velocity += gravity*dt_m;
+            it.prev_position = it.position;
+            it.position += it.velocity*dt_m;
 
-                //angular usable fields are:  .orientation|.prev_orientation|.angular_velocity|.prev_angular_velocity
-                it.prev_orientation = it.orientation;
-                dq :=  Quaternion.{it.angular_velocity.x, it.angular_velocity.y, it.angular_velocity.z, 0.0};
-                dq = dq*it.orientation; //this is confusing for me
-                it.orientation += 0.5 * dq * dt; //seriously confusing, the 0.5, why!
-                normalize(*it.orientation); //because the above is an approximation since dq is not infty small.
+            //angular usable fields are:  .orientation|.prev_orientation|.angular_velocity|.prev_angular_velocity
+            it.prev_orientation = it.orientation;
+            dq :=  Quaternion.{it.angular_velocity.x, it.angular_velocity.y, it.angular_velocity.z, 0.0};
+            dq = dq*it.orientation; //this is confusing for me
+            it.orientation += 0.5 * dq * dt_m; //seriously confusing, the 0.5, why!
+            normalize(*it.orientation); //because the above is an approximation since dq is not infty small.
 
 
-                //Fake floor, temporary.
-                if it.position.y<0.0 {
-                    it.position = it.prev_position;
-                }
-                basic.assert(is_valid(it.position), "your body exploded");
-                basic.assert(is_valid(it.velocity), "your body tried to explode");
+            //Fake floor, temporary.
+            if it.position.y<0.0 {
+                it.position = it.prev_position;
             }
+            basic.assert(is_valid(it.position), "your body exploded");
+            basic.assert(is_valid(it.velocity), "your body tried to explode");
         }
 
         //NOTE IMPORTANT: :tagIm99percentSureThatThisIsWrongBUTitworks
@@ -88,25 +87,26 @@ simulate :: () {
         //
         // VELOCITIES           update linear and angular velocities
         //
+        if dt == 0.0 then continue; //we early return because yes
+
         for *bodies
         {
-            if it.inv_mass != 0
-            {
-                //linear
-                it.velocity = (it.position - it.prev_position) / dt;
-                //angualar
-                dq := it.orientation * conjugate(it.prev_orientation);
-                it.angular_velocity = 2.0* dq.xyz / dt;
-                if dq.w < 0 then it.angular_velocity *= -1.0;
+            mask := (it.inv_mass != 0.0).(float);
+            inv_dt_m := (1.0/dt)*mask;
+            //linear
+            it.velocity = (it.position - it.prev_position) * inv_dt_m;
+            //angualar
+            dq := it.orientation * conjugate(it.prev_orientation);
+            it.angular_velocity = 2.0* dq.xyz * inv_dt_m;
+            if dq.w < 0 then it.angular_velocity *= -1.0;
 
 
-                push_vector(it.position, it.angular_velocity, Vector4.{.5,.5,.1,1.0});
-                if length_squared(it.angular_velocity) > 200 {
-                    basic.log("MAX ANG VEL REACHED; CLAMPING");
-                    // clamp_length(*it.angular_velocity, 5);
-                 }
+            push_vector(it.position, it.angular_velocity, Vector4.{.5,.5,.1,1.0});
+            if length_squared(it.angular_velocity) > 200 {
+                basic.log("MAX ANG VEL REACHED; CLAMPING");
+                // clamp_length(*it.angular_velocity, 5);
+             }
 
-            }
         }
 
         //
