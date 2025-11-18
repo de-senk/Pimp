@@ -29,8 +29,6 @@ simulate :: () {
     }
     number_of_steps_executed_so_far += 1;
 
-
-
     //
     // ACTUAL ALGORITHM STARTS HERE
     //
@@ -46,6 +44,7 @@ simulate :: () {
     {
         for *bodies
         {
+            //I think I dont even needa mask because stub_world_body.velocity should always be zero because prev_position is always he same as current position for that body.
             mask := (it.inv_mass != 0.0).(float);
             dt_m := dt*mask;
 
@@ -73,7 +72,7 @@ simulate :: () {
             basic.assert(is_valid(it.velocity), "your body tried to explode");
         }
 
-        //NOTE IMPORTANT: :tagIm99percentSureThatThisIsWrongBUTitworks
+        //NOTE IMPORTANT: :tagIm99percentSureThatThisIsWrongBUTitworks TODO: Study iterative convergence.
         for *joint: joint_constraints {
             //solve(it, dt); FLATTENED OUT:
              //these are callbacks of procedures stored inside each joint, I think this strategy is better than a switch statement.
@@ -113,7 +112,7 @@ simulate :: () {
         // Dampings          Apply velocity dampings, NOTE: I highly doubt that this is the correct way of doing this. BUT this callback strategy allows me to fix it in the future, I hope.
         //
         for *joint: joint_constraints {
-             // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
             joint.apply_linear_damping(joint, dt);
              // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
             joint.apply_angular_damping(joint, dt);

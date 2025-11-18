@@ -31,7 +31,7 @@ w2l :: inline (position: Vector3, orientation: Quaternion, world_point: Vector3)
 
 #program_export
 w2l_rotate_only :: inline (_: Vector3, orientation: Quaternion, world_point: Vector3) -> Vector3 {
-    //_ gets ignored, but I write it anyways, the only reason this procedure exist is because I like to iterate on soem stuff without changing parameters.
+    //_ gets ignored, but I write it anyways, the only reason this parameter "_" exist is because I like to iterate on soem stuff without changing arguments.
     return  rotation_matrix(Matrix3, conjugate(orientation)) * (world_point ); //Maybe: replace with rotate() from amth mdouels.
 } @dll_export
 
@@ -44,7 +44,7 @@ get_C_and_normal :: inline (error: Vector3) -> C: float, normal: Vector3 {
     return C, normal;
 }
 
-//Lagrange multipliers - TODO: explain lagrange multipliers.
+//Lagrange multipliers - TODO: explain lagrange multipliers. NOTE: I know I could take advantage of #bake_arguments but I decided to jsut write more instead.
 
 //for max stiffness
 get_lambda :: inline (dt: float, w: float,C: float) -> lambda: float, force_magnitude: float {
@@ -108,19 +108,19 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
 
     lambda, force_magnitude := get_lambda(dt, w, C, compliance);
 
-    correction_force := -lambda * normal; //constraint linear force, not really forces, but "force impulses", but force_magnitude is a real force.
+    correction_force := -lambda * normal;
 
     dx_for_A := get_world_linear_position_correction(A,correction_force, attach_position_A);
-    dq_for_A := get_world_angular_position_correction(A,correction_force, attach_position_A); //ORIGINAL
+    dq_for_A := get_world_angular_position_correction(A,correction_force, attach_position_A);
     A.position += dx_for_A;
     A.orientation = normalize(dq_for_A + A.orientation);
 
     push_line(A.position, attach_position_A,.{x=1, w=1});
-    push_line(attach_position_A, attach_position_A+correction_force,.{x=0.1, z=1});
+    push_line(attach_position_A, attach_position_A + correction_force,.{x=0.1, z=1});
     push_line(attach_position_A, attach_position_B,.{x=0.1, w=1});
 
-    dx_for_B := get_world_linear_position_correction(B,-correction_force, attach_position_B);
-    dq_for_B := get_world_angular_position_correction(B,-correction_force, attach_position_B);
+    dx_for_B := get_world_linear_position_correction(B, -correction_force, attach_position_B);
+    dq_for_B := get_world_angular_position_correction(B, -correction_force, attach_position_B);
     B.position += dx_for_B;
     B.orientation = normalize(dq_for_B + B.orientation);
 
@@ -189,6 +189,7 @@ get_delta_angular_from_torque :: inline (body: Body, correction_torque: Vector3)
     return get_delta_angular_from_torque(body.inv_local_moment_of_inertia, body.orientation, correction_torque);
 }
 
+//maybe delete
 // get_delta_angular_from_torque :: inline ( w_ang: float,  orientation: Quaternion , correction_torque: Vector3) -> delta_angular: Vector3 {
 //     delta_angular := correction_torque;
 //     delta_angular = rotate(delta_angular, conjugate(orientation));
@@ -198,7 +199,7 @@ get_delta_angular_from_torque :: inline (body: Body, correction_torque: Vector3)
 // }
 
 
-//old name: apply_position_correction_to_center_of_mass
+//long name: apply_position_correction_to_center_of_mass_frame_of_reference
 apply_angular_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, angular_error: Vector3) -> force_magnitude: float
 {
     C, normal := get_C_and_normal(angular_error);
@@ -301,47 +302,6 @@ get_world_angular_position_correction :: (body: Body, correction_force: Vector3,
     delta_orientation := get_stable_delta_orientation(delta_angular, body.orientation);
     return delta_orientation;
 }
-
-
-
-//:tagExplanationOfWORLDeffectivemass
-/*
-I did not iterated a lot in this expalanation, so its not perfect:
- Imagine you are floating in space and you try to move a very heavy steel-iron rod like one of those I-shaped beamsthat is way heavier than you, like 3 times heavier, and its very long
- If you try to grab it from the center you would feel like it has mass 3 times as you. And when you move it a distance d, you also moved yourself a distance -3d
- If you try to grab it from one of the tips, you will feel like its way heavier than 3 times your mass! because in the intent of trying to move the tip particles, because its a rigid body, you are forced to also move all the rest of the particles, how you calculate the relation between how much you moved the tip and its center of mass and how much you moved? That is the moment of inertia term.
- in a steel rod,
- at the tip you have an I of 1/3 rod_mass * length^2
- at the center you have an I of 1/12 rod_mass * length^2
- well I dont feel like doing the math here, but you get the idea.
-*/
-
-//
-// the code *-*- From here and below -*-*-  will be deleted.
-//
-
-//from three js, its the same as qleft*qright overload from jai modules.
-#if 0
-multiplyQuaternions :: ( a: Quaternion, b: Quaternion ) -> Quaternion {
-	// from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/code/index.htm
-	qax := a.x;
-	   qay := a.y;
-	   qaz := a.z;
-	   qaw := a.w;
-	qbx := b.x;
-	   qby := b.y;
-	   qbz := b.z;
-	   qbw := b.w;
-    this: Quaternion = ---;
-	this.x = qax * qbw + qaw * qbx + qay * qbz - qaz * qby;
-	this.y = qay * qbw + qaw * qby + qaz * qbx - qax * qbz;
-	this.z = qaz * qbw + qaw * qbz + qax * qby - qay * qbx;
-	this.w = qaw * qbw - qax * qbx - qay * qby - qaz * qbz;
-    // this._onChangeCallback();
-	return this;
-}
-
-
 
 
 //this is from my impulse solver, I only have this here as a reference.

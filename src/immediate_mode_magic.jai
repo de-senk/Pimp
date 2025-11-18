@@ -143,7 +143,13 @@ doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis:
 
     //update door with relevant data for this new frame
     if did_just_created_a_new_one {
-        //we do nothing for position yet.
+        #if 0 //we do nothing for position yet.
+        {
+            door.solve_position = solve_position_for_fixed_constraint_cb; //this generates big forces
+            door.local_attach_position_A = w2l(door.A.position,door.A.orientation, world_hinge_attach_position);
+            door.local_attach_position_B = world_hinge_attach_position;
+        }
+
         door.solve_orientation = solve_orientation_for_door_constraint_cb;
         // door.apply_angular_damping = hinge_angular_damping_cb;
         door.swingMin = min_angle_radians;
