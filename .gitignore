@@ -2,6 +2,7 @@
 .build
 
 #for code I dont want to upload
+generated_transpiled.hpp
 *.joi
 *.exp
 *.pdb
