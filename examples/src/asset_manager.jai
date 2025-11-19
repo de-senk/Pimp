@@ -16,9 +16,9 @@ rotate_vector_x_90 :: (v: Vector3, direction: int) -> Vector3 {
 	return result;
 }
 
-load_custom_skinned_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool {
-	CURRENT_CUSTOM_MESH_VERSION :: 3;
-	parse_joint :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh, joint : *Skeleton.Joint) -> bool
+PARSE_SKINNED_MESH_V3 :: #string JAI
+CURRENT_CUSTOM_MESH_VERSION :: 3;
+parse_joint :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh, joint : *Skeleton.Joint) -> bool
 	{
 		name, ok := consume_next_line (handler);
 		if !ok
@@ -124,6 +124,11 @@ load_custom_skinned_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) 
 		return true;
 	}
 
+JAI;
+
+load_custom_skinned_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool {
+    #insert PARSE_SKINNED_MESH_V3;
+
 	handler : Text_File_Handler;
 	defer deinit (*handler);
 
@@ -203,5 +208,4 @@ load_custom_skinned_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) 
 
 	return true;
 }
-
 

@@ -21,7 +21,7 @@ build_dll.jai
 #import "Program_Print";
 
 
-OUTPUT_FILE_NAME :: "generated_transpiled.hpp";
+OUTPUT_FILE_NAME :: "../generated_transpiled.hpp";
 FILE_ENTRY_POINT :: "./module.jai";
 
 // Track all declarations we need to transpile
