@@ -4,5 +4,7 @@
 
 - If anymation is playing, we get strong forces due to animations updating the positionsinto states where constraints are violated.
 
+- I forget that I have immediate drawing capabilities and I tend to not use them when I should.
+
 FIXED -> [BIGGEST PROBLEM RN] -> SOLUTION WAS: Bug on dt in integration angular step. I was multiplying *dt on one line, and accidentally doit it again in 2 lines below.
 There is a problem with moment of inertia and angular corrections. maybe I should defer it. But if a steel rod moves a big heavy object, it should also rotate it with ease, even if its moment of inertia is big. Maybe  I should go towars matrix of moments of inertia.
