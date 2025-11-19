@@ -312,8 +312,6 @@ Basic_Shape :: struct {
 }
 
 
-#run basic.log("[THIS SHOULD BE TEMP]\n\n !!! Remove SOFTBODY, dont upload to git\n\n");
-#load "softbody.jai";
 #load "src/body_procs.jai";
 #load "src/joints.jai";
 #load "src/immediate_mode_magic.jai";
