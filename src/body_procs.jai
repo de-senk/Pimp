@@ -36,7 +36,6 @@ w2l_rotate_only :: inline (_: Vector3, orientation: Quaternion, world_point: Vec
 } @dll_export
 
 
-
 get_C_and_normal :: inline (error: Vector3) -> C: float, normal: Vector3 {
     dist2 := length_squared(error);
     C := sqrt(dist2);
@@ -44,7 +43,9 @@ get_C_and_normal :: inline (error: Vector3) -> C: float, normal: Vector3 {
     return C, normal;
 }
 
+//
 //Lagrange multipliers - TODO: explain lagrange multipliers. NOTE: I know I could take advantage of #bake_arguments but I decided to jsut write more instead.
+//
 
 //for max stiffness
 get_lambda :: inline (dt: float, w: float,C: float) -> lambda: float, force_magnitude: float {
@@ -166,6 +167,8 @@ get_world_angular_velocity_correction :: (body: Body, correction_force: Vector3,
 /*  TODO: SUBJECT[inv_local_moment_of_inertia: Vector3] figure out if we can still use this for NON symetrical objects, or we need to go back to a matrix form of moment of inertia
     this is Angular Force / Angular Mass, is angular acceleration, just like Linear
 */
+
+//maybe delete
 // get_delta_angular_from_torque :: inline (inv_local_moment_of_inertia: Vector3, orientation: Quaternion , correction_torque: Vector3) -> delta_angular: Vector3 {
 //     delta_angular := correction_torque;
 //     delta_angular = rotate(delta_angular, conjugate(orientation));
@@ -197,7 +200,6 @@ get_delta_angular_from_torque :: inline (body: Body, correction_torque: Vector3)
 //     delta_angular = rotate(delta_angular, (orientation));
 //     return delta_angular;
 // }
-
 
 //long name: apply_position_correction_to_center_of_mass_frame_of_reference
 apply_angular_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, angular_error: Vector3) -> force_magnitude: float

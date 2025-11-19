@@ -12,7 +12,7 @@ Joint_Kinds :: enum {
 
 Two_Body_Constraint_Shared :: struct {
     A: *Body;
-    B: *Body;
+    B: *Body; //I dont know how to make this a default Right here.
     bucket_locator: Bucket_Locator;
 
     //for immediate mode

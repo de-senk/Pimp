@@ -1,5 +1,5 @@
 //
-// Continuous  Granularity: I focus all my efforts into making this library as granular as possible, without sacrificing performance and code simplicity. It's a hard balance to maintain!
+// Continuous  Granularity: I focus all my efforts into making this library as granular as possible, without sacrificing performance and code simplicity. It's a hard balance to maintain! read this argument :tagCodePathsBad
 //
 KNUTH_GOLDEN_RATIO_64 :: 11400714819323198485;
 
@@ -169,7 +169,7 @@ doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis:
             local_front_dir_A := w2l_rotate_only(.{}, body.orientation, world_door_close_n);
             local_front_dir_B := w2l_rotate_only(.{}, .{}, world_door_close_n); //unnecesary.
 
-            //I think we store more info than needed, but whatever.
+            //I think we store more info than needed, but whatever. //NOTE: this trick dissallow us from using a common distance constraint, but we can still do a custom one.
             dq_A := shortest_arc(door.local_ref_A,local_front_dir_A );
             dq_B := shortest_arc(door.local_ref_B,local_front_dir_B );
 
@@ -415,3 +415,11 @@ find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float, mass: 
 
     return ball, did_just_created_a_new_one;
 }
+
+
+//:tagCodePathsBad
+/*
+Every new codepath represents a new possibility of code execution,
+it also represents a new possibility of code failure, and thus
+an opportunity for testing and further development work.
+*/

@@ -112,7 +112,7 @@ simulate :: () {
         // Dampings          Apply velocity dampings, NOTE: I highly doubt that this is the correct way of doing this. BUT this callback strategy allows me to fix it in the future, I hope.
         //
         for *joint: joint_constraints {
-             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+             // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
             joint.apply_linear_damping(joint, dt);
              // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
             joint.apply_angular_damping(joint, dt);
