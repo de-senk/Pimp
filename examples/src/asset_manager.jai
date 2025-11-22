@@ -1,5 +1,117 @@
+#import "Hash_Table";
+
+MrArena :: struct(MAX: s64) {
+    buffer: [MAX]u8;
+    count: s64;
+}
+
+RES: ResourceManager;
+SIZE_MEGAS_50 :: 50 * 1024 * 1024;
+SIZE_MEGAS_5 :: 5 * 1024 * 1024;
+SIZE_MEGAS_1 :: 1 * 1024 * 1024; //Overflows for meshes
+ResourceManager :: struct {
+    skin_mesh_resources: Table(string, *Skinned_Mesh);
+    skin_mesh_arena: MrArena(SIZE_MEGAS_5);
+
+}
+
+alloc :: (arena: *$MrArena, size: s64) -> *void {
+    num_free_slots := MrArena.MAX - arena.count;
+    overflow := size > num_free_slots;
+    assert(!overflow, "arena will overflow!");
+    ptr := arena.buffer.data + arena.count;
+    arena.count += size;
+    return ptr;
+}
 
 
+
+// TODO: Binary alternative
+load_custom_skinned_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool {
+    #insert PARSE_SKINNED_MESH_V3;
+
+	handler : Text_File_Handler;
+	defer deinit (*handler);
+
+	found_slash, dir, basename := split_from_right (filename, #char "/");
+	if !found_slash then basename = filename;
+
+    start_file (*handler, basename, filename, optional = false);
+
+	if handler.failed
+		return false;
+
+	if handler.version != CURRENT_CUSTOM_MESH_VERSION
+		return error_out (handler, "Invalid version number.");
+
+	ok : bool;
+	mesh.joints.count, ok = parse_ident_and_int_line (*handler, "joint_count");
+	if !ok
+		return false;
+	// assert(mesh.joints.count>0);
+	if mesh.joints.count > MAX_JOINTS
+		return error_out (handler, "Too many joints (expected at most %, got %).", MAX_JOINTS, mesh.joints.count);
+
+	mesh.vertices.count, ok = parse_ident_and_int_line (*handler, "vertex_count");
+	if !ok
+		return false;
+
+	triangle_count : s64;
+	triangle_count, ok = parse_ident_and_int_line (*handler, "triangle_count");
+	if !ok
+		return false;
+	mesh.indices.count = triangle_count * 3;
+
+	// Allocate all the data in one batch, so everything is contiguous
+	count_memory_needed := size_of (Skeleton.Joint) * mesh.joints.count + size_of (Vertex) * mesh.vertices.count + size_of (u32) * mesh.indices.count;
+	all_data := alloc(*RES.skin_mesh_arena, count_memory_needed);
+
+    // all_data := alloc ( );
+
+	init (*mesh.name_to_joint_id, mesh.joints.count);
+	mesh.joints.data   = all_data;
+	mesh.vertices.data = cast (*Vertex) (mesh.joints.data + mesh.joints.count);
+	mesh.indices.data  = cast (*u32) (mesh.vertices.data + mesh.vertices.count);
+
+	// joints
+	line, found := consume_next_line (*handler);
+	if line != "joints:"
+		return error_out (handler, "Expected 'joints:', got '%' instead.", line);
+	for * mesh.joints
+		if !parse_joint (*handler, mesh, it)
+			return error_out (handler, "Could not parse joint %.", it_index);
+	// Inverse all the bind transforms we calculated while parsing the joints
+	for * mesh.joints
+		_, it.inverse_bind_transform = inverse(it.inverse_bind_transform);
+	//
+
+	// vertices
+	line, found = consume_next_line (*handler);
+	if line != "vertices:"
+		return error_out (handler, "Expected 'vertices:', got '%' instead.", line);
+	for * mesh.vertices
+		if !parse_skinned_vertex (*handler, mesh, it)
+			return error_out (handler, "Could not parse vertex %.", it_index);
+    //
+
+	// triangles
+	line, found = consume_next_line (*handler);
+	if line != "triangles:"
+		return error_out (handler, "Expected 'triangles:', got '%' instead.", line);
+	for i : 0..triangle_count - 1
+		if !parse_triangle (*handler, mesh, i * 3)
+			return error_out (handler, "Could not parse triangle %.", i);
+    //
+
+	line, found = consume_next_line (*handler);
+	if found
+		return error_out (handler, "Expected EOF.");
+
+	return true;
+}
+
+
+PARSE_SKINNED_MESH_V3 :: #string JAI
 
 rotate_vector_x_90 :: (v: Vector3, direction: int) -> Vector3 {
 	result: Vector3;
@@ -16,7 +128,6 @@ rotate_vector_x_90 :: (v: Vector3, direction: int) -> Vector3 {
 	return result;
 }
 
-PARSE_SKINNED_MESH_V3 :: #string JAI
 CURRENT_CUSTOM_MESH_VERSION :: 3;
 parse_joint :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh, joint : *Skeleton.Joint) -> bool
 	{
@@ -60,26 +171,16 @@ parse_joint :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh, joint : *Ske
 
 		ok : bool;
 		vertice_id:u32;
-		vertice_id, ok = parse_int (handler, u32);
-			assert(ok);//if !ok then return false;
-		vertex.position, ok = parse_vector3 (handler);
-			assert(ok);//if !ok then return false;
-		vertex.normal, ok = parse_vector3 (handler);
-			assert(ok);//if !ok then return false;
-		vertex.tangent, ok = parse_vector3 (handler);
-			assert(ok);//if !ok then return false;
-		vertex.tangentw, ok = parse_float (handler);
-			assert(ok);//if !ok then return false;
-		vertex.texcoord_0, ok = parse_vector2 (handler);
-			assert(ok);//if !ok then return false;
-		vertex.colorScale, ok = parse_int (handler, u32);
-			assert(ok);//if !ok then return false;
-		vertex.material_index, ok = parse_int (handler, u32);
-			assert(ok);//if !ok then return false;
-		vertex.weights, ok = parse_vector4 (handler);
-			assert(ok);//if !ok then return false;
-		vertex.joints, ok = parse_int_tuple (handler, 4, s16);
-			assert(ok);//if !ok then return false;
+		vertice_id, ok = parse_int (handler, u32);               assert(ok);//if !ok then return false;
+		vertex.position, ok = parse_vector3 (handler);           assert(ok);//if !ok then return false;
+		vertex.normal, ok = parse_vector3 (handler);             assert(ok);//if !ok then return false;
+		vertex.tangent, ok = parse_vector3 (handler);            assert(ok);//if !ok then return false;
+		vertex.tangentw, ok = parse_float (handler);             assert(ok);//if !ok then return false;
+		vertex.texcoord_0, ok = parse_vector2 (handler);         assert(ok);//if !ok then return false;
+		vertex.colorScale, ok = parse_int (handler, u32);        assert(ok);//if !ok then return false;
+		vertex.material_index, ok = parse_int (handler, u32);    assert(ok);//if !ok then return false;
+		vertex.weights, ok = parse_vector4 (handler);            assert(ok);//if !ok then return false;
+		vertex.joints, ok = parse_int_tuple (handler, 4, s16);   assert(ok);//if !ok then return false;
 
 		#if SHOULD_MIRROR_X {
 			vertex.position.x *= -1;
@@ -125,87 +226,3 @@ parse_joint :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh, joint : *Ske
 	}
 
 JAI;
-
-load_custom_skinned_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool {
-    #insert PARSE_SKINNED_MESH_V3;
-
-	handler : Text_File_Handler;
-	defer deinit (*handler);
-
-	found_slash, dir, basename := split_from_right (filename, #char "/");
-	if !found_slash then basename = filename;
-
-    start_file (*handler, basename, filename, optional = false);
-
-	if handler.failed
-		return false;
-
-	if handler.version != CURRENT_CUSTOM_MESH_VERSION
-		return error_out (handler, "Invalid version number.");
-
-	ok : bool;
-	mesh.joints.count, ok = parse_ident_and_int_line (*handler, "joint_count");
-	if !ok
-		return false;
-	// assert(mesh.joints.count>0);
-	if mesh.joints.count > MAX_JOINTS
-		return error_out (handler, "Too many joints (expected at most %, got %).", MAX_JOINTS, mesh.joints.count);
-
-	mesh.vertices.count, ok = parse_ident_and_int_line (*handler, "vertex_count");
-	if !ok
-		return false;
-
-	triangle_count : s64;
-	triangle_count, ok = parse_ident_and_int_line (*handler, "triangle_count");
-	if !ok
-		return false;
-	mesh.indices.count = triangle_count * 3;
-
-	// Allocate all the data in one batch, so everything is contiguous
-	all_data := alloc (size_of (Skeleton.Joint) * mesh.joints.count
-		+ size_of (Vertex) * mesh.vertices.count
-		+ size_of (u32) * mesh.indices.count
-	);
-
-	init (*mesh.name_to_joint_id, mesh.joints.count);
-	mesh.joints.data   = all_data;
-	mesh.vertices.data = cast (*Vertex) (mesh.joints.data + mesh.joints.count);
-	mesh.indices.data  = cast (*u32) (mesh.vertices.data + mesh.vertices.count);
-
-	// joints
-	line, found := consume_next_line (*handler);
-	if line != "joints:"
-		return error_out (handler, "Expected 'joints:', got '%' instead.", line);
-	for * mesh.joints
-		if !parse_joint (*handler, mesh, it)
-			return error_out (handler, "Could not parse joint %.", it_index);
-	// Inverse all the bind transforms we calculated while parsing the joints
-	for * mesh.joints
-		_, it.inverse_bind_transform = inverse(it.inverse_bind_transform);
-	//
-
-	// vertices
-	line, found = consume_next_line (*handler);
-	if line != "vertices:"
-		return error_out (handler, "Expected 'vertices:', got '%' instead.", line);
-	for * mesh.vertices
-		if !parse_skinned_vertex (*handler, mesh, it)
-			return error_out (handler, "Could not parse vertex %.", it_index);
-    //
-
-	// triangles
-	line, found = consume_next_line (*handler);
-	if line != "triangles:"
-		return error_out (handler, "Expected 'triangles:', got '%' instead.", line);
-	for i : 0..triangle_count - 1
-		if !parse_triangle (*handler, mesh, i * 3)
-			return error_out (handler, "Could not parse triangle %.", i);
-    //
-
-	line, found = consume_next_line (*handler);
-	if found
-		return error_out (handler, "Expected EOF.");
-
-	return true;
-}
-

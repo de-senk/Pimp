@@ -363,6 +363,124 @@ push_vector :: (start: Vector3, vector: Vector3, color: Vector4) {
     push_line(start, start + vector, color);
 }
 
+push_X :: (center: Vector3, size: float = 1.0, normal: Vector3 = game_coordinates.up, color: Vector4 = .{.5,.7,.5,1}) {
+    horizontal := get_normal_from_normal(normal);
+    vertical := cross_product(normal, horizontal);
+
+    f := size / (1.51 * 2);
+    start1 := center - f * (horizontal + vertical);
+    end1 := center + f * (horizontal + vertical);
+    start2 := center + f * (horizontal - vertical);
+    end2 := center - f * (horizontal - vertical);
+
+    push_line(start1, end1, color);
+    push_line(start2, end2, color);
+}
+
+// Push a + marker for debugging
+push_plus :: (center: Vector3, size: float = 1.0, normal: Vector3 = game_coordinates.up, color: Vector4 = .{.5,.7,.5,1}) {
+    horizontal := get_normal_from_normal(normal);
+    vertical := cross_product(normal, horizontal);
+
+    half_size := size * 0.5;
+    push_line(center - horizontal * half_size, center + horizontal * half_size, color);
+    push_line(center - vertical * half_size, center + vertical * half_size, color);
+}
+
+// Push a circle marker
+push_circle :: (center: Vector3, radius: float = 0.4, segments: int = 16, normal: Vector3 = game_coordinates.up, color: Vector4 = .{.5,.7,.5,1}) {
+    horizontal := get_normal_from_normal(normal);
+    vertical := cross_product(normal, horizontal);
+
+    prev_point := center + horizontal * radius;
+
+    for i: 1..segments {
+        angle := (cast(float)i / cast(float)segments) * 2.0 * PI;
+        x := cos(angle) * radius;
+        y := sin(angle) * radius;
+
+        point := center + horizontal * x + vertical * y;
+        push_line(prev_point, point, color);
+        prev_point = point;
+    }
+}
+
+// Push a square marker
+push_square :: (center: Vector3, size: float = 0.9, normal: Vector3 = game_coordinates.up, color: Vector4 = .{.5,.7,.5,1}) {
+    horizontal := get_normal_from_normal(normal);
+    vertical := cross_product(normal, horizontal);
+
+    half_size := size * 0.5;
+
+    p0 := center - horizontal * half_size - vertical * half_size;
+    p1 := center + horizontal * half_size - vertical * half_size;
+    p2 := center + horizontal * half_size + vertical * half_size;
+    p3 := center - horizontal * half_size + vertical * half_size;
+
+    push_line(p0, p1, color);
+    push_line(p1, p2, color);
+    push_line(p2, p3, color);
+    push_line(p3, p0, color);
+}
+
+// Push a wireframe box
+push_wireframe_box :: (center: Vector3, size: Vector3 = .{0.9,0.9,0.9}, color: Vector4 = .{.5,.7,.5,1}) {
+    half := size * 0.5;
+
+    // Bottom face
+    p0 := center + .{-half.x, -half.y, -half.z};
+    p1 := center + .{ half.x, -half.y, -half.z};
+    p2 := center + .{ half.x, -half.y,  half.z};
+    p3 := center + .{-half.x, -half.y,  half.z};
+
+    // Top face
+    p4 := center + .{-half.x, half.y, -half.z};
+    p5 := center + .{ half.x, half.y, -half.z};
+    p6 := center + .{ half.x, half.y,  half.z};
+    p7 := center + .{-half.x, half.y,  half.z};
+
+    // Bottom
+    push_line(p0, p1, color);
+    push_line(p1, p2, color);
+    push_line(p2, p3, color);
+    push_line(p3, p0, color);
+
+    // Top
+    push_line(p4, p5, color);
+    push_line(p5, p6, color);
+    push_line(p6, p7, color);
+    push_line(p7, p4, color);
+
+    // Verticals
+    push_line(p0, p4, color);
+    push_line(p1, p5, color);
+    push_line(p2, p6, color);
+    push_line(p3, p7, color);
+}
+
+// Push an arrow
+push_arrow :: (start: Vector3, vector: Vector3= game_coordinates.up, head_size: float = 0.2, color: Vector4 = .{.5,.7,.5,1}) {
+    end := vector+start;
+    push_line(start, end, color);
+
+    direction := normalize(end - start);
+    perpendicular := get_normal_from_normal(direction);
+    other_perp := cross_product(direction, perpendicular);
+
+    head_base := end - direction * head_size;
+    head_offset := head_size * 0.3;
+
+    head1 := head_base + perpendicular * head_offset;
+    head2 := head_base - perpendicular * head_offset;
+    head3 := head_base + other_perp * head_offset;
+    head4 := head_base - other_perp * head_offset;
+
+    push_line(end, head1, color);
+    push_line(end, head2, color);
+    push_line(end, head3, color);
+    push_line(end, head4, color);
+}
+
 push_grid :: (plane_origin: Vector3, plane_normal: Vector3, min_for: s64, max_for: s64 , density:float=1.0, color := Vector4.{0.4, 0.4, 0.4, 1}) {
     horizontal := get_normal_from_normal(plane_normal);
     vertical := cross_product(plane_normal, horizontal);

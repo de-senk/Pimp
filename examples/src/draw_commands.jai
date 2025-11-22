@@ -711,25 +711,87 @@ HLSL;
 // I use uppercase to determine the Highest level of abstraction.
 //
 //:tagHighestLevelOfAbstractionExplanationAndCode
-Draw :: (using pose : *Skeleton_Pose, world_model : Matrix4 = Matrix4_Identity, color : Vector4 = Vector4.{0,1,0,1}) {
+push_draw :: (using pose : *Skeleton_Pose, world_model : Matrix4 = Matrix4_Identity, color : Vector4 = Vector4.{0,1,0,1}) {
     cmd: Draw_Command;
     cmd.kind = .SKELETON;
-    cmd.should_render = true;
+    cmd.should_render = g_params.show_skeleton;
     cmd.skeleton.world_model = world_model;
     cmd.skeleton.pose = pose;
     cmd.skeleton.color = color;
     array_add(*drawing_commands, cmd);
 }
 
-Draw :: (using mesh : *Skinned_Mesh, world_model : Matrix4 = Matrix4_Identity, skinning_matrices : []Matrix4) {
+push_draw :: (using mesh : *Skinned_Mesh, world_model : Matrix4 = Matrix4_Identity, skinning_matrices : []Matrix4) {
     cmd: Draw_Command;
     cmd.kind = .TRIANGLE_MESH;
-    cmd.should_render = true;
+    cmd.should_render = g_params.show_mesh;
     cmd.mesh.kind = .SKINNED;
     cmd.mesh.world_model = world_model;
     cmd.mesh.skinned_mesh = mesh;
     cmd.mesh.skinning_matrices = skinning_matrices;
     array_add(*drawing_commands, cmd);
+}
+
+
+Draw :: (using entity: *Entity, delta_time : float) {
+    if kind == .Player0 {
+    if g_mesh != skin_mesh
+	{
+		g_mesh = skin_mesh;
+		// We changed the mesh, so reallocate a new pose
+		free_pose (*g_pose);
+		if g_mesh
+			g_pose = make_pose_for_skeleton (g_mesh);
+	}
+
+	anim : *Sampled_Animation;
+	if g_params.animation_index > 0
+		anim = table_find_pointer(*g_loaded_animations, g_params.animation_names[g_params.animation_index]);
+	else
+		anim = null;
+
+	if g_mesh
+	{
+
+
+
+       if  g_mesh.joints.count != 0
+       {
+       // wpos := get_world_position(*g_pose, "DEF-spine.004");
+       // spos := WorldToScreen(world_model*wpos);
+       // if g_params.show_mesh doLabel("GLADIATOR", spos);
+       }
+
+	}
+
+	// Increment animation time
+	if anim
+	{
+		g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
+		g_params.animation_time = fmod_cycling(g_params.animation_time, xx anim.sample_count);
+	}
+	else
+		g_params.animation_time = 0;
+
+	//:tagMovedHereBecausePhysics this commented out stuff is the old one, go to tag for new.
+	   // We transpose the result because OpenGL stores matrices in column-major
+        // if g_mesh
+        // 	generate_skinning_matrices (*g_pose, transpose_result = true);
+
+
+       // We reset to the bind pose because the animation
+	   // might not have all of the joints our pose has.
+	   reset_to_bind_pose (*g_pose);
+
+	   if anim && g_params.show_animation
+	   {
+	   	sample_animation( anim, g_params.animation_time, *g_pose, g_params.interpolation_mode );
+	   }
+
+       push_draw(skin_mesh, world_model, g_pose.skinning_matrices);
+       push_draw(*g_pose, world_model, xyzw(g_params.skeleton_color, 1));
+   }
+
 }
 
 Draw_Dun_Cmds :: (mcmds: []MESH_RENDER_COMMAND) {

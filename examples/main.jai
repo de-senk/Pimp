@@ -141,6 +141,7 @@ main :: () {
 		  push_line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
 		  // Draw grid
 		  push_grid(.{0,0,0}, .{0,1,0},);
+		  drawDungeon();
         }
 
         //
@@ -170,18 +171,38 @@ main :: () {
 	}
 }
 
-all_entities: [..]Entity;
-Entity :: struct {
-    position: Vector3;
-    orientation: Vector3;
-    world_model: Matrix4 = Matrix4_Identity;
-    is_player0: bool;
-    is_a_box: bool;
-    is_a_wall: bool;
-    is_a_floor_or_ceiling: bool;
-    skin_mesh : *Skinned_Mesh;
+//https://www.youtube.com/watch?v=gKNJKce1p8M
+//https://www.youtube.com/watch?v=ZZY9YE7rZJw
+dunmap : [12][12]int;
+drawDungeon :: () {
+
+
+    for rowarr, row: dunmap {
+        for cell, col: rowarr {
+            center := Vector3.{row.(float), 1.0, col.(float)};
+            if cell == {
+            case 0;
+            push_X(center);
+            case 1;
+            push_square(center);
+            case 2;
+            push_plus(center);
+            case 3;
+            push_circle(center);
+            case 4;
+            push_arrow(center);
+            case 5;
+            push_wireframe_box(center);
+            case;
+            }
+        }
+    }
+
 }
 
+leastConflicts :: () {
+
+}
 
 handle_inputs_shared_between_modes:: () {
     for Input.events_this_frame {
@@ -201,9 +222,6 @@ handle_inputs_shared_between_modes:: () {
     }
 }
 
-g_game_state : struct {
-    should_start_scene: bool = true;
-}
 
 update_frame :: (delta_time : float)
 {
@@ -217,15 +235,12 @@ update_frame :: (delta_time : float)
 	}
     if g_game_state.should_start_scene {
         g_game_state.should_start_scene = false;
-        //create player0
-        player0 :Entity;
-        player0.is_player0 = true;
-        array_add(*all_entities, player0);
+        create_player0();
     }
 	update_flying_camera (*g_camera, delta_time);
 
     for *all_entities {
-        // using it; I don't need to use it anymore.
+        // using it; //I don't need to use it anymore.
         if it.is_player0 then do_player0_gamecode(it, delta_time);
 
 
@@ -233,6 +248,50 @@ update_frame :: (delta_time : float)
 
 	} //for all entities
 }
+
+
+g_game_state : struct {
+    should_start_scene: bool = true;
+}
+
+all_entities: [..]Entity;
+stub_skin_mesh: Skinned_Mesh;
+
+Entity :: struct {
+    position: Vector3;
+    orientation: Vector3;
+    world_model: Matrix4 = Matrix4_Identity;
+    kind: enum {Player0;Wall;Door;};
+    is_player0: bool;
+    is_a_box: bool;
+    is_a_wall: bool;
+    is_a_door: bool;
+    is_a_floor_or_ceiling: bool;
+
+    asset_guid: string;
+
+
+    is_walking: bool;
+    is_running: bool;
+    is_idle: bool;
+    is_rolling: bool;
+    skin_mesh : *Skinned_Mesh;
+}
+
+
+
+create_entity :: () -> *Entity {
+       entity := array_add(*all_entities);
+       entity.skin_mesh = *stub_skin_mesh;
+       return entity;
+}
+
+create_player0 :: () {
+    player0 := create_entity();
+    player0.is_player0 = true;
+    player0.asset_guid = copy_string("Player0");
+}
+
 
 
 
@@ -432,19 +491,21 @@ find_and_load_meshes_and_animations :: inline () {
 	visitor :: (info : *File_Visit_Info, data : *void) {
 		path, basename, ext := path_decomp (info.full_name);
 		if ext == {
-		  case "mesh";
-			mesh : Skinned_Mesh;
-			loaded := load_mesh_from_file (*mesh, info.full_name);
-			if loaded {
-				init_mesh_rendering_objects (*mesh);
-				table_add (*g_loaded_meshes, copy_string (basename), mesh);
-			} else {
-				log_error ("Could not load % mesh.", basename);
-            }
+		  //comented out, proabability of deletion 100%
+          // case "mesh";
+          // 	mesh : Skinned_Mesh;
+          // 	loaded := load_mesh_from_file (*mesh, info.full_name);
+          // 	if loaded {
+          // 		init_mesh_rendering_objects (*mesh);
+          // 		table_add (*g_loaded_meshes, copy_string (basename), mesh);
+          // 	} else {
+          // 		log_error ("Could not load % mesh.", basename);
+          //   }
 		  case "skinned_mesh";
 			mesh : Skinned_Mesh;
 			loaded := load_custom_skinned_mesh_from_file(*mesh, info.full_name);
 			if loaded {
+			     
 			     upload_mesh_to_gpu (*mesh);
                 // init_mesh_rendering_objects (*mesh);
 				table_add (*g_loaded_meshes, copy_string (basename), mesh);

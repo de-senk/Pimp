@@ -407,3 +407,4 @@ get_world_pos_ori_scale :: (world_model: Matrix4, pose: *Skeleton_Pose, joint_id
 
 		return world_position, world_orientation, world_scale;
 }
+
