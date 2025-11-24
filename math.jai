@@ -141,12 +141,15 @@ outer :: inline (a: Vector3,  b: Vector3) -> Matrix3 {
 }
 
 
-clamp_length :: inline (v: *$T/.[Vector3], max: float)
+clamp_length :: inline (v: *$T/.[Vector3], max: float) -> new_length: float
 {
-    if length_squared(v) > max*max {
+    len := length(v);
+    if len > max {
+
         normalize(v);
-        v.* *= max;
+        v.* *= max/len;
     }
+    return len;
 }
 
 is_not_zero :: (a: $T / .[Vector3, Vector4, Vector6]) -> bool {
