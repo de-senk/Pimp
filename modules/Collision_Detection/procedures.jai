@@ -639,15 +639,14 @@ collide_sphere_with_sphere :: (sphere_center_A: Vector3, sphere_radius_A: float,
     r2 := sphere_radius_B;
     C2 := sphere_center_A;
 
-    penetration = distance(C2, C1) - r1 - r2;
-
+    penetration                  = distance(C2, C1) - r1 - r2;
     if penetration < 0 {
-        d := penetration;
-        world_normal_towards_A = normalize(C1 - C2, fallback = .{}); //already pointing towards A center
+        d := penetration; //to write less
+        world_normal_towards_A   = normalize(C1 - C2, fallback = .{}); //already pointing towards A center
         assert(length_squared(world_normal_towards_A)>0.001, "TWO SPHERES SPAWNED AT THE SAME POSITION! your problem might be something else, I only have problems with this assert when the world explodes on my test scenes obviusly");
-        num_contacts = 1;
+        num_contacts             = 1;
         //TODO: Change C1 to C2 and invert sign on these 3 lines, well it works so maybe dont touch.
-        world_midpoint = C1 - (r1+d/2)*world_normal_towards_A;
+        world_midpoint           = C1 - (r1+d/2)*world_normal_towards_A;
         world_contact_point_on_A = C1 - (r1)*world_normal_towards_A;
         world_contact_point_on_B = C1 - (r1+d)*world_normal_towards_A;
     }
@@ -655,7 +654,49 @@ collide_sphere_with_sphere :: (sphere_center_A: Vector3, sphere_radius_A: float,
     return num_contacts, penetration, world_midpoint, world_contact_point_on_A, world_contact_point_on_B, world_normal_towards_A;
 };
 
+collide_sphere_with_capsule  :: (sphere_center: Vector3, sphere_radius: float, capsule_start_line: Vector3, capsule_end_line: Vector3, capsule_radius: float ) ->
+    num_contacts: int,
+    penetration: float,
+    world_midpoint: Vector3,
+    world_contact_point_on_A: Vector3,
+    world_contact_point_on_B: Vector3,
+    world_normal_towards_A: Vector3
+{
 
+    num_contacts: int;
+    penetration: float;
+    world_midpoint: Vector3;
+    world_contact_point_on_A: Vector3;
+    world_contact_point_on_B: Vector3;
+    world_normal_towards_A: Vector3;
+
+    // unpack sphere data
+    //not needed
+
+    // unpack capsule data
+    capsule_height := distance(capsule_start_line, capsule_end_line);
+
+    // project sphere position vector into line segment,
+    capsule_direction := normalize(capsule_end_line - capsule_start_line);
+    to_sphere := sphere_center - capsule_start_line;
+    t := clamp(dot(to_sphere, capsule_direction), 0, capsule_height);
+    closest_point_on_line := capsule_start_line + t * capsule_direction;
+    //
+
+    from_line_to_sphere := sphere_center - closest_point_on_line;
+    penetration                  = length(from_line_to_sphere) - sphere_radius - capsule_radius;
+    if penetration < 0 {
+        d := penetration; //to write less
+        world_normal_towards_A   = normalize(from_line_to_sphere, fallback = .{0,0,0});
+        assert(length_squared(world_normal_towards_A)>0.001, "sphere spawned inside capsule");
+        num_contacts             = 1;
+        world_midpoint           = closest_point_on_line +  (capsule_radius  +d/2)*world_normal_towards_A ;
+        world_contact_point_on_A = closest_point_on_line + (capsule_radius + d)*world_normal_towards_A ;
+        world_contact_point_on_B = closest_point_on_line + (capsule_radius)*world_normal_towards_A;
+    }
+
+    return num_contacts, penetration, world_midpoint, world_contact_point_on_A, world_contact_point_on_B, world_normal_towards_A;
+};
 
 //
 // TODO: a good title for this category.
