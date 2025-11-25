@@ -615,6 +615,49 @@ CPP
 
 
 //
+// Collide Shape X with Shape Y
+//
+collide_sphere_with_sphere :: (sphere_center_A: Vector3, sphere_radius_A: float, sphere_center_B: Vector3, sphere_radius_B: float) ->
+    num_contacts: int,
+    penetration: float,
+    world_midpoint: Vector3,
+    world_contact_point_on_A: Vector3,
+    world_contact_point_on_B: Vector3,
+    world_normal_towards_A: Vector3
+{
+    num_contacts: int;
+    penetration: float;
+    world_midpoint: Vector3;
+    world_contact_point_on_A: Vector3;
+    world_contact_point_on_B: Vector3;
+    world_normal_towards_A: Vector3;
+    //unpack sphere 1 data
+    r1 := sphere_radius_A;
+    C1 := sphere_center_A;
+
+    //unpack sphere 2 data
+    r2 := sphere_radius_B;
+    C2 := sphere_center_A;
+
+    penetration = distance(C2, C1) - r1 - r2;
+
+    if penetration < 0 {
+        d := penetration;
+        world_normal_towards_A = normalize(C1 - C2, fallback = .{}); //already pointing towards A center
+        assert(length_squared(world_normal_towards_A)>0.001, "TWO SPHERES SPAWNED AT THE SAME POSITION! your problem might be something else, I only have problems with this assert when the world explodes on my test scenes obviusly");
+        num_contacts = 1;
+        //TODO: Change C1 to C2 and invert sign on these 3 lines, well it works so maybe dont touch.
+        world_midpoint = C1 - (r1+d/2)*world_normal_towards_A;
+        world_contact_point_on_A = C1 - (r1)*world_normal_towards_A;
+        world_contact_point_on_B = C1 - (r1+d)*world_normal_towards_A;
+    }
+
+    return num_contacts, penetration, world_midpoint, world_contact_point_on_A, world_contact_point_on_B, world_normal_towards_A;
+};
+
+
+
+//
 // TODO: a good title for this category.
 //
 
