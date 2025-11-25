@@ -620,17 +620,17 @@ CPP
 collide_sphere_with_sphere :: (sphere_center_A: Vector3, sphere_radius_A: float, sphere_center_B: Vector3, sphere_radius_B: float) ->
     num_contacts: int,
     penetration: float,
+    world_normal_towards_A: Vector3,
     world_midpoint: Vector3,
     world_contact_point_on_A: Vector3,
-    world_contact_point_on_B: Vector3,
-    world_normal_towards_A: Vector3
+    world_contact_point_on_B: Vector3
 {
     num_contacts: int;
     penetration: float;
+    world_normal_towards_A: Vector3;
     world_midpoint: Vector3;
     world_contact_point_on_A: Vector3;
     world_contact_point_on_B: Vector3;
-    world_normal_towards_A: Vector3;
     //unpack sphere 1 data
     r1 := sphere_radius_A;
     C1 := sphere_center_A;
@@ -651,24 +651,24 @@ collide_sphere_with_sphere :: (sphere_center_A: Vector3, sphere_radius_A: float,
         world_contact_point_on_B = C1 - (r1+d)*world_normal_towards_A;
     }
 
-    return num_contacts, penetration, world_midpoint, world_contact_point_on_A, world_contact_point_on_B, world_normal_towards_A;
+    return num_contacts, penetration, world_normal_towards_A, world_midpoint, world_contact_point_on_A, world_contact_point_on_B;
 };
 
 collide_sphere_with_capsule  :: (sphere_center: Vector3, sphere_radius: float, capsule_start_line: Vector3, capsule_end_line: Vector3, capsule_radius: float ) ->
     num_contacts: int,
     penetration: float,
+    world_normal_towards_A: Vector3,
     world_midpoint: Vector3,
     world_contact_point_on_A: Vector3,
-    world_contact_point_on_B: Vector3,
-    world_normal_towards_A: Vector3
+    world_contact_point_on_B: Vector3
 {
 
     num_contacts: int;
     penetration: float;
+    world_normal_towards_A: Vector3;
     world_midpoint: Vector3;
     world_contact_point_on_A: Vector3;
     world_contact_point_on_B: Vector3;
-    world_normal_towards_A: Vector3;
 
     // unpack sphere data
     //not needed
@@ -695,7 +695,133 @@ collide_sphere_with_capsule  :: (sphere_center: Vector3, sphere_radius: float, c
         world_contact_point_on_B = closest_point_on_line + (capsule_radius)*world_normal_towards_A;
     }
 
-    return num_contacts, penetration, world_midpoint, world_contact_point_on_A, world_contact_point_on_B, world_normal_towards_A;
+    return num_contacts, penetration, world_normal_towards_A, world_midpoint, world_contact_point_on_A, world_contact_point_on_B;
+};
+
+
+// #run collide_hull_with_hull(.{},.{},.{},.{}, .{},.{},.{},.{});
+collide_hull_with_hull :: (
+    position_A: Vector3, orientation_A: Quaternion, scale_A: Vector3, hull_A: Convex_Hull,
+    position_B: Vector3, orientation_B: Quaternion, scale_B: Vector3, hull_B: Convex_Hull
+
+    ) ->
+    num_contacts             : int,
+    penetration              : float,
+    world_normal_towards_A   : Vector3,
+    world_midpoints          : [4]Vector3,
+    world_contact_points_on_A: [4]Vector3,
+    world_contact_points_on_B: [4]Vector3
+{
+
+    num_contacts            : int;
+    penetration             : float;
+    world_normal_towards_A  : Vector3;
+    world_midpoints          : [4]Vector3;
+    world_contact_points_on_A: [4]Vector3;
+    world_contact_points_on_B: [4]Vector3;
+
+
+    query: SAT_Query;
+
+    hull0: Convex_Hull;
+    hull1: Convex_Hull;
+
+    //@Hack temporary hack, I could not figure out good procedure parameters, maybe I should modularize this procedure.
+    {
+        hull0 = hull_A;
+        hull1 = hull_B;
+        hull0.worldSpace = make_translation_matrix4(position_A)*rotation_matrix (Matrix4, orientation_A) * make_scale_matrix4(scale_A);
+        hull1.worldSpace  = make_translation_matrix4(position_B)*rotation_matrix (Matrix4, orientation_B) * make_scale_matrix4(scale_B);
+        hull0.scale = scale_A;
+        hull1.scale = scale_B;
+
+        //we precompute the inverses of A and B, this is still expensive, o(n^2) I think I can convert it to O(n) (not the traversal but the operation, by caching it inside the body
+        //idea: check if for this frame is already calculated, if it is, dont execute those. The bottleneck is still  QueryEdgeDirection and its calls
+        success:, hull0.inv_worldSpace = inverse(hull0.worldSpace);
+        success=, hull1.inv_worldSpace = inverse(hull1.worldSpace);
+
+        assert(success, "error while inverting some hull world model, are your hulls created?");
+        // hull.scale = scale;
+    }
+    collision := SAT_dirk_gregorius(hull0, hull1, *query);
+    if collision {
+
+		faceDistance0 :=  query.faceQuery_AB.distance ;
+		faceDistance1 :=  query.faceQuery_BA.distance ;
+
+		//grep this from https://www.gamedev.net/forums/topic/667499-3d-sat-problem/?page=2
+		kLinearSlop :=  0.005 ;
+		kRelEdgeTolerance :=  0.90 ;
+		kRelFaceTolerance :=  0.98 ;
+		kAbsTolerance :=  0.5 * kLinearSlop ;
+
+        is_near_edge := query.edgeQuery.distance > kRelEdgeTolerance * max(faceDistance0, faceDistance1) + kAbsTolerance;
+        is_near_face0 := faceDistance1 > (kRelFaceTolerance* faceDistance0 + kAbsTolerance);
+        is_near_face1 := !is_near_face0;//not used
+
+		if is_near_edge
+		{
+
+			contact : EdgeContact = CreateEdgeContact(query.edgeQuery,hull0,hull1);
+			{
+                world_normal_towards_A = -contact.separationAxis;
+                penetration = contact.query.distance * length_squared(world_normal_towards_A);
+
+                if penetration < 0 {
+                    num_contacts = 1;
+                    world_midpoints[0] = contact.midpoint;
+                    world_contact_points_on_A[0] = contact.midpoint + (penetration/2.0)*world_normal_towards_A;
+                    world_contact_points_on_B[0] = contact.midpoint - (penetration/2.0)*world_normal_towards_A;
+                }
+			}
+
+		}
+		else if is_near_face0
+		{
+		    contact :FaceContact= CreateFaceContact(query.faceQuery_BA, hull1,hull0);
+            {
+                world_normal_towards_A           = transform_direction(contact.query.face.facePlane.normal,hull1.worldSpace);
+                penetration                      = contact.query.distance * length_squared(world_normal_towards_A);
+                assert(contact.points.count <= 4, "we got more than 4 contact points! contact.points.count == %",contact.points.count);
+                if penetration < 0
+                {
+                    for point_in_B: contact.points
+                    {
+                        num_contacts             += 1;
+                        world_midpoints[it_index]           = point_in_B + (penetration/2.0) * world_normal_towards_A;
+                        world_contact_points_on_A[it_index] = point_in_B + penetration * world_normal_towards_A;
+                        world_contact_points_on_B[it_index] = point_in_B;
+                    }
+
+                }
+            }
+		}
+		else
+		{
+		    contact := CreateFaceContact(query.faceQuery_AB, hull0, hull1);
+            {
+                world_normal_towards_A = -transform_direction(contact.query.face.facePlane.normal,hull0.worldSpace);
+                penetration = contact.query.distance * length_squared(world_normal_towards_A);
+
+                assert(contact.points.count <= 4, "we got more than 4 contact points! AB contact.points.count == %",contact.points.count);
+                if penetration < 0
+                {
+                    for point_in_A: contact.points
+                    {
+                        num_contacts += 1;
+                        world_midpoints[it_index] = point_in_A - (penetration/2.0) * world_normal_towards_A;
+                        world_contact_points_on_A[it_index] = point_in_A;
+                        world_contact_points_on_B[it_index] = point_in_A - penetration*world_normal_towards_A;
+                    }
+                }
+            }
+
+
+		} //end edge or faceBA or faceAB test
+    } //end if collision
+
+    return num_contacts, penetration, world_normal_towards_A, world_midpoints, world_contact_points_on_A, world_contact_points_on_B ;
+
 };
 
 //
