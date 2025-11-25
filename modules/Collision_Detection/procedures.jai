@@ -615,9 +615,9 @@ CPP
 
 
 //
-// Collide Shape X with Shape Y
+// Collide Shape X vs Shape Y
 //
-collide_sphere_with_sphere :: (sphere_center_A: Vector3, sphere_radius_A: float, sphere_center_B: Vector3, sphere_radius_B: float) ->
+collide_sphere_vs_sphere :: (sphere_center_A: Vector3, sphere_radius_A: float, sphere_center_B: Vector3, sphere_radius_B: float) ->
     num_contacts: int,
     penetration: float,
     world_normal_towards_A: Vector3,
@@ -654,7 +654,7 @@ collide_sphere_with_sphere :: (sphere_center_A: Vector3, sphere_radius_A: float,
     return num_contacts, penetration, world_normal_towards_A, world_midpoint, world_contact_point_on_A, world_contact_point_on_B;
 };
 
-collide_sphere_with_capsule  :: (sphere_center: Vector3, sphere_radius: float, capsule_start_line: Vector3, capsule_end_line: Vector3, capsule_radius: float ) ->
+collide_sphere_vs_capsule  :: (sphere_center: Vector3, sphere_radius: float, capsule_start_line: Vector3, capsule_end_line: Vector3, capsule_radius: float ) ->
     num_contacts: int,
     penetration: float,
     world_normal_towards_A: Vector3,
@@ -699,8 +699,8 @@ collide_sphere_with_capsule  :: (sphere_center: Vector3, sphere_radius: float, c
 };
 
 
-// #run collide_hull_with_hull(.{},.{},.{},.{}, .{},.{},.{},.{});
-collide_hull_with_hull :: (
+// #run collide_hull_vs_hull(.{},.{},.{},.{}, .{},.{},.{},.{});
+collide_hull_vs_hull :: (
     position_A: Vector3, orientation_A: Quaternion, scale_A: Vector3, hull_A: Convex_Hull,
     position_B: Vector3, orientation_B: Quaternion, scale_B: Vector3, hull_B: Convex_Hull
 
