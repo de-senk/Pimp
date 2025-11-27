@@ -36,7 +36,7 @@ intersect_three_planes:: (plane1_normal: Vector3, plane1_d: float, plane2_normal
 }
 
 
-// #if SHOULD_RUN_TESTS #run intersect_segment_with_plane(.{}, .{}, .{}, 0.0,cast(*float) *context); //danger, never uncomment.
+#if SHOULD_RUN_TESTS #run intersect_segment_with_plane(.{}, .{}, .{}, 0.0,cast(*float) *context); //danger, never uncomment.
 intersect_segment_with_plane :: (start: Vector3, end: Vector3, plane_normal: Vector3, plane_distance: float, t: *float) -> (success: bool, intersect_point: Vector3)
 {
     ab := end - start;
@@ -47,7 +47,7 @@ intersect_segment_with_plane :: (start: Vector3, end: Vector3, plane_normal: Vec
 }
 
 
-// #if SHOULD_RUN_TESTS #run intersect_segment_with_plane(.{}, .{}, .{},.{},.{}, cast(*float) *context); //danger, never uncomment.
+#if SHOULD_RUN_TESTS #run intersect_segment_with_plane(.{}, .{}, .{},.{},.{}, cast(*float) *context); //danger, never uncomment.
 intersect_segment_with_plane :: (start: Vector3, end: Vector3, triangle_a: Vector3, triangle_b: Vector3, triangle_c: Vector3, t: *float) -> (success: bool, intersect_point: Vector3)
 {
     plane_normal := cross_product(triangle_b - triangle_a, triangle_c - triangle_a);
@@ -159,7 +159,7 @@ closest_point_to_on_segmentbad :: inline (point: Vector3, segment_start: Vector3
     // }
 }
 
-// ClosestPointsSegmentSegment(MFpoint3 segmentA_start, MFpoint3 segmentA_end, MFpoint3 segmentB_start, MFpoint3 segmentB_end, MFpoint3& closest_point_on_A, MFpoint3& closest_point_on_B,	MFfloat& s, MFfloat& t) -> float
+//source https://math.stackexchange.com/a/2812513 and the realtime book
 closest_point_segment_to_segment :: inline (
  segmentA_start: Vector3, segmentA_end: Vector3,
  segmentB_start: Vector3, segmentB_end: Vector3
@@ -170,17 +170,19 @@ closest_point_segment_to_segment :: inline (
     slider_t: float = ---;
     sss: float = ---;
 
-	dirA := segmentA_end - segmentA_start; //direction segment 0
-	dirB := segmentB_end - segmentB_start; // direction segment 1
-	verticalDirection := segmentA_start - segmentB_start;//inner "normal"
+	dirA := segmentA_end - segmentA_start;
+	dirB := segmentB_end - segmentB_start;
+	verticalDirection := segmentA_start - segmentB_start;
 	dirA_dirA := dot(dirA, dirA);
 	dirB_dirB := dot(dirB, dirB);
-	//project direction 1 onto vertical
-	centerProjection1 := dot(dirB, verticalDirection);
-	// Check if either or both segments degenerate into points
-	if dirA_dirA <= EPSILON5 && dirB_dirB <= EPSILON5
+
+	projected_center_B := dot(dirB, verticalDirection);
+
+
+	A_segment_degenerate_into_point := dirA_dirA <= EPSILON5;
+	B_segment_degenerate_into_point := dirB_dirB <= EPSILON5;
+	if A_segment_degenerate_into_point && B_segment_degenerate_into_point
 	{
-		// Both segments degenerate into points
 		sss = 0;
 		slider_t = 0;
     	closest_point_on_A = segmentA_start;
@@ -191,49 +193,43 @@ closest_point_segment_to_segment :: inline (
         // --------------- early return ---------- to be fixed, make it return at the end.
         // --------------- early return ---------- to be fixed, make it return at the end.
 	}
-	if (dirA_dirA <= EPSILON5)
+
+	if A_segment_degenerate_into_point
 	{
-		// First segment degenerates into a point
 		sss = 0.0;
-		slider_t = centerProjection1 / dirA_dirA; // s = 0 => slider_t = (b*s + f) / e = f / e
+		slider_t = projected_center_B / dirA_dirA;
 		slider_t = clamp(slider_t, 0.0, 1.0);
 	}
 	else
-	{   //project direction 0 onto vertical
-		centerProjection0 := dot(dirA, verticalDirection);
-		if (dirB_dirB <= EPSILON5)
+	{
+		center_projected_A := dot(dirA, verticalDirection);
+		if B_segment_degenerate_into_point
 		{
-			// Second segment degenerates into a point
+
 			slider_t = 0.0;
-			sss = clamp(-centerProjection0 / dirA_dirA, 0.0, 1.0); // slider_t = 0 => s = (b*slider_t - c) / a = -c / a
+			sss = clamp(-center_projected_A / dirA_dirA, 0.0, 1.0);
 		}
 		else
 		{
-			// The general nondegenerate case starts here
-			//project dirA onto dirB
 			b: float = dot(dirA, dirB);
-			denom: float = dirA_dirA * dirB_dirB - b * b; // Always nonnegative
-			// If segments not parallel, compute closest point on L0 to L1 and
-			// clamp to segment S0. Else pick arbitrary s (here 0)
+			denom: float = dirA_dirA * dirB_dirB - b * b;
+
 			if denom != 0.0
-				sss = clamp((b * centerProjection1 - centerProjection0 * dirB_dirB) / denom, 0.0, 1.0);
+				sss = clamp((b * projected_center_B - center_projected_A * dirB_dirB) / denom, 0.0, 1.0);
 			else
 				sss = 0.0;
-			// Compute point on L1 closest to S0(s) using
-			// slider_t = Dot((P0 + D0*s) - P1,D1) / Dot(D1,D1) = (b*s + f) / e
-			slider_t = (b * sss + centerProjection1) / dirB_dirB;
-			// If slider_t in [0,1] done. Else clamp slider_t, recompute s for the new value
-			// of slider_t using s = Dot((P1 + D1*slider_t) - P1,D0) / Dot(D0,D0)= (slider_t*b - c) / a
-			// and clamp s to [0, 1]
+
+			slider_t = (b * sss + projected_center_B) / dirB_dirB;
+
 			if slider_t < 0.0
 			{
 				slider_t = 0.0;
-				sss = clamp(-centerProjection0 / dirA_dirA, 0.0, 1.0);
+				sss = clamp(-center_projected_A / dirA_dirA, 0.0, 1.0);
 			}
 			else if slider_t > 1.0
 			{
 				slider_t = 1.0;
-				sss = clamp((b - centerProjection0) / dirA_dirA, 0.0, 1.0);
+				sss = clamp((b - center_projected_A) / dirA_dirA, 0.0, 1.0);
 			}
 		}
 	}
@@ -277,6 +273,7 @@ AABB :: struct {
 
 };
 
+
 //I dont like using the name intersect because I was reserving that name to check if collision is true AND retriving collision points.
 // intersect_aabb_with_aabb :: TestAABBAABB; // @Report: why this forces Southerland_Hodgmand to be a declaration?
 // are_colliding ::  TestAABBAABB; // @Report: //I should use procedure overloading and semantic compression isntead.
@@ -313,6 +310,19 @@ OBB :: struct { //confusing data structure
     local_axes: Matrix3; //you use it by rows local_axes.v[0] is x- axis, will see
     half_extents: Vector3;
 };
+
+#if SHOULD_RUN_TESTS #run TestOBBPlane(.{}, .{}, 0);
+TestOBBPlane :: (obb: OBB,  plane_normal: Vector3, plane_distance: float)-> bool
+{
+    // Compute the projection interval radius of b onto L(t) = b.c + t * plane_normal
+    r := obb.half_extents.component[0]*abs(dot(plane_normal, obb.local_axes.v[0])) +
+         obb.half_extents.component[1]*abs(dot(plane_normal, obb.local_axes.v[1])) +
+         obb.half_extents.component[2]*abs(dot(plane_normal, obb.local_axes.v[2]));
+    // Compute distance of box center from plane
+    s := dot(plane_normal, obb.center) - plane_distance;
+    // Intersection occurs when distance s falls within [-r,+r] interval
+    return abs(s) <= r;
+}
 
 
 // #if SHOULD_RUN_TESTS #run TestAABBAABB(.{},.{}, .CENTER_RADIUS);
@@ -615,20 +625,6 @@ TestSphereHalfspace :: (sphere: Sphere, plane_normal: Vector3, plane_distance: f
     return dist <= sphere.radius;
 }
 
-#if SHOULD_RUN_TESTS #run TestOBBPlane(.{}, .{}, 0);
-TestOBBPlane :: (obb: OBB,  plane_normal: Vector3, plane_distance: float)-> bool
-{
-    // Compute the projection interval radius of b onto L(t) = b.c + t * plane_normal
-    r := obb.half_extents.component[0]*abs(dot(plane_normal, obb.local_axes.v[0])) +
-         obb.half_extents.component[1]*abs(dot(plane_normal, obb.local_axes.v[1])) +
-         obb.half_extents.component[2]*abs(dot(plane_normal, obb.local_axes.v[2]));
-    // Compute distance of box center from plane
-    s := dot(plane_normal, obb.center) - plane_distance;
-    // Intersection occurs when distance s falls within [-r,+r] interval
-    return abs(s) <= r;
-}
-
-
 
 #if SHOULD_RUN_TESTS #run TestAABBPlane(.{}, .{}, 0);
 TestAABBPlane :: (aabb: AABB,  plane_normal: Vector3, plane_distance: float)-> bool
@@ -657,16 +653,6 @@ TestSphereAABB :: (sphere: Sphere, precomputed_closest_point_to_aabb: Vector3)->
 {
     sqDist := length_squared(precomputed_closest_point_to_aabb);
     return sqDist <= sphere.radius * sphere.radius;
-}
-
-
-
-#if SHOULD_RUN_TESTS #run TestSphereOBB(.{},.{});
-TestSphereOBB :: (sphere: Sphere, obb: OBB)-> (success: bool, closest: Vector3)
-{
-    closest := closest_point_to_obb(sphere.center, obb);
-    v := closest - sphere.center;
-    return dot(v, v) <= sphere.radius * sphere.radius, closest;
 }
 
 
@@ -755,7 +741,7 @@ TestSphereTriangle :: (sphere: Sphere, a: Vector3, b: Vector3, c: Vector3)-> (su
 
 */
 
-// #if SHOULD_RUN_TESTS #run IntersectRaySphere(.{}, .{}, .{}, cast(*float) *context); //danger, never uncomment.
+#if SHOULD_RUN_TESTS #run IntersectRaySphere(.{}, .{}, .{}, cast(*float) *context); //danger, never uncomment.
 IntersectRaySphere :: (ray_start: Vector3, ray_dir: Vector3, sphere: Sphere, t: *float) -> (success: bool, intersect_point: Vector3)
 {
     sphere_to_ray := ray_start - sphere.center;
@@ -783,7 +769,7 @@ TestRaySphere :: (ray_start: Vector3, ray_dir: Vector3, sphere: Sphere)-> bool
 }
 
 
-// #if SHOULD_RUN_TESTS #run IntersectRayAABB(.{}, .{}, .{}, cast(*float) *context); //danger, never uncomment.
+#if SHOULD_RUN_TESTS #run IntersectRayAABB(.{}, .{}, .{}, cast(*float) *context); //danger, never uncomment.
 IntersectRayAABB :: (ray_start: Vector3, ray_dir: Vector3, aabb: AABB, tmin: *float)-> (success: bool, intersect_point: Vector3)
 {
     EPSILON7 :: 0.00000001; //random small number, to twak I guess... @Todo create epsilons EPSILON4 EPSILON5 EPSILON6 EPSILON7 xD
@@ -871,7 +857,6 @@ IntersectLineTriangle :: (line_start: Vector3, line_end: Vector3, a: Vector3, b:
 }
 
 
-
 #if SHOULD_RUN_TESTS #run IntersectLineQuad(.{}, .{}, .{},.{},.{},.{});
 IntersectLineQuad :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b: Vector3,  c: Vector3,  d: Vector3)-> (success: bool, intersection_point: Vector3)
 {
@@ -922,8 +907,6 @@ IntersectLineQuad :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b:
 // Given segment pq and triangle abc, returns whether segment intersects
 // triangle and if so, also returns the barycentric coordinates (u,v,w)
 // of the intersection point
-
-
 
 #if SHOULD_RUN_TESTS #run IntersectSegmentTriangle(.{}, .{}, .{},.{},.{});
 IntersectSegmentTriangle :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b: Vector3,  c: Vector3)-> (success: bool, barycentric_coordinates: Vector3, slider_t: float)
@@ -1100,19 +1083,3 @@ IntersectSegmentPolyhedron :: (segment_start: Vector3, segment_end: Vector3, pla
     return true, tfirst, tlast;
 }
 
-
-// // Given a set s of vertices, compute a maximal set of independent vertices
-// IndependentSet :: (s: []Vertices)
-// // Initialize i to the empty set
-// Set i = EmptySet();
-// // Loop over all vertices in the input set
-// for (all vertices v in s) {
-// // If unmarked and has 8 or fewer neighboring vertices...
-// if (!Marked(v) && Degree(v) <= 8) {
-// // Add v to the independent set and mark all of v’s neighbors
-// i.Add(v);
-// s.MarkAllVerticesAdjacentToVertex(v);
-// }
-// }
-// return i;
-// }

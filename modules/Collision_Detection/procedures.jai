@@ -40,8 +40,38 @@ QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
     return result;
 }
 
+//NOTE: Quickhull should  make the geometric center at {0,0,0}
+project_all_vertices_of_hull_into_axis :: (hull: Convex_Hull, axis: Vector3)-> left_interval: float, right_interval:float {
+    axis_n := normalize(axis);
+    // left_interval: float = FLOAT32_INFINITY;
+    // right_interval: float = -FLOAT32_INFINITY;
+    world_geometric_center := get_translation(hull.worldSpace); //lets assume geometric center is in the middle, otherwise, user did hull wrong
+    center_proj := dot(world_geometric_center, axis_n);
 
-//this is no gaussmap, N^2 kinda or N^3
+    //so we expand the interval [left, right] from the world hull center because I cannot brain how to do it with ininity's
+    left_interval: float = center_proj;
+    right_interval: float = center_proj;
+
+    //THOUGHTS(tr):
+    //I think I can embed the dot product inside hull.worlSpace, so I would create a copy of the model matrix and modify it so it also applies dot product
+    //even better: we can just recreate the hull in world space, combined with caching per frame, its worth it maybe, double memory tho.
+    //but we only use hulls in SAT calculations, so maybe we need to combine all these with the SAT caching logic.
+    start := hull.mesh.vertices;
+    current := start;
+    while true {
+        defer current = current.next; //executed second //TODO: replace defers with normal code here.
+        defer if current.next == start then break; //executed first
+        local_vertex := current.vertex;
+        world_vertex := hull.worldSpace * local_vertex;
+        proj := dot(world_vertex, axis_n);
+        //I dont use continue here because I want to hint the compiler to make this branchless
+        if proj > right_interval then right_interval = proj;
+        if proj < left_interval  then left_interval = proj;
+        }
+    return left_interval, right_interval;
+}
+
+//this is no gaussmap, n^2 or n^3, very expensive.
 QueryEdgeDirections_bruteforce :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQuery
 {
     //ahh I need to rewatch the video on gauss map from dirk gregorius...
@@ -63,15 +93,15 @@ QueryEdgeDirections_bruteforce :: (hullA: Convex_Hull, hullB: Convex_Hull) -> Ed
 			assert(edgeB.twin.twin != null, "edgeB.twin.twin is null");
 			assert(edgeB.twin.twin == edgeB, "edge != edge.twin.twin");
 
-            //iI shouldve deleted this comment -> m trying this trick, but, I dont like "clever" tricks, so TODO(tr): Delete this trick and use a normal block liek the one below
-            edgeA_dir := ifx 1 then {
 
-                   edgeOrigin := hullA.worldSpace * (hullA.scale * edgeA.tail.vertex);
-    	           edgeDestination := hullA.worldSpace * (hullA.scale*edgeA.twin.tail.vertex);
-    	           edgeDestination - edgeOrigin;
-    	        }
+            edgeA_dir: Vector3;
+            {
+               edgeOrigin := hullA.worldSpace * (hullA.scale * edgeA.tail.vertex);
+	           edgeDestination := hullA.worldSpace * (hullA.scale*edgeA.twin.tail.vertex);
+	           edgeA_dir = edgeDestination - edgeOrigin;
+	        }
 
-            edgeB_dir: Vector3 = ---;
+            edgeB_dir: Vector3;
             {
                edgeOrigin := hullB.worldSpace * (hullA.scale * edgeB.tail.vertex);
 	           edgeDestination := hullB.worldSpace * (hullA.scale*edgeB.twin.tail.vertex);
