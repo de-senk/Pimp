@@ -699,7 +699,7 @@ collide_sphere_vs_capsule  :: (sphere_center: Vector3, sphere_radius: float, cap
 };
 
 
-// #run collide_hull_vs_hull(.{},.{},.{},.{}, .{},.{},.{},.{});
+//another possible name collide_convex_vs_convex
 collide_hull_vs_hull :: (
     position_A: Vector3, orientation_A: Quaternion, scale_A: Vector3, hull_A: Convex_Hull,
     position_B: Vector3, orientation_B: Quaternion, scale_B: Vector3, hull_B: Convex_Hull
@@ -735,8 +735,8 @@ collide_hull_vs_hull :: (
         hull0.scale = scale_A;
         hull1.scale = scale_B;
 
-        //we precompute the inverses of A and B, this is still expensive, o(n^2) I think I can convert it to O(n) (not the traversal but the operation, by caching it inside the body
-        //idea: check if for this frame is already calculated, if it is, dont execute those. The bottleneck is still  QueryEdgeDirection and its calls
+
+        //maybe cache per frame/orientation treshold. The bottleneck is still  QueryEdgeDirection and its calls
         success:, hull0.inv_worldSpace = inverse(hull0.worldSpace);
         success=, hull1.inv_worldSpace = inverse(hull1.worldSpace);
 
@@ -778,7 +778,7 @@ collide_hull_vs_hull :: (
 		}
 		else if is_near_face0
 		{
-		    contact :FaceContact= CreateFaceContact(query.faceQuery_BA, hull1,hull0);
+		    contact :FaceContact= CreateFaceContact(query.faceQuery_BA, hull1,hull0); //reference,incindet
             {
                 world_normal_towards_A           = transform_direction(contact.query.face.facePlane.normal,hull1.worldSpace);
                 penetration                      = contact.query.distance * length_squared(world_normal_towards_A);
@@ -787,7 +787,7 @@ collide_hull_vs_hull :: (
                 {
                     for point_in_B: contact.points
                     {
-                        num_contacts             += 1;
+                        num_contacts += 1;
                         world_midpoints[it_index]           = point_in_B + (penetration/2.0) * world_normal_towards_A;
                         world_contact_points_on_A[it_index] = point_in_B + penetration * world_normal_towards_A;
                         world_contact_points_on_B[it_index] = point_in_B;
@@ -809,7 +809,7 @@ collide_hull_vs_hull :: (
                     for point_in_A: contact.points
                     {
                         num_contacts += 1;
-                        world_midpoints[it_index] = point_in_A - (penetration/2.0) * world_normal_towards_A;
+                        world_midpoints[it_index]           = point_in_A - (penetration/2.0) * world_normal_towards_A;
                         world_contact_points_on_A[it_index] = point_in_A;
                         world_contact_points_on_B[it_index] = point_in_A - penetration*world_normal_towards_A;
                     }
