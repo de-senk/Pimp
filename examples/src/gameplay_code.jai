@@ -11,18 +11,20 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     // if g_params.mesh_index == 0
     //    skin_mesh = null;
     // else
-	if is_key_down(#char "J")
-	   skin_mesh = table_find_pointer (*g_loaded_meshes, g_params.mesh_names[g_params.mesh_index]);
-
-    Draw(player0, delta_time);
+    // if is_key_down(#char "J") {
+    //    log("% %",asset_guid, skin_mesh);
+    //    skin_mesh = table_find_pointer (*g_loaded_meshes, asset_guid);
+    // }
 
 
     ball: *Body;
 
-    if !is_key_down(#char "G") {
-        // ball = doBall(*world_model);;
-        ball = doBall(world_model, *g_pose);;
-        }
+    Draw(player0, delta_time);
+    if is_key_down(#char "G") {
+        ball = doBall(*world_model);;
+        // ball = doBall(world_model, *skin_pose);;
+    }
+
 
     move_direction: Vector3;
     is_ctrl_down := is_key_down(Key_Code.CTRL);
@@ -34,13 +36,16 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if is_key_down(Key_Code.SPACEBAR) move_direction += 10.0*game_coordinates.up;;
 
     normalize(*move_direction);
+
+    // new_len := clamp_length(*ball.velocity, max_velocity);
+    anim_speed =  0.3*length(move_direction) ;//20.0*new_len/max_velocity;
+
     if ball {
 
-    if !is_ctrl_down
+    if is_ctrl_down
         ball.angular_velocity +=  0.2*move_direction;
     else
         ball.velocity +=  0.2*move_direction;
-
 
     //
     //Complxity detected: Maybe the physics cod shoudl go into animation code for the cases that manipulates aniamtions?

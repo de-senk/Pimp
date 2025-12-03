@@ -31,29 +31,31 @@ VertexOutput :: struct
 
 }
 
-
-
 #if !#exists(ID3D11Buffer)
 ID3D11Buffer :: u64;
 
 Skinned_Mesh :: struct
 {
-	#as using skeleton : Skeleton; @NoSerialize
-	vertices : []Vertex; @NoSerialize
-	vertices_dirty : bool; @NoSerialize
-	indices  : []u32; @NoSerialize
+	#as using skeleton : Skeleton;
+	vertices : []Vertex;
+	vertices_dirty : bool;
+	indices  : []u32;
 	model_name: string;
     // world_model := Matrix4_Identity;
 
-    _padding_render_res: bool=  ---;
-    #place _padding_render_res; // OpenGL resources
-	vao, vbo, ibo : GLuint; @NoSerialize
-    #place _padding_render_res; // D3D11 resources
-    vertex_buffer: *ID3D11Buffer; @NoSerialize
-    index_buffer: *ID3D11Buffer; @NoSerialize
-    vertex_count: u32; @NoSerialize
-    index_count: u32; @NoSerialize
-    is_already_on_gpu_mem: bool; @NoSerialize
+    vertex_count: u32;
+    index_count: u32;
+    is_already_on_gpu_mem: bool;
+
+
+    #overlay( _padding_render_res) using openglstuff : struct {
+	   vao, vbo, ibo : GLuint;
+	};
+    #overlay( _padding_render_res) using dx11stuff : struct{
+        vertex_buffer: *ID3D11Buffer;
+        index_buffer: *ID3D11Buffer;
+    };
+    _padding_render_res: [4]u32;
 }
 
 

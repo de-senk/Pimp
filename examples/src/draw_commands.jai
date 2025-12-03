@@ -4,6 +4,18 @@
 
 //:tagHighestLevelOfAbstractionExplanationAndCode
 
+skinning_commands: [..]ToSkin_Command;
+ToSkin_Command :: struct {
+        pose: *Skeleton_Pose;
+}
+
+push_skinning_change :: (pose: *Skeleton_Pose)
+{
+    cmd: ToSkin_Command;
+    cmd.pose = pose;
+    array_add(*skinning_commands, cmd);
+}
+
 drawing_commands: [..]Draw_Command;
 Draw_Command :: struct {
     should_render: bool; //maybe nonsense because it is IMMEDIATE MODE, BUT, maybe some frustrum culling sets this.
@@ -207,19 +219,6 @@ DrawSphere :: (position: Vector3, orientation: Quaternion, radius: float, subdiv
 }
 
 
-draw_polygon :: (vertices: [] Vector3, color := Vector4.{ 1, 1, 1, 1 }) {
-    dx11_set_shader_for_color(true);
-
-    for j: 1..vertices.count - 2 {
-        k := (j + 1) % vertices.count;
-
-        v0 := vertices[0];
-        v1 := vertices[j];
-        v2 := vertices[k];
-        jdraw_triangle(.{ v0.x, v0.y, v0.z }, .{ v1.x, v1.y, v1.z }, .{ v2.x, v2.y, v2.z }, color);
-    }
-}
-
 DrawCircle :: (pos: Vector3, r: float, color := Vector4.{ 1, 1, 1, 1 }) {
     POINTS_PER_CIRCLE :: 10;
     THETA :: TAU / POINTS_PER_CIRCLE;
@@ -228,30 +227,30 @@ DrawCircle :: (pos: Vector3, r: float, color := Vector4.{ 1, 1, 1, 1 }) {
         for i: 0..POINTS_PER_CIRCLE - 1 {
             vertices[i] = pos + .{ cos(THETA * i), sin(THETA * i) , 0} * r;
         }
-        draw_polygon(vertices, color);
+        push_debug_polygon(vertices, color);
     }
     {
         vertices : [POINTS_PER_CIRCLE] Vector3;
         for i: 0..POINTS_PER_CIRCLE - 1 {
             vertices[i] = pos + .{0,  cos(THETA * i), sin(THETA * i) } * r;
         }
-        draw_polygon(vertices, color);
+        push_debug_polygon(vertices, color);
     }
     {
         vertices : [POINTS_PER_CIRCLE] Vector3;
         for i: 0..POINTS_PER_CIRCLE - 1 {
             vertices[i] = pos + .{ cos(THETA * i), 0, sin(THETA * i) } * r;
         }
-        draw_polygon(vertices, color);
+        push_debug_polygon(vertices, color);
     }
 }
 
 
 biggest_mass_so_far: float= 0.1;
-Draw :: (using body: *RigidBody) {
+Draw :: (using body: *Body) {
 
    if biggest_mass_so_far < body.mass then biggest_mass_so_far = body.mass;
-    draw_as_capsule :: (using body: *RigidBody) { //draw_capsule for grep
+    draw_as_capsule :: (using body: *Body) { //draw_capsule for grep
         if g_jolt_renderer.enable_wireframe
         then g_jolt_renderer.current_state = .WIREFRAME;
         defer g_jolt_renderer.current_state = .NORMAL;
@@ -264,7 +263,7 @@ Draw :: (using body: *RigidBody) {
         DrawCapsule (capsule_center,orientation, capsule_radius , capsule_height, subdivisions = 16, color = Vector4.{ 1, 1, 1, 1 });
 
     }
-   draw_as_sphere :: (using body: *RigidBody) {//draw_sphere for grep
+   draw_as_sphere :: (using body: *Body) {//draw_sphere for grep
         if g_jolt_renderer.enable_wireframe
         then g_jolt_renderer.current_state = .WIREFRAME;
         defer g_jolt_renderer.current_state = .NORMAL;
@@ -274,7 +273,7 @@ Draw :: (using body: *RigidBody) {
         // DrawWireframeSphere(position, length(size));
 
     }
-   draw_as_plane :: (using body: *RigidBody) { //draw_plane for grep
+   draw_as_plane :: (using body: *Body) { //draw_plane for grep
         R3D := rotation_matrix(Matrix3, orientation);
         density_alpha_blend := clamp(body.mass / biggest_mass_so_far, 0.99, 1.0);
 
@@ -291,11 +290,11 @@ Draw :: (using body: *RigidBody) {
             v1 := R3D * Vector3.{-100,  100 ,  0} + center;
             v3 := R3D * Vector3.{ 100, -100 ,  0} + center;
             v2 := R3D * Vector3.{ 100,  100 ,  0} + center;
-            draw_polygon(.[ v0, v1, v2, v3 ], Vector4.{ plane_normal.x, plane_normal.y, plane_normal.z, density_alpha_blend });
+            push_debug_polygon(.[ v0, v1, v2, v3 ], Vector4.{ plane_normal.x, plane_normal.y, plane_normal.z, density_alpha_blend });
             // debug_break();
         }
     }
-    draw_as_hull_shape  :: (using body: *RigidBody) {
+    draw_as_hull_shape  :: (using body: *Body) {
         if g_jolt_renderer.enable_wireframe
         then g_jolt_renderer.current_state = .WIREFRAME;
         defer g_jolt_renderer.current_state = .NORMAL;
@@ -326,23 +325,20 @@ Draw :: (using body: *RigidBody) {
                     color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), 1 };
                 /* AI CODE ENDS HERE  AI CODE ENDS HERE AI CODE ENDS HERE*/
 
-                draw_polygon(.[ v0, v1, v2 ], color);
+                push_debug_polygon(.[ v0, v1, v2 ], color);
         }
     }
 
-    draw_as_hull  :: (using body: *RigidBody) {
+    draw_as_hull  :: (using body: *Body) {
         if g_jolt_renderer.enable_wireframe
         then g_jolt_renderer.current_state = .WIREFRAME;
         defer g_jolt_renderer.current_state = .NORMAL;
-
+        return;
 	    currentIndex: u32;
 	    local_vertex: [4]Vector3;
-        start_face := hull_shape.mesh.faces;
-        current_face := start_face;
-        while true { defer if current_face == start_face break;
-        	start_edge := current_face.edge;
-            current_edge := start_edge;
-    	    while true { defer if current_edge == start_edge then break;
+
+            for :each_face current_face: hull_shape.mesh {
+    	    for :each_edge current_edge: current_face {
         		localPoint := hull_shape.scale * current_edge.tail.vertex;
         		local_vertex[currentIndex] = localPoint;
         		currentIndex += 1;
@@ -363,20 +359,61 @@ Draw :: (using body: *RigidBody) {
                         color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), 1 };
                     /* AI CODE ENDS HERE  AI CODE ENDS HERE AI CODE ENDS HERE*/
 
-                    draw_polygon(.[ v0, v1, v2, v3 ], color);
+                    push_debug_polygon(.[ v0, v1, v2, v3 ], color);
 
 
                     currentIndex = 0; //to use  local_vertex array as a ring buffer
                 }
-                //while loop edge related:
-                current_edge = current_edge.next;
             }
-            //while loop face related:
-            current_face = current_face.next;
     	}
     }
+    // draw_as_hull  :: (using body: *Body) {
+    //     if g_jolt_renderer.enable_wireframe
+    //     then g_jolt_renderer.current_state = .WIREFRAME;
+    //     defer g_jolt_renderer.current_state = .NORMAL;
 
-    draw_as_cube :: (using body: *RigidBody) {
+    //     currentIndex: u32;
+    //     local_vertex: [4]Vector3;
+    //     start_face := hull_shape.mesh.faces;
+    //     current_face := start_face;
+    //     while true { defer if current_face == start_face break;
+    //     	start_edge := current_face.edge;
+    //         current_edge := start_edge;
+    // 	    while true { defer if current_edge == start_edge then break;
+    //     		localPoint := hull_shape.scale * current_edge.tail.vertex;
+    //     		local_vertex[currentIndex] = localPoint;
+    //     		currentIndex += 1;
+    //     		should_draw_face := currentIndex == 4;
+    //     		if should_draw_face
+    //     		{
+
+    //         		v0 := l2w(body.position, body.orientation, local_vertex[0]);
+    //                 v1 := l2w(body.position, body.orientation, local_vertex[1]);
+    //                 v2 := l2w(body.position, body.orientation, local_vertex[2]);
+    //                 v3 := l2w(body.position, body.orientation, local_vertex[3]);
+
+    //                 /* AI CODE HERE, I ASKED AI TO ADD COLOR TO MY CODE */
+    //                     // compute face normal
+    //                     n := 0.4*normalize(cross(local_vertex[1] - local_vertex[0],
+    //                                          local_vertex[2] - local_vertex[0]));
+    //                     // simple color mapping from normal to RGB
+    //                     color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), 1 };
+    //                 /* AI CODE ENDS HERE  AI CODE ENDS HERE AI CODE ENDS HERE*/
+
+    //                 push_debug_polygon(.[ v0, v1, v2, v3 ], color);
+
+
+    //                 currentIndex = 0; //to use  local_vertex array as a ring buffer
+    //             }
+    //             //while loop edge related:
+    //             current_edge = current_edge.next;
+    //         }
+    //         //while loop face related:
+    //         current_face = current_face.next;
+    // 	}
+    // }
+
+    draw_as_cube :: (using body: *Body) {
         R3D := rotation_matrix(Matrix3, orientation);
         density_alpha_blend := clamp(body.mass / biggest_mass_so_far, 0.1, 0.5);
         rotate_around_fake :: (v0: *Vector3, v1: *Vector3, v2: *Vector3, v3: *Vector3) {
@@ -425,7 +462,7 @@ Draw :: (using body: *RigidBody) {
             v2 := R * Vector3.{  size.x ,  size.y  , -size.z } + center;
             v3 := R * Vector3.{ -size.x ,  size.y  , -size.z } + center;
             rotate_around_fake(*v0, *v1, *v2, *v3);
-            draw_polygon(.[ v0, v1, v2, v3 ], .{ .4, 0, 0, density_alpha_blend });
+            push_debug_polygon(.[ v0, v1, v2, v3 ], .{ .4, 0, 0, density_alpha_blend });
             // debug_break();
         }
 
@@ -436,7 +473,7 @@ Draw :: (using body: *RigidBody) {
             v2 := R * Vector3.{  size.x ,  size.y  , size.z } + center;
             v3 := R * Vector3.{ -size.x ,  size.y  , size.z } + center;
             rotate_around_fake(*v0, *v1, *v2, *v3);
-            draw_polygon(.[v0, v1, v2, v3 ], .{ .4, 1, 0, density_alpha_blend });
+            push_debug_polygon(.[v0, v1, v2, v3 ], .{ .4, 1, 0, density_alpha_blend });
         }
 
          //top 1 face
@@ -446,7 +483,7 @@ Draw :: (using body: *RigidBody) {
             v2 := R * Vector3.{  size.x ,  -size.y  , size.z } + center;
             v3 := R * Vector3.{ -size.x ,  -size.y  , size.z } + center;
             rotate_around_fake(*v0, *v1, *v2, *v3);
-            draw_polygon(.[v0, v1, v2, v3 ], .{ .6, .2, 0, density_alpha_blend });
+            push_debug_polygon(.[v0, v1, v2, v3 ], .{ .6, .2, 0, density_alpha_blend });
         }
 
          //bottom face
@@ -456,7 +493,7 @@ Draw :: (using body: *RigidBody) {
             v2 := R * Vector3.{  size.x , size.y  , size.z } + center;
             v3 := R * Vector3.{ -size.x , size.y  , size.z } + center;
             rotate_around_fake(*v0, *v1, *v2, *v3);
-            draw_polygon(.[v0, v1, v2, v3 ], .{ .4, .5, 0, density_alpha_blend });
+            push_debug_polygon(.[v0, v1, v2, v3 ], .{ .4, .5, 0, density_alpha_blend });
         }
 
          //side 1 face
@@ -466,7 +503,7 @@ Draw :: (using body: *RigidBody) {
             v2 := R * Vector3.{ -size.x , -size.y  , size.z } + center;
             v3 := R * Vector3.{ -size.x , size.y  , size.z } + center;
             rotate_around_fake(*v0, *v1, *v2, *v3);
-            draw_polygon(.[v0, v1, v2, v3 ], .{ .1, .1, .1, density_alpha_blend });
+            push_debug_polygon(.[v0, v1, v2, v3 ], .{ .1, .1, .1, density_alpha_blend });
         }
 
          //side 2 face
@@ -476,7 +513,7 @@ Draw :: (using body: *RigidBody) {
             v2 := R * Vector3.{ size.x , -size.y  , size.z } + center;
             v3 := R * Vector3.{ size.x , size.y  , size.z } + center;
             rotate_around_fake(*v0, *v1, *v2, *v3);
-            draw_polygon(.[v0, v1, v2, v3 ], .{ .1, .1, 0.5, density_alpha_blend });
+            push_debug_polygon(.[v0, v1, v2, v3 ], .{ .1, .1, 0.5, density_alpha_blend });
         }
     }
 
@@ -734,65 +771,65 @@ push_draw :: (using mesh : *Skinned_Mesh, world_model : Matrix4 = Matrix4_Identi
 
 
 Draw :: (using entity: *Entity, delta_time : float) {
-    if kind == .Player0 {
-    if g_mesh != skin_mesh
-	{
-		g_mesh = skin_mesh;
-		// We changed the mesh, so reallocate a new pose
-		free_pose (*g_pose);
-		if g_mesh
-			g_pose = make_pose_for_skeleton (g_mesh);
-	}
+
+    if rendering_flags & .Has_Skin_Mesh != 0 {
+
+        if skin_mesh == *stub_skin_mesh {
+            log("% %",asset_guid, skin_mesh);
+            skin_mesh = table_find_pointer(*RES.skin_meshes, asset_guid);
+            log("% %",asset_guid, skin_mesh);
+		    free_pose (*skin_pose);
+		    if skin_mesh
+		        skin_pose = make_pose_for_skeleton (skin_mesh);
+
+        }
+
+        if skin_mesh.joints.count != 0
+        {
+        // wpos := get_world_position(*g_pose, "DEF-spine.004");
+        // spos := WorldToScreen(world_model*wpos);
+        // if g_params.show_mesh doLabel("GLADIATOR", spos);
+        }
+
+
 
 	anim : *Sampled_Animation;
 	if g_params.animation_index > 0
-		anim = table_find_pointer(*g_loaded_animations, g_params.animation_names[g_params.animation_index]);
+		anim = table_find_pointer(*g_loaded_animations, current_anim_guid);
 	else
 		anim = null;
 
-	if g_mesh
-	{
 
-
-
-       if  g_mesh.joints.count != 0
-       {
-       // wpos := get_world_position(*g_pose, "DEF-spine.004");
-       // spos := WorldToScreen(world_model*wpos);
-       // if g_params.show_mesh doLabel("GLADIATOR", spos);
-       }
-
-	}
 
 	// Increment animation time
 	if anim
 	{
-		g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
+		g_params.animation_time += delta_time * g_params.animation_speed_in_fps*anim_speed;
 		g_params.animation_time = fmod_cycling(g_params.animation_time, xx anim.sample_count);
 	}
 	else
 		g_params.animation_time = 0;
 
-	//:tagMovedHereBecausePhysics this commented out stuff is the old one, go to tag for new.
-	   // We transpose the result because OpenGL stores matrices in column-major
-        // if g_mesh
-        // 	generate_skinning_matrices (*g_pose, transpose_result = true);
-
 
        // We reset to the bind pose because the animation
 	   // might not have all of the joints our pose has.
-	   reset_to_bind_pose (*g_pose);
+	   reset_to_bind_pose (*skin_pose);
 
+   // if skin_pose.skeleton
+   {
 	   if anim && g_params.show_animation
 	   {
-	   	sample_animation( anim, g_params.animation_time, *g_pose, g_params.interpolation_mode );
+	       sample_animation( anim, g_params.animation_time, *skin_pose, g_params.interpolation_mode );
 	   }
+       push_draw(*skin_pose, world_model, xyzw(g_params.skeleton_color, 1));
+    }
+       push_skinning_change(*skin_pose);
+       push_draw(skin_mesh, world_model, skin_pose.skinning_matrices);
 
-       push_draw(skin_mesh, world_model, g_pose.skinning_matrices);
-       push_draw(*g_pose, world_model, xyzw(g_params.skeleton_color, 1));
    }
 
 }
+
 
 Draw_Dun_Cmds :: (mcmds: []MESH_RENDER_COMMAND) {
     for mcmds {
