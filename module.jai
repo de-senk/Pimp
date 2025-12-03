@@ -49,10 +49,8 @@ Simplest_Geometric_Shape :: struct {
     c: Vector3;
     d: Vector3;
     count: int;
-    #place a;
-        points: [4]Vector3 = ---;
-    #place count;
-        state: enum {POINT;SEGMENT;TRIANGLE;TETRAHEDRON;} = ---;
+    #overlay(a) points: [4]Vector3;
+    #overlay(count) state: enum {NONE;POINT;SEGMENT;TRIANGLE;TETRAHEDRON;};
 }
 
 simplex_add :: (simplex: *Simplest_Geometric_Shape, point: Vector3) {
@@ -283,34 +281,49 @@ Body :: struct {
     hash: u64; //for immediate mode caching invalidation
 }
 
-//from realtime.jai
-AABB :: struct {
-     min: Vector3;
-     max: Vector3;
-     #place max;
-        extents: Vector3 = ---;
-
-     #place min;
-      center: Vector3 = ---;
-      half_extents: Vector3 = ---;
-
-};
 
 Basic_Shape :: struct {
     _1, _2, _3: float;
 
-    #place _1;
-        using #as v: Vector3 = ---;
-    #place _1;
-        capsule_radius: float = ---;
-        capsule_height: float = ---;
-        capsule_unused:float = ---;
-    #place _1;
-        sphere_radius: float = ---;
-        sphere_unused: float = ---;
-        sphere_unused2: float = ---;
+    #overlay(_1) using #as v: Vector3;
+    #overlay(_1) sphere_radius: float;
+    #overlay(_1) capsule_radius: float;
+    #overlay(_2) capsule_height: float;
 }
 
+
+Contact_Info :: struct {
+    //Contact_Feature will not hold, will change to a better one in the future.
+     Contact_Feature :: struct {
+            value: u64;
+            kind: enum{
+                ALREADY_UNIQUE; //this is for spheres vs spheres
+                EDGE; //for convex hulls
+                FACE; //for convex hulls
+                DIRECTION_SIGN; //DIRECTION_SIGN is for capsules, I take capsule A dir an capsule B dir and if its dot product is positive I use value 1 and 7 if it is negative I use vale 7 and 1, why 7? no reason at all., maybe change enum name.
+                }
+        };
+        //these two fields are added just to support CCD, maybe it can be done in a better way later on.
+        // A: *Body;
+        // B: *Body;
+
+        world_point_A: Vector3;
+        world_point_B: Vector3;
+
+        local_point_A: Vector3;
+        local_point_B: Vector3;
+
+        world_normal_A: Vector3; //same for B but opposite
+
+        // position: Vector3;
+        penetration_A: float; //same for B but opposite
+        time_of_impact: float; //same for B
+
+        //hacks
+        feature: Contact_Feature; //this is some hack to distinghish between frames if the previois contact point is or may be the same as the new computed one.
+        world_midpoint: Vector3;
+
+};
 
 #load "src/body_procs.jai";
 #load "src/joints.jai";
@@ -322,7 +335,9 @@ Basic_Shape :: struct {
 #import "Math";
 #import "Hash_Table";
 #import,file "math.jai";
-#import "SIMD_Math";
+// #import "SIMD_Math";
+// #import,dir "modules/Collision_Detection";
+#load "modules/Collision_Detection/module.jai";
 basic :: #import "Basic";
 
 #scope_module
