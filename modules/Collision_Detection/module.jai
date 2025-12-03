@@ -14,6 +14,8 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
     query.edgeQuery = QueryEdgeDirections(hullA, hullB);
 else
 	query.edgeQuery = QueryEdgeDirections_bruteforce(hullA, hullB);
+
+
 	if query.edgeQuery.distance > EPSILON4
 		return false;
 

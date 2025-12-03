@@ -2,14 +2,14 @@ SHOULD_RUN_TESTS :: false; //Not a single test exists right now. I was prototypy
 //some of these procedures are inspired from the book realtime collision detection by Chris Ericson.
 
 // Given three noncollinear points (ordered ccw), compute plane equation
-create_plane :: (a: Vector3, b: Vector3, c: Vector3)-> normal: Vector3, d: float {
+create_plane :: (a: Vector3, b: Vector3, c: Vector3) -> normal: Vector3, d: float {
     plane_normal := normalize(cross_product(b - a, c - a));
     d := dot(plane_normal, a);
     return plane_normal, d;
 }
 
 #if SHOULD_RUN_TESTS #run intersect_plane_with_plane(.{}, 0, .{}, 0);
-intersect_plane_with_plane :: (plane1_normal: Vector3, plane1_d: float, plane2_normal: Vector3, plane2_d: float)-> (success: bool, intersection_point_on_line: Vector3, line_direction: Vector3)
+intersect_plane_with_plane :: (plane1_normal: Vector3, plane1_d: float, plane2_normal: Vector3, plane2_d: float) -> (success: bool, intersection_point_on_line: Vector3, line_direction: Vector3)
 {
     EPSILON7 :: 0.00000001;
     intersection_point_on_line: Vector3 = ---; //would this be inserted directly into the caller?
@@ -23,7 +23,7 @@ intersect_plane_with_plane :: (plane1_normal: Vector3, plane1_d: float, plane2_n
 
 
 #if SHOULD_RUN_TESTS #run intersect_three_planes(.{}, 0, .{}, 0, .{}, 0);
-intersect_three_planes:: (plane1_normal: Vector3, plane1_d: float, plane2_normal: Vector3, plane2_d: float, plane3_normal: Vector3, plane3_d: float)-> (success: bool, intersection_point: Vector3)
+intersect_three_planes:: (plane1_normal: Vector3, plane1_d: float, plane2_normal: Vector3, plane2_d: float, plane3_normal: Vector3, plane3_d: float) -> (success: bool, intersection_point: Vector3)
 {
     FILLSTAC:float = 111111111;
     intersection_point: Vector3 = ---;
@@ -57,7 +57,7 @@ intersect_segment_with_plane :: (start: Vector3, end: Vector3, triangle_a: Vecto
 }
 
 
-is_quad_convex :: (a: Vector3, b: Vector3, c: Vector3, d: Vector3)-> bool
+is_quad_convex :: (a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> bool
 {
     // Quad is nonconvex if Dot(Cross(bd, ba), Cross(bd, bc)) >= 0
      bda := cross_product(d - b, a - b);
@@ -69,7 +69,7 @@ is_quad_convex :: (a: Vector3, b: Vector3, c: Vector3, d: Vector3)-> bool
     return dot(acd, acb) < 0.0;
 }
 
-distance_point_to_line_prenormalized:: inline (point: Vector3, line_start: Vector3, normalized_line_dir: Vector3)-> float
+distance_point_to_line_prenormalized:: inline (point: Vector3, line_start: Vector3, normalized_line_dir: Vector3) -> float
 {
     hypothenuse := point - line_start;
     proj := dot(hypothenuse, normalized_line_dir)*normalized_line_dir;
@@ -78,7 +78,7 @@ distance_point_to_line_prenormalized:: inline (point: Vector3, line_start: Vecto
 }
 
 DistanceFromLine :: distance_point_to_line;
-distance_point_to_line:: inline (point: Vector3, line_start: Vector3, line_end: Vector3)-> float
+distance_point_to_line:: inline (point: Vector3, line_start: Vector3, line_end: Vector3) -> float
 {
     line_dir_n := normalize(line_start - line_end);
     hypothenuse := point - line_start;
@@ -87,12 +87,12 @@ distance_point_to_line:: inline (point: Vector3, line_start: Vector3, line_end: 
     return length(orth_diff);
 }
 
-distance_point_to_plane :: inline (point: Vector3, plane_normal: Vector3, plane_distance: float)-> float
+distance_point_to_plane :: inline (point: Vector3, plane_normal: Vector3, plane_distance: float) -> float
 {
     return abs((dot(plane_normal, point) - plane_distance));
 }
 
-distance_point_to_plane_signed :: inline (point: Vector3, plane_normal: Vector3, plane_distance: float)-> float
+distance_point_to_plane_signed :: inline (point: Vector3, plane_normal: Vector3, plane_distance: float) -> float
 {
     return (dot(plane_normal, point) - plane_distance);
 }
@@ -103,14 +103,21 @@ closest_point_to_plane :: (point: Vector3, plane_normal: Vector3, plane_distance
     return point - distance_point_to_plane_signed(point, plane_normal, plane_distance) * plane_normal;
 }
 
-closest_point_to_on_segment ::( start: Vector3, end: Vector3, Point: Vector3)-> Vector3
+distance_point_to_fat_plane_signed :: inline (point: Vector3, plane_normal: Vector3, plane_distance: float, epsilon: float) -> float
+{
+	d := distance_point_to_plane_signed(point, plane_normal, plane_distance);
+	if d <= epsilon && d >= -epsilon d = 0.0;
+	return d;
+}
+
+closest_point_to_on_segment ::( start: Vector3, end: Vector3, Point: Vector3) -> Vector3
 {
     AB := end - start;
     t:  = dot(Point - start, AB) / dot(AB, AB);
     return start + min(max(t,0),1) * AB; // saturate(t) can be written as: min((max(t, 0), 1)
 }
 
-intersect_ray_with_plane :: (ray_origin: Vector3, ray_dir: Vector3, plane: Plane)-> bool, point_on_plane: Vector3
+intersect_ray_with_plane :: (ray_origin: Vector3, ray_dir: Vector3, plane: Plane) -> bool, point_on_plane: Vector3
 {
 	point_on_plane: Vector3 = ---;
 	fp := distance_point_to_plane_signed(point=ray_origin, plane.normal, plane.distance);
@@ -163,7 +170,7 @@ closest_point_to_on_segmentbad :: inline (point: Vector3, segment_start: Vector3
 closest_point_segment_to_segment :: inline (
  segmentA_start: Vector3, segmentA_end: Vector3,
  segmentB_start: Vector3, segmentB_end: Vector3
- )-> closest_point_on_A: Vector3, closest_point_on_B: Vector3, sss:float, slider_t: float, distance_distance: float
+ ) -> closest_point_on_A: Vector3, closest_point_on_B: Vector3, sss:float, slider_t: float, distance_distance: float
 {
     closest_point_on_A: Vector3;
     closest_point_on_B: Vector3;
@@ -264,13 +271,9 @@ distance_point_to_segment_squared :: (point: Vector3, segment_start: Vector3, se
 AABB :: struct {
      min: Vector3;
      max: Vector3;
-     #place max;
-        extents: Vector3 = ---;
-
-     #place min;
-      center: Vector3 = ---;
-      half_extents: Vector3 = ---;
-
+     #overlay(min) center: Vector3;
+     #overlay(max) half_extents: Vector3;
+     #overlay(max) extents: Vector3;
 };
 
 
@@ -278,7 +281,7 @@ AABB :: struct {
 // intersect_aabb_with_aabb :: TestAABBAABB; // @Report: why this forces Southerland_Hodgmand to be a declaration?
 // are_colliding ::  TestAABBAABB; // @Report: //I should use procedure overloading and semantic compression isntead.
 
-is_aabb_valid :: (using aabb: AABB) -> bool {
+is_aabb_valid :: (using aabb: AABB, $COLLISION_MARGIN:= 0.001) -> bool {
   return min != max && length_squared(min) + length_squared(max) > COLLISION_MARGIN*COLLISION_MARGIN;
 }
 
@@ -312,7 +315,7 @@ OBB :: struct { //confusing data structure
 };
 
 #if SHOULD_RUN_TESTS #run TestOBBPlane(.{}, .{}, 0);
-TestOBBPlane :: (obb: OBB,  plane_normal: Vector3, plane_distance: float)-> bool
+TestOBBPlane :: (obb: OBB,  plane_normal: Vector3, plane_distance: float) -> bool
 {
     // Compute the projection interval radius of b onto L(t) = b.c + t * plane_normal
     r := obb.half_extents.component[0]*abs(dot(plane_normal, obb.local_axes.v[0])) +
@@ -326,7 +329,7 @@ TestOBBPlane :: (obb: OBB,  plane_normal: Vector3, plane_distance: float)-> bool
 
 
 // #if SHOULD_RUN_TESTS #run TestAABBAABB(.{},.{}, .CENTER_RADIUS);
-TestAABBAABB :: (a: AABB, b: AABB, $mode: enum{MIN_MAX;MIN_EXTENT;CENTER_RADIUS;} = .MIN_MAX)-> bool
+TestAABBAABB :: (a: AABB, b: AABB, $mode: enum{MIN_MAX;MIN_EXTENT;CENTER_RADIUS;} = .MIN_MAX) -> bool
 {
     // Exit with no intersection if separated along an axis
     #if mode == .MIN_MAX {
@@ -352,7 +355,7 @@ TestAABBAABB :: (a: AABB, b: AABB, $mode: enum{MIN_MAX;MIN_EXTENT;CENTER_RADIUS;
 
 // Given point p, return the point q on or in AABB b that is closest to p
 #if SHOULD_RUN_TESTS #run closest_point_to_aabb(.{},.{});
-closest_point_to_aabb :: ( point: Vector3, b: AABB)->Vector3
+closest_point_to_aabb :: ( point: Vector3, b: AABB) ->Vector3
 {
     closest: Vector3 = ---;
     for point.component
@@ -402,8 +405,7 @@ Rect :: struct {
      axis1: Vector3;
      axis2: Vector3;
      half_extent: [2]float; //maybe I should use vector2 here.
-     #place axis1;
-        u: [2]Vector3 = ---;
+     #overlay(axis1) u: [2]Vector3;
 };
 
 
@@ -559,7 +561,7 @@ is_point_outside_plane :: inline (point: Vector3, a: Vector3, b: Vector3, c: Vec
 
 
 #if SHOULD_RUN_TESTS #run closest_point_to_tetrahedron(.{},.{},.{},.{},.{});
-closest_point_to_tetrahedron :: (point: Vector3, a: Vector3, b: Vector3, c: Vector3, d: Vector3)-> (closest: Vector3)
+closest_point_to_tetrahedron :: (point: Vector3, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> (closest: Vector3)
 {
     //tetrahedron: ABC, ACD,ADB, BDC are CCW
     // Start out assuming point inside all halfspaces, so closest to itself
@@ -612,14 +614,14 @@ TestSpherePlane :: (sphere: Sphere, plane_normal: Vector3, plane_distance: float
 
 
 #if SHOULD_RUN_TESTS #run InsideSpherePlane(.{}, .{}, 0);
-InsideSpherePlane :: (sphere: Sphere, plane_normal: Vector3, plane_distance: float)-> bool
+InsideSpherePlane :: (sphere: Sphere, plane_normal: Vector3, plane_distance: float) -> bool
 {
     dist := dot(sphere.center, plane_normal) - plane_distance;
     return dist < -sphere.radius;
 }
 
 #if SHOULD_RUN_TESTS #run TestSphereHalfspace(.{}, .{}, 0);
-TestSphereHalfspace :: (sphere: Sphere, plane_normal: Vector3, plane_distance: float)-> bool
+TestSphereHalfspace :: (sphere: Sphere, plane_normal: Vector3, plane_distance: float) -> bool
 {
     dist := dot(sphere.center, plane_normal) - plane_distance;
     return dist <= sphere.radius;
@@ -627,7 +629,7 @@ TestSphereHalfspace :: (sphere: Sphere, plane_normal: Vector3, plane_distance: f
 
 
 #if SHOULD_RUN_TESTS #run TestAABBPlane(.{}, .{}, 0);
-TestAABBPlane :: (aabb: AABB,  plane_normal: Vector3, plane_distance: float)-> bool
+TestAABBPlane :: (aabb: AABB,  plane_normal: Vector3, plane_distance: float) -> bool
 {
     // These two lines not necessary with a (center, extents) AABB representation
     aabb_center := (aabb.max + aabb.min) * 0.5; // Compute AABB aabb_center
@@ -642,14 +644,14 @@ TestAABBPlane :: (aabb: AABB,  plane_normal: Vector3, plane_distance: float)-> b
 
 
 #if SHOULD_RUN_TESTS #run TestSphereAABB(Sphere.{}, AABB.{});
-TestSphereAABB :: (sphere: Sphere, aabb: AABB)-> bool
+TestSphereAABB :: (sphere: Sphere, aabb: AABB) -> bool
 {
     sqDist := distance_point_to_aabb_squared(sphere.center, aabb);
     return sqDist <= sphere.radius * sphere.radius;
 }
 
 #if SHOULD_RUN_TESTS #run TestSphereAABB(Sphere.{}, precomputed_closest_point_to_aabb=.{});
-TestSphereAABB :: (sphere: Sphere, precomputed_closest_point_to_aabb: Vector3)-> bool
+TestSphereAABB :: (sphere: Sphere, precomputed_closest_point_to_aabb: Vector3) -> bool
 {
     sqDist := length_squared(precomputed_closest_point_to_aabb);
     return sqDist <= sphere.radius * sphere.radius;
@@ -658,7 +660,7 @@ TestSphereAABB :: (sphere: Sphere, precomputed_closest_point_to_aabb: Vector3)->
 
 
 #if SHOULD_RUN_TESTS #run TestSphereTriangle(.{},.{},.{},.{});
-TestSphereTriangle :: (sphere: Sphere, a: Vector3, b: Vector3, c: Vector3)-> (success: bool, closest: Vector3)
+TestSphereTriangle :: (sphere: Sphere, a: Vector3, b: Vector3, c: Vector3) -> (success: bool, closest: Vector3)
 {
     closest := closest_point_to_triangle(sphere.center, a, b, c);
     v := closest - sphere.center;
@@ -756,7 +758,7 @@ IntersectRaySphere :: (ray_start: Vector3, ray_dir: Vector3, sphere: Sphere, t: 
 }
 
 #if SHOULD_RUN_TESTS #run TestRaySphere(.{}, .{}, .{});
-TestRaySphere :: (ray_start: Vector3, ray_dir: Vector3, sphere: Sphere)-> bool
+TestRaySphere :: (ray_start: Vector3, ray_dir: Vector3, sphere: Sphere) -> bool
 {
     sphere_to_ray := ray_start - sphere.center;
     c := dot(sphere_to_ray, sphere_to_ray) - sphere.radius * sphere.radius;
@@ -770,7 +772,7 @@ TestRaySphere :: (ray_start: Vector3, ray_dir: Vector3, sphere: Sphere)-> bool
 
 
 #if SHOULD_RUN_TESTS #run IntersectRayAABB(.{}, .{}, .{}, cast(*float) *context); //danger, never uncomment.
-IntersectRayAABB :: (ray_start: Vector3, ray_dir: Vector3, aabb: AABB, tmin: *float)-> (success: bool, intersect_point: Vector3)
+IntersectRayAABB :: (ray_start: Vector3, ray_dir: Vector3, aabb: AABB, tmin: *float) -> (success: bool, intersect_point: Vector3)
 {
     EPSILON7 :: 0.00000001; //random small number, to twak I guess... @Todo create epsilons EPSILON4 EPSILON5 EPSILON6 EPSILON7 xD
     tmin.* = 0.0;
@@ -794,7 +796,7 @@ IntersectRayAABB :: (ray_start: Vector3, ray_dir: Vector3, aabb: AABB, tmin: *fl
 
 
 #if SHOULD_RUN_TESTS #run TestSegmentAABB(.{}, .{}, .{});
-TestSegmentAABB :: (segment_start: Vector3, segment_end: Vector3, aabb: AABB)-> bool
+TestSegmentAABB :: (segment_start: Vector3, segment_end: Vector3, aabb: AABB) -> bool
 {
     EPSILON7 :: 0.00000001; //random small number, to twak I guess... @Todo create epsilons EPSILON4 EPSILON5 EPSILON6 EPSILON7 xD
     box_center := (aabb.min + aabb.max) * 0.5; // Box center-point
@@ -832,7 +834,7 @@ TestSegmentAABB :: (segment_start: Vector3, segment_end: Vector3, aabb: AABB)-> 
 
 
 #if SHOULD_RUN_TESTS #run IntersectLineTriangle(.{}, .{}, .{},.{},.{});
-IntersectLineTriangle :: (line_start: Vector3, line_end: Vector3, a: Vector3, b: Vector3, c: Vector3)-> (success: bool, barycentric_coordinates: Vector3)
+IntersectLineTriangle :: (line_start: Vector3, line_end: Vector3, a: Vector3, b: Vector3, c: Vector3) -> (success: bool, barycentric_coordinates: Vector3)
 {
     barycentric_coordinates: Vector3;
     pq := line_end - line_start;
@@ -858,7 +860,7 @@ IntersectLineTriangle :: (line_start: Vector3, line_end: Vector3, a: Vector3, b:
 
 
 #if SHOULD_RUN_TESTS #run IntersectLineQuad(.{}, .{}, .{},.{},.{},.{});
-IntersectLineQuad :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b: Vector3,  c: Vector3,  d: Vector3)-> (success: bool, intersection_point: Vector3)
+IntersectLineQuad :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b: Vector3,  c: Vector3,  d: Vector3) -> (success: bool, intersection_point: Vector3)
 {
     intersection_point: Vector3;
     pq := line_end - line_start;
@@ -909,7 +911,7 @@ IntersectLineQuad :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b:
 // of the intersection point
 
 #if SHOULD_RUN_TESTS #run IntersectSegmentTriangle(.{}, .{}, .{},.{},.{});
-IntersectSegmentTriangle :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b: Vector3,  c: Vector3)-> (success: bool, barycentric_coordinates: Vector3, slider_t: float)
+IntersectSegmentTriangle :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b: Vector3,  c: Vector3) -> (success: bool, barycentric_coordinates: Vector3, slider_t: float)
 {
     barycentric_coordinates: Vector3;
     slider_t: float;

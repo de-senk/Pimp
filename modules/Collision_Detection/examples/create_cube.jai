@@ -69,7 +69,7 @@ JAI;
 main :: () {
     #insert STUFF_REQUIRED_FOR_TEST_TO_WORK_NOT_IMPORTANT_TO_SAT;
     #insert SAME__NOT_IMPORTANT_TO_SAT_BUT__MAYBE_USEFUL_AS_REFERENCE;
-    
+
     result_contacts: [4]Contact_Info;
     num_contacts: int;
 
@@ -240,6 +240,7 @@ main :: () {
     }
 }
 
+#if !#exists(is_normalized)
 is_normalized :: (a: $T / .[Vector2, Vector3, Vector4], $tolerance:float = 0.000001) -> bool {
     sum: float;
     for a.component {

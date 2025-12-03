@@ -1,4 +1,3 @@
-//the half edge datrasturcture is amazing, it allows us to do a lot of tricks.
 Convex_Hull :: struct {
     mesh: Half_Edge_Mesh;
     worldSpace: Matrix4;
@@ -6,7 +5,7 @@ Convex_Hull :: struct {
     scale: Vector3;
 };
 
-
+//this datastructure is very powerful, It let you do useful topological stuff.
 Half_Edge_Mesh :: struct {
     #import "Hash_Table"; //:tag_Extra_Import_Here_Maybe_Pull_Out
     compare_he :: (a: *Hull_Half_Edge, b: *Hull_Half_Edge) -> bool {
@@ -20,19 +19,25 @@ Half_Edge_Mesh :: struct {
     edges: Table(*Hull_Half_Edge, void, given_compare_function = compare_he);
     vertices: *Hull_Vertex;
     faces: *Hull_Face;
+    //for usage, might be less than allocated
     vertexCount: int;
     edgeCount: int;
     faceCount: int;
+
     CONVEXITY_EPSILON: float : 0.00005;
-    vertexBuffer: [..] Hull_Vertex;
-    edgeBuffer: [..] Hull_Half_Edge;
-    faceBuffer: [..] Hull_Face;
-    allocatedVertices: int;
-    allocatedEdges: int;
-    allocatedFaces: int;
-    vertexFreeList_stack: [..] *Hull_Vertex;
-    edgeFreeList_stack: [..] *Hull_Half_Edge;
-    faceFreeList_stack: [..] *Hull_Face;
+    //for allocation
+    vertexBuffer: [] Hull_Vertex;
+    edgeBuffer: [] Hull_Half_Edge;
+    faceBuffer: [] Hull_Face;
+
+    //I use singular instead of plural for grep reasons
+    num_allocated_vertex: int;
+    num_allocated_edge: int;
+    num_allocated_face: int;
+    vertex_free_list: *Hull_Vertex;
+    edge_free_list: *Hull_Half_Edge;
+    face_free_list: *Hull_Face;
+    //
 };
 
 
@@ -42,21 +47,25 @@ Hull_Face :: struct
 	next: *Hull_Face;
 	edge: *Hull_Half_Edge;
 
-	facePlane: Plane;
-	vertexCount: int; //equal to face's edge count, always 4 probably, idk, we will see.
+	face_plane_normal: Vector3;
+	face_plane_distance: float;
+	vertexCount: int;
 
-	conflict_list : [..]*Hull_Vertex; //field, used for quickhull
+	//fields, used for quickhull, 
+	conflict_list : [..]*Hull_Vertex;
+	visited: bool;
 };
 
 Hull_Half_Edge :: struct
 {
+	tail: *Hull_Vertex;
+
 	prev: *Hull_Half_Edge;
 	next: *Hull_Half_Edge;
 	twin: *Hull_Half_Edge;
-	tail: *Hull_Vertex;
+
 	face: *Hull_Face;
 };
-
 
 
 Hull_Vertex :: struct
@@ -72,6 +81,8 @@ Hull_Vertex :: struct
     //
 	edge: *Hull_Half_Edge;
     leaving_edge: *Hull_Half_Edge;
+
+    conflict_face: *Hull_Face;
 };
 
 
