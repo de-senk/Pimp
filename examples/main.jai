@@ -65,10 +65,10 @@ main :: () {
 	glEnable (GL_BLEND);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-
+    iii:bool;
 	while g_running
 	{
-
+        iii = !iii;
 		frame_start := current_time_monotonic ();
 		defer reset_temporary_storage ();
 		update_window_events ();
@@ -99,8 +99,8 @@ main :: () {
 
     	//:tagMovedHereBecausePhysics
 	   // We transpose the result because OpenGL stores matrices in column-major
-        if g_mesh
-        	generate_skinning_matrices (*g_pose, transpose_result = true);
+	   for skinning_commands
+        	generate_skinning_matrices (it.pose, transpose_result = true);
         //
         // Drawing pass
         //
@@ -141,7 +141,7 @@ main :: () {
 		  push_line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
 		  // Draw grid
 		  push_grid(.{0,0,0}, .{0,1,0},);
-		  drawDungeon();
+          // drawDungeon();
         }
 
         //
@@ -151,9 +151,14 @@ main :: () {
 		for drawing_commands {
 		  actual_draw(it);
 		}
+        if iii
+		draw_all_debug_triangles();
 
 		for *context.solver.world.soft_bodies init_softbody_mesh(it, it_index);
 	    array_reset(*drawing_commands);
+	    array_reset(*skinning_commands);
+	    array_reset_keeping_memory(*debug_triangle_list);
+	    array_reset_keeping_memory(*debug_triangle_list_wire);
 
 		update_ui (delta_time); //Hopefully I will be able to get rid of this procedure in the future.
 
@@ -255,13 +260,14 @@ g_game_state : struct {
 }
 
 all_entities: [..]Entity;
-stub_skin_mesh: Skinned_Mesh;
+stub_skin_mesh:: Skinned_Mesh.{};
 
 Entity :: struct {
     position: Vector3;
     orientation: Vector3;
     world_model: Matrix4 = Matrix4_Identity;
     kind: enum {Player0;Wall;Door;};
+    rendering_flags: Rendering_Flags;
     is_player0: bool;
     is_a_box: bool;
     is_a_wall: bool;
@@ -269,13 +275,25 @@ Entity :: struct {
     is_a_floor_or_ceiling: bool;
 
     asset_guid: string;
+    current_anim_guid: string;
+    anim_speed: float;
+    max_velocity: float : 2.0;
 
 
     is_walking: bool;
     is_running: bool;
     is_idle: bool;
     is_rolling: bool;
+
     skin_mesh : *Skinned_Mesh;
+    skin_pose: Skeleton_Pose;
+    skin_anim: Sampled_Animation;
+}
+
+Rendering_Flags :: enum_flags {
+    Unused;
+    Has_Skin_Mesh;
+    Has_Animation;
 }
 
 
@@ -283,13 +301,16 @@ Entity :: struct {
 create_entity :: () -> *Entity {
        entity := array_add(*all_entities);
        entity.skin_mesh = *stub_skin_mesh;
+
        return entity;
 }
 
 create_player0 :: () {
     player0 := create_entity();
     player0.is_player0 = true;
+    player0.rendering_flags = .Has_Skin_Mesh;
     player0.asset_guid = copy_string("Player0");
+    player0.current_anim_guid = copy_string("Run_Forward");
 }
 
 
@@ -338,8 +359,8 @@ g_dropdown_font : *simp.Dynamic_Font;
 // by their name).
 g_loaded_meshes : Table (string, Skinned_Mesh);
 g_loaded_animations : Table (string, Sampled_Animation);
-g_mesh : *Skinned_Mesh;
-g_pose : Skeleton_Pose;
+// g_mesh : *Skinned_Mesh;
+// g_pose : Skeleton_Pose;
 
 
 
@@ -458,6 +479,7 @@ populate_mesh :: (this: *Soft_Body, mesh: *Skinned_Mesh) {
 		+ size_of (Vertex) * mesh.vertices.count
 		+ size_of (u32) * mesh.indices.count
 	);
+	assert(all_data!=null, "allocation failed");
 
     //oh init table...
 	init (*mesh.name_to_joint_id, mesh.joints.count);
@@ -489,7 +511,7 @@ sync_positions_with_renderer :: (this: *Soft_Body, mesh: *Skinned_Mesh) {
 
 find_and_load_meshes_and_animations :: inline () {
 	visitor :: (info : *File_Visit_Info, data : *void) {
-		path, basename, ext := path_decomp (info.full_name);
+		path, name_without_ext, ext := path_decomp (info.full_name);
 		if ext == {
 		  //comented out, proabability of deletion 100%
           // case "mesh";
@@ -497,29 +519,32 @@ find_and_load_meshes_and_animations :: inline () {
           // 	loaded := load_mesh_from_file (*mesh, info.full_name);
           // 	if loaded {
           // 		init_mesh_rendering_objects (*mesh);
-          // 		table_add (*g_loaded_meshes, copy_string (basename), mesh);
+          // 		table_add (*g_loaded_meshes, copy_string (name_without_ext), mesh);
           // 	} else {
-          // 		log_error ("Could not load % mesh.", basename);
+          // 		log_error ("Could not load % mesh.", name_without_ext);
           //   }
 		  case "skinned_mesh";
 			mesh : Skinned_Mesh;
 			loaded := load_custom_skinned_mesh_from_file(*mesh, info.full_name);
 			if loaded {
-			     
+
 			     upload_mesh_to_gpu (*mesh);
                 // init_mesh_rendering_objects (*mesh);
-				table_add (*g_loaded_meshes, copy_string (basename), mesh);
+				table_add (*g_loaded_meshes, copy_string (name_without_ext), mesh);
+				table_add(*RES.skin_meshes, copy_string(name_without_ext), mesh);
 			} else {
-				log_error ("Could not load % mesh.", basename);
+				log_error ("Could not load % mesh.", name_without_ext);
             }
 		case"skinned_anim"; #through;
 		case"anim";
 		    anim : Sampled_Animation;
 			loaded := load_animation_from_file (*anim, info.full_name);
 			if loaded {
-				table_add (*g_loaded_animations, copy_string (basename), anim);
+				table_add (*g_loaded_animations, copy_string (name_without_ext), anim);
+				table_add(*RES.animations, copy_string(name_without_ext), anim);
+
             } else {
-				log_error ("Could not load % animation.", basename);
+				log_error ("Could not load % animation.", name_without_ext);
             }
 		}
 	}
@@ -560,7 +585,7 @@ find_and_load_meshes_and_animations :: inline () {
 #import "Basic";
 #import "String";
 #import "Window_Creation";
-#import "SIMD_Math";
+// #import "SIMD_Math";
 using Input :: #import "Input";
 
 DEBUG :: false;
@@ -621,6 +646,7 @@ is_key_down :: inline (key : Key_Code) -> bool
 simp :: #import "Simp";
 getrect :: #import "GetRect";
 
+CD ::#import,file"../modules/Collision_Detection/module.jai";
 // physics ::#import,file"../module.jai";
 #load "../module.jai";
 

@@ -162,6 +162,21 @@ init_rendering_objects :: () -> bool
 	glBindVertexArray (0);
 	glBindBuffer (GL_ARRAY_BUFFER, 0);
 
+
+	// every time we want to draw a line.
+	glGenVertexArrays (1, *g_debug_triangles_vao);
+	glBindVertexArray (g_debug_triangles_vao);
+	glGenBuffers (1, *g_debug_triangles_vbo);
+	glBindBuffer (GL_ARRAY_BUFFER, g_debug_triangles_vbo);
+	glBufferData (GL_ARRAY_BUFFER, size_of (DebugDrawVertex) * MAX_DEBUG_TRIANGLES, null, GL_DYNAMIC_DRAW);
+	glEnableVertexAttribArray (0);
+	glVertexAttribPointer (0, 3, GL_FLOAT, GL_FALSE, size_of (DebugDrawVertex), cast (*void) 0);
+	glEnableVertexAttribArray (1);
+	glVertexAttribPointer (1, 4, GL_FLOAT, GL_FALSE, size_of (DebugDrawVertex), cast (*void) size_of (Vector3));
+
+	glBindVertexArray (0);
+	glBindBuffer (GL_ARRAY_BUFFER, 0);
+
 	// Create big data uniform buffer object
 	glGenBuffers (1, *g_big_data_ubo);
 	glBindBuffer (GL_UNIFORM_BUFFER, g_big_data_ubo);
@@ -347,7 +362,6 @@ LINE_RENDER_COMMAND :: struct {
 }
 
 
-
 push_line :: (start : Vector3, end : Vector3, color : Vector4) {
     cmd: Draw_Command;
     cmd.kind = .LINE;
@@ -422,6 +436,57 @@ push_square :: (center: Vector3, size: float = 0.9, normal: Vector3 = game_coord
     push_line(p2, p3, color);
     push_line(p3, p0, color);
 }
+
+
+push_debug_polygon :: (vertices: [] Vector3, color := Vector4.{ 1, 1, 1, 1 }) {
+    // dx11_set_shader_for_color(true);
+
+    for j: 1..vertices.count - 2 {
+        k := (j + 1) % vertices.count;
+
+        v0 := vertices[0];
+        v1 := vertices[j];
+        v2 := vertices[k];
+        push_debug_triangle(.{ v0.x, v0.y, v0.z }, .{ v1.x, v1.y, v1.z }, .{ v2.x, v2.y, v2.z }, color);
+    }
+}
+
+
+push_debug_hull :: (position: Vector3, orientation: Quaternion, hull_shape: Convex_Hull) {
+    vert_count: u32;
+    vertices_tmp: [4]Vector3;
+    for :each_face current_face: hull_shape.mesh {
+        for :each_edge current_edge: current_face {
+	        localPoint := hull_shape.scale * current_edge.tail.vertex;
+    		vertices_tmp[vert_count] = localPoint;
+    		vert_count += 1;
+        }
+
+        if vert_count == {
+            case 4;
+    		    v0 := l2w(position, orientation, vertices_tmp[0]);
+                v1 := l2w(position, orientation, vertices_tmp[1]);
+                v2 := l2w(position, orientation, vertices_tmp[2]);
+                v3 := l2w(position, orientation, vertices_tmp[3]);
+                n := current_face.face_plane_normal;
+                color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), 1 };
+                push_debug_polygon(.[ v0, v1, v2, v3 ], color);
+            case 3;
+    		    v0 := l2w(position, orientation, vertices_tmp[0]);
+                v1 := l2w(position, orientation, vertices_tmp[1]);
+                v2 := l2w(position, orientation, vertices_tmp[2]);
+                n := current_face.face_plane_normal;
+                color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), 1 };
+                push_arrow(v0,n,color=color); // push_arrow(v1,n,color=color); // push_arrow(v2,n,color=color);
+                push_debug_triangle( v0, v1, v2, color);
+
+            case;
+                assert(false, "vert_count %", vert_count);
+            }
+	   vert_count = 0; //to use vertices_tmp array as a ring buffer
+	}
+}
+
 
 // Push a wireframe box
 push_wireframe_box :: (center: Vector3, size: Vector3 = .{0.9,0.9,0.9}, color: Vector4 = .{.5,.7,.5,1}) {
@@ -526,6 +591,55 @@ draw_line :: (start : Vector3, end : Vector3, start_color : Vector4, end_color :
 	glDrawArrays (GL_LINES, 0, 2);
 }
 
+
+DebugDrawVertex :: struct {
+    position: Vector3;
+    color: Vector4;
+}
+
+
+
+g_debug_triangles_vao: GLuint;
+g_debug_triangles_vbo: GLuint;
+MAX_DEBUG_TRIANGLES :: 100_000;
+debug_triangle_list: [..]DebugDrawVertex;
+debug_triangle_list_wire: [..]DebugDrawVertex;
+state_machine_wireframe:=false;
+push_debug_triangle ::  (v1: Vector3, v2: Vector3, v3: Vector3, color_vec: Vector4)
+{
+    //check space and add triangle
+    triangle_buf := *debug_triangle_list;
+    if state_machine_wireframe then triangle_buf = *debug_triangle_list_wire;
+    if triangle_buf.count + 3 <= MAX_DEBUG_TRIANGLES {
+        array_add(triangle_buf, DebugDrawVertex.{
+            position = Vector3.{v1.x, v1.y, v1.z},
+            color = color_vec
+        });
+
+        array_add(triangle_buf, DebugDrawVertex.{
+            position = Vector3.{v2.x, v2.y, v2.z},
+            color = color_vec
+        });
+
+        array_add(triangle_buf, DebugDrawVertex.{
+            position = Vector3.{v3.x, v3.y, v3.z},
+            color = color_vec
+        });
+    }
+
+}
+
+draw_all_debug_triangles :: () {
+    glBindVertexArray (g_debug_triangles_vao);
+	glBindBuffer (GL_ARRAY_BUFFER, g_debug_triangles_vbo);
+	// Fill the vertex buffer with our two line vertices
+    // log("c : % % % ", debug_triangle_list.count);
+	glBufferSubData (GL_ARRAY_BUFFER, 0, size_of (DebugDrawVertex) * debug_triangle_list.count.(u32), debug_triangle_list.data);
+	glUseProgram (g_line_shader);
+	glUniformMatrix4fv (glGetUniformLocation (g_line_shader, "u_View_Projection_Matrix"), 1, GL_TRUE, *g_camera.view_projection_matrix.coef[0][0]);
+	glDrawArrays (GL_TRIANGLES, 0, debug_triangle_list.count.(u32));
+
+}
 
 
 // Following is the vertex and fragment shaders for rendering
