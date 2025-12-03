@@ -29,7 +29,108 @@ maybe_insert_DEBUG :: () -> string
 }
 #scope_export
 
+Sign :: inline (x: float) -> float {
+        return ifx x < 0 then -1.0 else (ifx x > 0 then 1.0 else 0.0);
+    }
+    // operator * :: (q: Quaternion, v:Vector3) -> Vector3 #symmetric
+    // {
+    //     u := Vector3.{q.x, q.y, q.z};
+    //     s := q.w;
 
+    //     // Compute v' = 2 * dot(u, v) * u + (s^2 - dot(u, u)) * v + 2 * s * cross(u, v)
+    //     dot_u_v := dot(u, v);
+    //     dot_u_u := dot(u, u);
+    //     cross_u_v := cross(u, v);
+
+    //     result := 2.0 * dot_u_v * u + (s * s - dot_u_u) * v + 2.0 * s * cross_u_v;
+    //     return result;
+    // }
+
+    // operator * :: (m: Matrix4, v: Vector3) -> Vector3 {
+
+    //     result: Vector3 = ---;
+    //     tmp: Vector4 = ---;
+    //     tmp.xyz = v;
+    //     tmp.w = 1.0;
+
+    //     r4 := inline multiply(m, tmp);
+    //     result = r4.xyz;
+    //     return result;
+    // }
+
+
+    make_quaternion_from_axis_and_angle :: (axiss: Vector3, theta: float) -> Quaternion {
+        using q: Quaternion = ---;
+        axis := unit_vector(axiss);
+
+        st := sin(theta * 0.5);
+        ct := cos(theta * 0.5);
+
+        x = axis.x * st;
+        y = axis.y * st;
+        z = axis.z * st;
+        w = ct;
+        return q;
+    }
+
+
+is_valid :: inline (a: $T/SIMD_Array) -> bool {
+    for a.data {
+        is_nan, is_inf := is_nan_is_inf(it);
+        if is_nan || is_inf return false;
+    }
+    return true;
+}
+
+is_valid :: inline (a: int) -> bool {
+    return true;
+}
+
+is_valid :: inline (a: float32) -> bool {
+    is_nan, is_inf := is_nan_is_inf(a);
+    return !is_nan;
+}
+
+is_valid :: inline (a: float64) -> bool {
+    is_nan, is_inf := is_nan_is_inf(a);
+    return !is_nan;
+}
+
+is_valid :: inline (a: Quaternion) -> bool {
+    for a.component {
+        is_nan, is_inf := is_nan_is_inf(it);
+        if is_nan || is_inf return false;
+    }
+    if !is_normalized(a) return false;
+    return true;
+}
+
+is_valid :: inline (a: $T/.[Vector2, Vector3, Vector4]) -> bool {
+    for a.component {
+    is_nan, is_inf := is_nan_is_inf(it);
+    if is_nan || is_inf return false;
+    }
+    return true;
+}
+
+
+is_normalized :: (a: Quaternion, $tolerance:float = 0.000001) -> bool {
+    sum: float;
+    sum += a.w*a.w;
+    sum += a.x*a.x;
+    sum += a.y*a.y;
+    sum += a.z*a.z;
+
+    return sum < 1+tolerance && sum > 1-tolerance; //Already tested, its badn we should use 6 or less->should I use epsilon7? 7 digits are the limits of flaot precisions, but idk if the first 0. counts
+}
+
+is_normalized :: (a: $T / .[Vector2, Vector3, Vector4], $tolerance:float = 0.000001) -> bool {
+    sum: float;
+    for a.component {
+        sum += it*it;
+    }
+    return sum < 1+tolerance && sum > 1-tolerance; //Already tested, its badn we should use 6 or less->should I use epsilon7? 7 digits are the limits of flaot precisions, but idk if the first 0. counts
+}
 
 //to be deleted:
 quaternion_from_axes_to_axes :: (from_x: Vector3, from_y: Vector3, from_z: Vector3,
@@ -542,7 +643,7 @@ get_translation :: inline (matrix: Matrix4) -> Vector3 {
 // }
 
 //this works? compare with :tagThisWorksPlaneEquation
-transform_plane :: inline (in_plane_normal: Vector3, in_plane_distance: float, mat: Matrix4) -> plane_normal: Vector3, plane_distance: float
+transform_plane_BAD :: inline (in_plane_normal: Vector3, in_plane_distance: float, mat: Matrix4) -> plane_normal: Vector3, plane_distance: float
 {
     plane_normal: Vector3 = ---;
     plane_normal.x  = in_plane_normal.x * mat.coef[0][0] + in_plane_normal.y * mat.coef[1][0] +  in_plane_normal.z * mat.coef[2][0];
@@ -658,9 +759,9 @@ Matrix6 :: struct {
     _41, _42, _43, _44, _45, _46 : float;
     _51, _52, _53, _54, _55, _56 : float;
     _61, _62, _63, _64, _65, _66 : float;
-    #place _11; v:      [6]    Vector6 = ---; // These are row vectors.
-    #place _11; coef:   [6][6] float   = ---;
-    #place _11; floats: [36]   float   = ---;
+    #overlay(_11) v:      [6]    Vector6; // These are row vectors.
+    #overlay(_11) coef:   [6][6] float;
+    #overlay(_11) floats: [36]   float;
 
 }
 block_assign :: (a: *Matrix6, b: Matrix3, $cuadrant: int = 4)
@@ -699,8 +800,7 @@ compute_joint_angular_hessian_block :: (world_axis: Vector3, lever_arm: Vector3)
 
 Bivector :: struct {
     xy, yz, zx: float;
-     #place xy;
-     component: [3] float = ---;
+     #overlay( xy ) component: [3] float;
 }
 
 Rotor :: struct {
@@ -718,13 +818,10 @@ Vector6 :: struct {
 //     yz: Vector2 = ---;
 // #place z;
 //     zw: Vector2 = ---;
-#place x;
-    linear: Vector3 = ---;
-#place w;
-    angular: Vector3 = ---;
+#overlay( x) linear: Vector3;
+#overlay(w) angular: Vector3;
 
-#place x;
-    component: [6] float = ---;
+#overlay(x) component: [6] float;
 }
 
 // Helper constructors
