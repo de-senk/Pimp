@@ -212,7 +212,7 @@ World :: struct {
 Solver :: struct {
     using world: *World;
     dt          := 1.0 / 60.0;
-    gravity     := Vector3.{0,-10,0};
+    gravity     := Vector3.{0,-.1,0};
     iterations  := 10;
     number_of_steps_executed_so_far : u64; //<- used for immediate mode.
 } @dll_export

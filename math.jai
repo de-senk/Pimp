@@ -642,17 +642,9 @@ get_translation :: inline (matrix: Matrix4) -> Vector3 {
 //     return dot(p, plane.normal) + plane.distance;
 // }
 
-//this works? compare with :tagThisWorksPlaneEquation
-transform_plane_BAD :: inline (in_plane_normal: Vector3, in_plane_distance: float, mat: Matrix4) -> plane_normal: Vector3, plane_distance: float
-{
-    plane_normal: Vector3 = ---;
-    plane_normal.x  = in_plane_normal.x * mat.coef[0][0] + in_plane_normal.y * mat.coef[1][0] +  in_plane_normal.z * mat.coef[2][0];
-    plane_normal.y  = in_plane_normal.x * mat.coef[0][1] + in_plane_normal.y * mat.coef[1][1] +  in_plane_normal.z * mat.coef[2][1];
-    plane_normal.z  = in_plane_normal.x * mat.coef[0][2] + in_plane_normal.y * mat.coef[1][2] +  in_plane_normal.z * mat.coef[2][2];
-    plane_distance := in_plane_normal.x * mat.coef[0][3] + in_plane_normal.y * mat.coef[1][3] +  in_plane_normal.z * mat.coef[2][3] + in_plane_distance;
 
-	return plane_normal, plane_distance;
-}
+
+
 
 // 6x6 LDL^T solver (overloaded)
 Solve ::  (a: Matrix6, b: Vector6) -> Vector6 {

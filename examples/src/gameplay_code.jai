@@ -45,7 +45,7 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if is_ctrl_down
         ball.angular_velocity +=  0.2*move_direction;
     else
-        ball.velocity +=  0.2*move_direction;
+        ball.position +=  0.05*move_direction;
 
     //
     //Complxity detected: Maybe the physics cod shoudl go into animation code for the cases that manipulates aniamtions?

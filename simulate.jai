@@ -159,6 +159,8 @@ simulate :: () {
 cubes_initialized: bool;
 hull0: Convex_Hull;
 hull1: Convex_Hull;
+test1pos: Vector3 = Vector3.{.5,0.7, 2.2};
+test1ori :: #run make_quaternion_from_axis_and_angle(.{1,-0.2,0}, 3.141593/4);
 TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion.{0,0,0,1},oriB:=Quaternion.{0,0,0,1}) {
     if !cubes_initialized {
         cubes_initialized = true;
@@ -176,9 +178,24 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
              .{ 0.5,  0.5,  0.5}, // 6: right-top-front
              .{-0.5,  0.5,  0.5}, // 7: left-top-front]);
              ]);
-        hull0.worldSpace = hull3.worldSpace;
-        hull0.scale = hull3.scale;
         // hull0 = hull3;
+        hull0.worldSpace = hull3.worldSpace;
+        // hull0.scale = hull3.scale;
+        // hull0.scale = .{1, 1, 1};
+    }
+
+    {
+    //@Hack temporary hack, I could not figure out good procedure parameters, maybe I should modularize this procedure.
+    //:tagCheckTemporaryHackMovedHere_Maybe_Cache_by_orientation_diff
+        hull0.worldSpace = make_translation_matrix4(posA)*rotation_matrix (Matrix4, oriA) * make_scale_matrix4(.{1,1,4});
+        hull1.worldSpace  = make_translation_matrix4(test1pos)*rotation_matrix (Matrix4, test1ori) * make_scale_matrix4(.{1,1,1});
+
+        //maybe cache per frame/orientation treshold. The bottleneck is still  QueryEdgeDirection and its calls
+        success:, hull0.inv_worldSpace = inverse(hull0.worldSpace);
+        success=, hull1.inv_worldSpace = inverse(hull1.worldSpace);
+
+        assert(success, "error while inverting some hull world model, are your hulls created?");
+        // hull.scale = scale;
     }
 
     num_contacts             :,
@@ -186,12 +203,9 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     world_normal_towards_A   :,
     world_midpoints          :,
     world_contact_points_on_A:,
-    world_contact_points_on_B:=collide_hull_vs_hull(
-     position_A=posA, orientation_A=oriA, scale_A=.{1,1,1}, hull0,
-     position_B=posB, orientation_B=oriB, scale_B=.{1,1,1}, hull1
-    );
+    world_contact_points_on_B:= collide_hull_vs_hull(hull0,hull1);
     push_debug_hull(posA, oriA, hull0);
-    push_debug_hull(posB, oriB, hull1);
+    push_debug_hull(test1pos, test1ori, hull1);
     for 0..num_contacts-1 {
         push_arrow(posA, world_normal_towards_A);
         push_X(world_contact_points_on_A[it],.05);
@@ -206,7 +220,6 @@ create_cube_hull :: (position: Vector3 = .{0,0,0}, scale: Vector3 = .{1,1,1}, ro
     hull.mesh = create_cube_half_edge_mesh(scale);
 
     hull.worldSpace = make_translation_matrix4(position)*rotation_matrix (Matrix4, rotation);
-    hull.scale = scale;
 
     return hull;
 }

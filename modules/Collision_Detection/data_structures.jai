@@ -2,7 +2,7 @@ Convex_Hull :: struct {
     mesh: Half_Edge_Mesh;
     worldSpace: Matrix4;
     inv_worldSpace: Matrix4;
-    scale: Vector3;
+    // scale: Vector3;
 };
 
 //this datastructure is very powerful, It let you do useful topological stuff.
@@ -51,7 +51,7 @@ Hull_Face :: struct
 	face_plane_distance: float;
 	vertexCount: int;
 
-	//fields, used for quickhull, 
+	//fields, used for quickhull,
 	conflict_list : [..]*Hull_Vertex;
 	visited: bool;
 };

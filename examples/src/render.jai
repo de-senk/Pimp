@@ -457,26 +457,28 @@ push_debug_hull :: (position: Vector3, orientation: Quaternion, hull_shape: Conv
     vertices_tmp: [4]Vector3;
     for :each_face current_face: hull_shape.mesh {
         for :each_edge current_edge: current_face {
-	        localPoint := hull_shape.scale * current_edge.tail.vertex;
+	        localPoint := current_edge.tail.vertex;
     		vertices_tmp[vert_count] = localPoint;
     		vert_count += 1;
         }
 
         if vert_count == {
             case 4;
-    		    v0 := l2w(position, orientation, vertices_tmp[0]);
-                v1 := l2w(position, orientation, vertices_tmp[1]);
-                v2 := l2w(position, orientation, vertices_tmp[2]);
-                v3 := l2w(position, orientation, vertices_tmp[3]);
+    		    v0 := hull_shape.worldSpace*vertices_tmp[0];// old: l2w(position, orientation, vertices_tmp[0]);
+                v1 := hull_shape.worldSpace*vertices_tmp[1];// old: l2w(position, orientation, vertices_tmp[1]);
+                v2 := hull_shape.worldSpace*vertices_tmp[2];// old: l2w(position, orientation, vertices_tmp[2]);
+                v3 := hull_shape.worldSpace*vertices_tmp[3];// old: l2w(position, orientation, vertices_tmp[3]);
                 n := current_face.face_plane_normal;
                 color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), 1 };
+                normalize(*color);
                 push_debug_polygon(.[ v0, v1, v2, v3 ], color);
             case 3;
-    		    v0 := l2w(position, orientation, vertices_tmp[0]);
-                v1 := l2w(position, orientation, vertices_tmp[1]);
-                v2 := l2w(position, orientation, vertices_tmp[2]);
+    		    v0 := hull_shape.worldSpace*vertices_tmp[0];// old: l2w(position, orientation, vertices_tmp[0]);
+                v1 := hull_shape.worldSpace*vertices_tmp[1];// old: l2w(position, orientation, vertices_tmp[1]);
+                v2 := hull_shape.worldSpace*vertices_tmp[2];// old: l2w(position, orientation, vertices_tmp[2]);
                 n := current_face.face_plane_normal;
-                color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), 1 };
+                color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), .11 };
+                normalize(*color);
                 push_arrow(v0,n,color=color); // push_arrow(v1,n,color=color); // push_arrow(v2,n,color=color);
                 push_debug_triangle( v0, v1, v2, color);
 

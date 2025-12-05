@@ -153,7 +153,7 @@ main :: () {
 			    contact :FaceContact= CreateFaceContact(query.faceQuery_BA, hull1,hull0);
 			    log("f1contact %", contact);
                 {
-                    world_normal_A := transform_direction(contact.query.face.facePlane.normal,hull1.worldSpace);
+                    world_normal_A := transform_normal(contact.query.face.facePlane.normal,hull1.inv_worldSpace);
                     penetration := contact.query.distance * length_squared(world_normal_A);
                     assert(is_normalized(world_normal_A), "normal:% if faceDistance1 > (kRelFaceTolerance* faceDistance0 + kAbsTolerance)", world_normal_A);
                     assert(contact.points.count <= 4, "we got more than 4 contact points! contact.points.count == %",contact.points.count);
@@ -194,7 +194,7 @@ main :: () {
 
 			contact := CreateFaceContact(query.faceQuery_AB, hull0, hull1);
                 {
-                    world_normal_A := -transform_direction(contact.query.face.facePlane.normal,hull0.worldSpace);
+                    world_normal_A := -transform_normal(contact.query.face.facePlane.normal,hull0.inv_worldSpace);
                     penetration := contact.query.distance * length_squared(world_normal_A);
                     assert(length_squared(world_normal_A) > 0.8, " * length_squared(world_normal_A);");
                     assert(contact.points.count <= 4, "we got more than 4 contact points! AB contact.points.count == %",contact.points.count);
