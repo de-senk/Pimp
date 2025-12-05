@@ -92,6 +92,9 @@ FaceQuery :: struct
 {
 	face: *Hull_Face;
 	distance: float = FLOAT32_MAX;
+	//for pseudo gjk :tagHerePseudoGJK
+	world_furthest_point: Vector3;
+	world_normal: Vector3;
 };
 
 EdgeQuery :: struct

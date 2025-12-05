@@ -57,8 +57,8 @@ main :: () {
 
 
 	// Position the camera in a nice way
-	g_camera.position = xyz (1, 1.3, 2.3);
-	g_camera.euler_angles.x = -20 * PI / 180.0;
+	g_camera.position = xyz (1, 1.3, -2.3);
+	g_camera.euler_angles.x = 200 * PI / 180.0;
 	g_camera.euler_angles.y = 10 * PI / 180.0;
 	g_running = true;
 	delta_time := 0.01667;

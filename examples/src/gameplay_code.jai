@@ -33,7 +33,8 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if is_key_down(#char "A") move_direction += game_coordinates.left;
     if is_key_down(#char "D") move_direction += game_coordinates.right;
 
-    if is_key_down(Key_Code.SPACEBAR) move_direction += 10.0*game_coordinates.up;;
+    if is_key_down(Key_Code.SPACEBAR) move_direction += 4.0*game_coordinates.up;;
+    if is_key_down(#char "C") move_direction -= 4.0*game_coordinates.up;;
 
     normalize(*move_direction);
 

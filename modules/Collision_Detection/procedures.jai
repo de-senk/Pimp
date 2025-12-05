@@ -1,6 +1,4 @@
-prevf:=0;
 QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
-    prevf += 1;
     early_return := false;
     result: FaceQuery;
     result.face = null;
@@ -32,6 +30,8 @@ QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
         if distance > result.distance {
             result.face = current_face;
             result.distance = distance; //most separating OR if negative: most closest to the penetration separation
+            result.world_furthest_point = furthest_vertex_world; //:tagHerePseudoGJK
+            result.world_normal = world_planeA.normal; //:tagHerePseudoGJK
             basically_separating := result.distance > EPSILON4;
             if basically_separating && early_return {
                 result.distance  = FLOAT32_INFINITY;
@@ -257,6 +257,12 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
 	push_grid(closest_point_to_plane(.{5,5,5}, world_ref_plane_n, world_ref_plane_d), world_ref_plane_n, color=.{1,0,0,1});
 	incident_face: *Hull_Face;
 
+    /* from slide 91
+        Implementation hint: To find the incident face simply iterate all faces on the other hull and compute the
+        dot product of each face normal with the normal of the reference face. The face
+        with the smallest dot product defines the incident face!
+
+    */
     {
         mostAntiParallel := FLOAT32_MAX;
 
@@ -279,6 +285,10 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
         assert(incident_face != null, "incident face not found!");
     }
 
+    {
+	n, d := transform_plane(incident_face.face_plane_normal, incident_face.face_plane_distance, incidentHull.worldSpace, incidentHull.inv_worldSpace);
+	push_grid(closest_point_to_plane(.{5,5,5}, n, d), n, color=.{.2,.2,1,1});
+	}
 	//collect incident edge vertices
 	incident_world_vertices: [..]Vector3;
     incident_world_vertices.allocator = temp;
@@ -286,67 +296,75 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
     assert(incident_world_vertices.count == 0);
 
     //fill incident_world_vertices traversing incident face edges
-	{
-		start := incident_face.edge;
-		current_edge := start;
-		while true
-		{
+    for :each_edge current_edge: incident_face {
 			point_in_world := incidentHull.worldSpace * current_edge.tail.vertex;
 			array_add(*incident_world_vertices, point_in_world);
+            // push_square(point_in_world, .2, normal=incident_face.face_plane_normal);
+	}
 
-			current_edge = current_edge.next;
-		    if current_edge == start then break;
-		}
-	};
 
-	start := reference_face.edge;
-	current_edge :=  start;
-	while true
-	{
+	//slide 92: We clip the incident face polygon against the side planes of the reference face Then we keep all points below the reference face
+
+	for :each_edge current_edge: reference_face {
 		referenceSideFace := ifx current_edge.face !=  reference_face then current_edge.face else current_edge.twin.face;
+        // referenceSideFace = current_edge.face; //HARDOCED
 		world_plane_normal, world_plane_dist  := transform_plane(referenceSideFace.face_plane_normal, referenceSideFace.face_plane_distance, referenceHull.worldSpace, referenceHull.inv_worldSpace);
+        // push_grid(closest_point_to_plane(.{5,5,5}, world_plane_normal, world_plane_dist), world_plane_normal, color=.{0,1,0,1});
         clipped_vertices := Sutherland_Hodgman(world_plane_normal,world_plane_dist , incident_world_vertices);
-
 
          if clipped_vertices.count == 0 {
             result.points.count = 0;
-            print("[seems like you clipped all vertices, early return] original1");
+            print("[seems like you clipped all vertices, early return] maybe one hull is too pointy!");
             return result;
         }
 
         array_copy(*incident_world_vertices, clipped_vertices);
         incident_world_vertices.count = clipped_vertices.count;
-
-
-		current_edge = current_edge.next;
-	    if current_edge == start then break;
 	}
+    // for :each_edge current_edge: incident_face
 
 
-    // project world vertices that survived clipping onto reference plane
-    for i: 0..incident_world_vertices.count - 1 {
-        incident_world_vertices[i] = closest_point_to_plane(point=incident_world_vertices[i], world_ref_plane_n, world_ref_plane_d);
-    }
+    // // project world vertices that survived clipping onto reference plane
+    // for i: 0..incident_world_vertices.count - 1 {
+    //     incident_world_vertices[i] = closest_point_to_plane(point=incident_world_vertices[i], world_ref_plane_n, world_ref_plane_d);
+    // }
 
     // result.points = incident_world_vertices;
     array_copy(*result.points, incident_world_vertices);
     array_free(incident_world_vertices);
 
+
+
+
     // for result.points if it.y < 0 then add_to_array_of_contact_points(it, radii = .1, color=.{0,0,1,1});
 
     reduce_contact_points_to_four_or_less(*result);
-    incident_plane_world_normal,incident_plane_world_distance :=
-    transform_plane(incident_face.face_plane_normal, incident_face.face_plane_distance,  incidentHull.worldSpace, incidentHull.inv_worldSpace);
+    // inc_plane_n,inc_plane_d := transform_plane(incident_face.face_plane_normal, incident_face.face_plane_distance,  incidentHull.worldSpace, incidentHull.inv_worldSpace);
     assert(result.points.count <= 4, "we aer supposued o get 4 or less contact points here, we got %", result.points.count);
 
+    // push_grid(closest_point_to_plane(.{5,5,5}, inc_plane_n, inc_plane_d), inc_plane_n, color=.{.2,1,1,1});
+    for result.points    push_X(it, 0.1, color=.{0,1,0,1});
     for *result.points {
-        len := distance_point_to_plane_signed(point=it.*, incident_plane_world_normal, incident_plane_world_distance);
+        // len := distance_point_to_plane_signed(point=it.*, inc_plane_n, inc_plane_d);
+        len := distance_point_to_plane_signed(point=it.*, world_ref_plane_n, world_ref_plane_d*1.0);
         is_separating_basically := len > -EPSILON3;
+        // doLabel(tprint("is_separating_basically %            < %            == %          ",len, EPSILON3, is_separating_basically), WorldToScreen(.{.5,-2.2-it_index.(float),10.0}));
         if is_separating_basically {
+        //     doLabel(tprint("is_separating_basically %            < %            == %          ",len, EPSILON3, is_separating_basically), WorldToScreen(.{.5,1.2+it_index.(float),10.0}));
+
+            // push_circle(it.*, 0.1, color=.{0,0,0,1});
             remove it;
          }
     }
-    // for result.points  then add_to_array_of_contact_points(it, radii = .2, color=.{1,0,0,1});
+
+    // slide 93: Project world vertices that survived clipping onto reference plane
+    //  This helps with coherence and (as we will see later) with contact point reduction
+    //  where we assume that the contact points are in common plane
+    for *result.points {
+        it.* = closest_point_to_plane(point=it, world_ref_plane_n, world_ref_plane_d);
+            // push_circle(it.*, 0.1, color=.{1,1,1,1});
+    }
+    // for result.points   push_X(it, 0.3, color=.{1,0,0,1});
   	return result;
 }
 
@@ -1569,10 +1587,13 @@ collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
 		faceDistance1 :=  query.faceQuery_BA.distance ;
 
 		//grep this from https://www.gamedev.net/forums/topic/667499-3d-sat-problem/?page=2
-		kLinearSlop :=  0.005 ;
-		kRelEdgeTolerance :=  0.90 ;
-		kRelFaceTolerance :=  0.98 ;
-		kAbsTolerance :=  0.5 * kLinearSlop ;
+		//slide 90+: The solution is simple and we apply a bias (or weighting) to prefer face contacts
+        //  over edge contacts and one face axis over another
+
+		kLinearSlop ::  0.005 ;
+		kRelEdgeTolerance ::  0.90 ;
+		kRelFaceTolerance ::  0.98 ;
+		kAbsTolerance ::  0.5 * kLinearSlop ;
 
         is_near_edge := query.edgeQuery.distance > kRelEdgeTolerance * max(faceDistance0, faceDistance1) + kAbsTolerance;
         is_near_face0 := faceDistance1 > (kRelFaceTolerance* faceDistance0 + kAbsTolerance);
@@ -1640,6 +1661,34 @@ collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
 
 
 		} //end edge or faceBA or faceAB test
+
+	//
+	//FALLBACK PSEUDOGJK
+	//
+    should_try_support_point :=  (is_near_face0 || is_near_face1) &&  num_contacts == 0;
+    if should_try_support_point {
+
+        if is_near_face0 {
+            point_in_B := query.faceQuery_BA.world_furthest_point; //:tagHerePseudoGJK
+            world_normal_towards_A := query.faceQuery_BA.world_normal ; //:tagHerePseudoGJK
+            penetration := query.faceQuery_BA.distance ; //:tagHerePseudoGJK
+            world_midpoints[0]           = point_in_B + (penetration/2.0) * world_normal_towards_A;
+            world_contact_points_on_A[0] = point_in_B + penetration * world_normal_towards_A;
+            world_contact_points_on_B[0] = point_in_B;
+
+        } else {
+            point_in_A := query.faceQuery_AB.world_furthest_point; //:tagHerePseudoGJK
+            world_normal_towards_A := -query.faceQuery_AB.world_normal ; //:tagHerePseudoGJK
+            penetration := query.faceQuery_AB.distance ; //:tagHerePseudoGJK
+            world_midpoints[0]           = point_in_A - (penetration/2.0) * world_normal_towards_A;
+            world_contact_points_on_A[0] = point_in_A;
+            world_contact_points_on_B[0] = point_in_A - penetration*world_normal_towards_A;
+        }
+        num_contacts = 1;
+
+        doLabel(tprint("N % FALLBACK  % ",num_contacts, is_near_face0 ), WorldToScreen(.{0.5,.2,2}));
+
+    }
     } //end if collision
 
     doLabel(tprint("N % edgedistance  % ",num_contacts, query.edgeQuery.distance ), WorldToScreen(.{0.5,2.2,2}));

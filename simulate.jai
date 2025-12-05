@@ -160,7 +160,7 @@ cubes_initialized: bool;
 hull0: Convex_Hull;
 hull1: Convex_Hull;
 test1pos: Vector3 = Vector3.{.5,0.7, 2.2};
-test1ori :: #run make_quaternion_from_axis_and_angle(.{1,-0.2,0}, 3.141593/4);
+test1ori := #run make_quaternion_from_axis_and_angle(.{1,-0.2,0}, 3.141593/4);
 TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion.{0,0,0,1},oriB:=Quaternion.{0,0,0,1}) {
     if !cubes_initialized {
         cubes_initialized = true;
@@ -188,7 +188,7 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     //@Hack temporary hack, I could not figure out good procedure parameters, maybe I should modularize this procedure.
     //:tagCheckTemporaryHackMovedHere_Maybe_Cache_by_orientation_diff
         hull0.worldSpace = make_translation_matrix4(posA)*rotation_matrix (Matrix4, oriA) * make_scale_matrix4(.{1,1,4});
-        hull1.worldSpace  = make_translation_matrix4(test1pos)*rotation_matrix (Matrix4, test1ori) * make_scale_matrix4(.{1,1,1});
+        hull1.worldSpace  = make_translation_matrix4(test1pos)*rotation_matrix (Matrix4, test1ori) * make_scale_matrix4(.{4,1,.5});
 
         //maybe cache per frame/orientation treshold. The bottleneck is still  QueryEdgeDirection and its calls
         success:, hull0.inv_worldSpace = inverse(hull0.worldSpace);
@@ -204,12 +204,24 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     world_midpoints          :,
     world_contact_points_on_A:,
     world_contact_points_on_B:= collide_hull_vs_hull(hull0,hull1);
+
+
     push_debug_hull(posA, oriA, hull0);
     push_debug_hull(test1pos, test1ori, hull1);
     for 0..num_contacts-1 {
-        push_arrow(posA, world_normal_towards_A);
+        push_arrow(test1pos, world_normal_towards_A);
         push_X(world_contact_points_on_A[it],.05);
         push_circle(world_contact_points_on_B[it],.05);
+        arm := world_contact_points_on_B[it]-test1pos;
+        torque := cross_product(arm, -world_normal_towards_A);
+        push_arrow(test1pos, torque*4.0, color=.{1,1,1,1});
+        push_line(test1pos, world_contact_points_on_A[it], .{0,1,0,1});
+
+        dq :Quaternion;
+        // set_from_axis_and_angle(*dq, torque, length_squared(torque)*context.solver.dt/0.0005);
+        dq.xyz = torque *context.solver.dt/(2.0*num_contacts);
+        test1ori = dq* test1ori;
+        test1ori = normalize(test1ori);
     }
 }
 
