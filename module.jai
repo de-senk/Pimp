@@ -131,9 +131,9 @@ deactivate_logger :: () #expand {
 
 #scope_export
 
-log_TODO :: (loc:= #caller_location) {
+TODO :: (msg: string,loc:= #caller_location) {
  //this is for VSCODE |||filepath line:character|||:
-  basic.log("TODO % %:%", loc.fully_pathed_filename, loc.line_number, loc.character_number);
+  basic.log("\n[TODO->] %, at-> % %:% [<-TODO]", msg, loc.fully_pathed_filename, loc.line_number, loc.character_number);
 }
 
 

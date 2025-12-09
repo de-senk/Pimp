@@ -6,7 +6,6 @@ simulate :: () {
     Remap_Context();
     context.stack_trace = *old_stack_trace[1]; //2 of 2: maybe needs bug fix? already mailed to jon.
     using context.solver;
-
     //
     //cleanup immediate mode cache
     //
@@ -70,8 +69,8 @@ simulate :: () {
             //angular usable fields are:  .orientation|.prev_orientation|.angular_velocity|.prev_angular_velocity
             it.prev_orientation = it.orientation;
             dq :=  Quaternion.{it.angular_velocity.x, it.angular_velocity.y, it.angular_velocity.z, 0.0};
-            dq = dq*it.orientation; //this is confusing for me
-            it.orientation += 0.5 * dq * dt_m; //seriously confusing, the 0.5, why!
+            dq = dq*it.orientation;
+            it.orientation += 0.5 * dq * dt_m;
             normalize(*it.orientation); //because the above is an approximation since dq is not infty small.
 
 
@@ -111,6 +110,9 @@ simulate :: () {
             if dq.w < 0 then it.angular_velocity *= -1.0;
 
 
+
+            #run TODO("[ERROR]Damping here!");
+            it.angular_velocity *= 0.55;
             push_vector(it.position, it.angular_velocity, Vector4.{.5,.5,.1,1.0});
             if length_squared(it.angular_velocity) > 200 {
                 basic.log("MAX ANG VEL REACHED; CLAMPING");
@@ -140,6 +142,7 @@ simulate :: () {
                 grav_dir := normalize(gravity); project_upwards := - dot(it.velocity, grav_dir)*grav_dir;
                 it.velocity += project_upwards; //to zero it out
                 it.velocity += it.factor_energy_loss_on_collision*project_upwards;  //to bounce
+
             }
 
         }
@@ -155,12 +158,13 @@ simulate :: () {
 } @dll_export
 
 
-
+collider_switch_face:bool;
 cubes_initialized: bool;
 hull0: Convex_Hull;
 hull1: Convex_Hull;
 test1pos: Vector3 = Vector3.{.5,0.7, 2.2};
-test1ori := #run make_quaternion_from_axis_and_angle(.{1,-0.2,0}, 3.141593/4);
+// test1ori := #run make_quaternion_from_axis_and_angle(.{1,-2.2,0}, 3.141593/4);
+test1ori := Quaternion.{-0.291444, -0.490207, -0.050201, 0.819901};
 TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion.{0,0,0,1},oriB:=Quaternion.{0,0,0,1}) {
     if !cubes_initialized {
         cubes_initialized = true;
@@ -178,7 +182,8 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
              .{ 0.5,  0.5,  0.5}, // 6: right-top-front
              .{-0.5,  0.5,  0.5}, // 7: left-top-front]);
              ]);
-        // hull0 = hull3;
+        // hull1 = hull0;
+        hull0 = hull3;
         hull0.worldSpace = hull3.worldSpace;
         // hull0.scale = hull3.scale;
         // hull0.scale = .{1, 1, 1};
@@ -186,9 +191,9 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
 
     {
     //@Hack temporary hack, I could not figure out good procedure parameters, maybe I should modularize this procedure.
-    //:tagCheckTemporaryHackMovedHere_Maybe_Cache_by_orientation_diff
-        hull0.worldSpace = make_translation_matrix4(posA)*rotation_matrix (Matrix4, oriA) * make_scale_matrix4(.{1,1,4});
-        hull1.worldSpace  = make_translation_matrix4(test1pos)*rotation_matrix (Matrix4, test1ori) * make_scale_matrix4(.{4,1,.5});
+    //:tagCheckTemporaryHackMovedHere_Maybe_Cache_by_orientation_diff this block was inserted in that tag before, now we do it once per frame maybe, to figure out.
+        hull0.worldSpace = make_translation_matrix4(posA)*rotation_matrix (Matrix4, oriA) * make_scale_matrix4(.{1,1,1});
+        hull1.worldSpace  = make_translation_matrix4(test1pos)*rotation_matrix (Matrix4, test1ori) * make_scale_matrix4(.{4,4,4});
 
         //maybe cache per frame/orientation treshold. The bottleneck is still  QueryEdgeDirection and its calls
         success:, hull0.inv_worldSpace = inverse(hull0.worldSpace);
@@ -206,22 +211,29 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     world_contact_points_on_B:= collide_hull_vs_hull(hull0,hull1);
 
 
-    push_debug_hull(posA, oriA, hull0);
-    push_debug_hull(test1pos, test1ori, hull1);
+    // push_debug_hull(posA, oriA, hull0);
+    // push_debug_hull(test1pos, test1ori, hull1);
     for 0..num_contacts-1 {
+        P_START:= world_contact_points_on_B[it];
+        P_END := P_START + world_normal_towards_A;
+
         push_arrow(test1pos, world_normal_towards_A);
         push_X(world_contact_points_on_A[it],.05);
-        push_circle(world_contact_points_on_B[it],.05);
-        arm := world_contact_points_on_B[it]-test1pos;
+        push_X(P_START,.05);
+        push_X(world_midpoints[it],.05);
+        push_circle(P_START,.05);
+        push_arrow(P_START, world_normal_towards_A, color=.{1,1,1,1});
+        doLabel("contact!", WorldToScreen(P_END));
+        arm := P_START-test1pos;
         torque := cross_product(arm, -world_normal_towards_A);
         push_arrow(test1pos, torque*4.0, color=.{1,1,1,1});
-        push_line(test1pos, world_contact_points_on_A[it], .{0,1,0,1});
+        // push_line(test1pos, world_contact_points_on_A[it], .{0,1,0,1});
 
         dq :Quaternion;
         // set_from_axis_and_angle(*dq, torque, length_squared(torque)*context.solver.dt/0.0005);
-        dq.xyz = torque *context.solver.dt/(2.0*num_contacts);
-        test1ori = dq* test1ori;
-        test1ori = normalize(test1ori);
+        dq.xyz = torque *context.solver.dt/(4.0*num_contacts);
+        // test1ori = dq* test1ori;
+        // test1ori = normalize(test1ori);
     }
 }
 
@@ -236,14 +248,6 @@ create_cube_hull :: (position: Vector3 = .{0,0,0}, scale: Vector3 = .{1,1,1}, ro
     return hull;
 }
 
-
-// DANGER DANGER DANGER
-//
-//  The code below is AI generated, there is a 99% probability that it does NOT work porperly.
-//
-// DANGER DANGER DANGER
-//
-//NOTE: the AI code was terrible, I had to heavily modify it, well this is temporary until I implement QuickHull.
 // Hardcoded Half-Edge Mesh for a unit cube centered at origin
 // Vertices range from -0.5 to 0.5 on each axis
 create_cube_half_edge_mesh :: (scale: Vector3) -> Half_Edge_Mesh {
@@ -271,175 +275,104 @@ create_cube_half_edge_mesh :: (scale: Vector3) -> Half_Edge_Mesh {
     mesh.faceBuffer.data = cast(*Hull_Face)(mesh.edgeBuffer.data+mesh.edgeBuffer.count);
 
 
-    // Cube vertices (8 vertices)
-    vertices := mesh.vertexBuffer;
-    vertices[0] = .{vertex = .{-0.5, -0.5, -0.5}}; // 0: left-bottom-back
-    vertices[1] = .{vertex = .{ 0.5, -0.5, -0.5}}; // 1: right-bottom-back
-    vertices[2] = .{vertex = .{ 0.5,  0.5, -0.5}}; // 2: right-top-back
-    vertices[3] = .{vertex = .{-0.5,  0.5, -0.5}}; // 3: left-top-back
-    vertices[4] = .{vertex = .{-0.5, -0.5,  0.5}}; // 4: left-bottom-front
-    vertices[5] = .{vertex = .{ 0.5, -0.5,  0.5}}; // 5: right-bottom-front
-    vertices[6] = .{vertex = .{ 0.5,  0.5,  0.5}}; // 6: right-top-front
-    vertices[7] = .{vertex = .{-0.5,  0.5,  0.5}}; // 7: left-top-front
-
-    // Set up vertex linked list
-    for i: 0..7 {
-        vertices[i].prev = *vertices[(i + 7) % 8];
-        vertices[i].next = *vertices[(i + 1) % 8];
-        vertices[i].referenceCount = 3; // Each vertex used by 3 faces
-    }
-    assert(vertices.data==vertices[7].next);
-    mesh.vertices = *vertices[0];
-    mesh.vertexCount = 8;
-
-    // Half-edges (24 half-edges for 12 edges)
-    edges := mesh.edgeBuffer;
-
-    // Face 0: Back face (z = -0.5) - vertices 0,1,2,3 (CCW when viewed from outside)
-    edges[0]  = .{tail = *vertices[0]}; // 0->1
-    edges[1]  = .{tail = *vertices[1]}; // 1->2
-    edges[2]  = .{tail = *vertices[2]}; // 2->3
-    edges[3]  = .{tail = *vertices[3]}; // 3->0
-
-    // Face 1: Front face (z = 0.5) - vertices 4,7,6,5 (CCW when viewed from outside)
-    edges[4]  = .{tail = *vertices[4]}; // 4->7
-    edges[5]  = .{tail = *vertices[7]}; // 7->6
-    edges[6]  = .{tail = *vertices[6]}; // 6->5
-    edges[7]  = .{tail = *vertices[5]}; // 5->4
-
-    // Face 2: Bottom face (y = -0.5) - vertices 0,4,5,1 (CCW when viewed from outside)
-    edges[8]  = .{tail = *vertices[0]}; // 0->4
-    edges[9]  = .{tail = *vertices[4]}; // 4->5
-    edges[10] = .{tail = *vertices[5]}; // 5->1
-    edges[11] = .{tail = *vertices[1]}; // 1->0
-
-    // Face 3: Top face (y = 0.5) - vertices 2,6,7,3 (CCW when viewed from outside)
-    edges[12] = .{tail = *vertices[2]}; // 2->6
-    edges[13] = .{tail = *vertices[6]}; // 6->7
-    edges[14] = .{tail = *vertices[7]}; // 7->3
-    edges[15] = .{tail = *vertices[3]}; // 3->2
-
-    // Face 4: Left face (x = -0.5) - vertices 0,3,7,4 (CCW when viewed from outside)
-    edges[16] = .{tail = *vertices[0]}; // 0->3
-    edges[17] = .{tail = *vertices[3]}; // 3->7
-    edges[18] = .{tail = *vertices[7]}; // 7->4
-    edges[19] = .{tail = *vertices[4]}; // 4->0
-
-    // Face 5: Right face (x = 0.5) - vertices 1,5,6,2 (CCW when viewed from outside)
-    edges[20] = .{tail = *vertices[1]}; // 1->5
-    edges[21] = .{tail = *vertices[5]}; // 5->6
-    edges[22] = .{tail = *vertices[6]}; // 6->2
-    edges[23] = .{tail = *vertices[2]}; // 2->1
-
-
-
-    // Set up edge connectivity (prev/next within each face)
-    face_edge_groups := [4]int.[
-        .[0, 1, 2, 3],   // Back face
-        .[4, 5, 6, 7],   // Front face
-        .[8, 9, 10, 11], // Bottom face
-        .[12, 13, 14, 15], // Top face
-        .[16, 17, 18, 19], // Left face
-        .[20, 21, 22, 23]  // Right face
-    ];
-
-    for group: face_edge_groups {
-        for i: 0..3 {
-            edges[group[i]].next = *edges[group[(i + 1) % 4]];
-            edges[group[i]].prev = *edges[group[(i + 3) % 4]];
+    //
+    // We fill the vertex memory with the cloud data and attach them to eachother to form the freelist
+    //
+    {
+        poison_vertex := Vector3.{7777,7777,7777};
+        cursor: *Hull_Vertex;
+        for 0..v_count - 1
+        {
+            vert_ptr := *mesh.vertexBuffer[it];
+            vert_ptr.vertex = poison_vertex;
+            if cursor
+            {
+                vert_ptr.linked_list_prev = cursor;
+                cursor.linked_list_next = vert_ptr;
+            }
+            cursor = vert_ptr;
         }
+        //because this is a special case its safe to do the following line.
+        mesh.vertex_free_list = *mesh.vertexBuffer[0];
+
     }
-
-    // Set up twin relationships
-    twin_pairs := [2]int.[
-        .[0, 11],   // 0->1 twins with 1->0
-        .[1, 23],   // 1->2 twins with 2->1
-        .[2, 15],   // 2->3 twins with 3->2
-        .[3, 16],   // 3->0 twins with 0->3
-        // .[4, 19],   // 4->7 twins with 7->4
-        .[4, 18],   // 4->7 twins with 7->4
-        // .[5, 14],   // 7->6 twins with 6->7
-        .[5, 13],   // 7->6 twins with 6->7
-        // .[6, 22],   // 6->5 twins with 5->6
-        .[6, 21],   // 6->5 twins with 5->6
-        .[7, 9],    // 5->4 twins with 4->5
-        .[8, 19],   // 0->4 (same as 4->0 reverse)
-        .[10, 20],  // 5->1 twins with 1->5
-        .[12, 22],  // 2->6 (same as 6->2 reverse)
-        // .[13, 18]   // 6->7 (same as 7->6 reverse)
-        .[14, 17]   // 6->7 (same as 7->6 reverse)
-    ];
-
-    for pair: twin_pairs {
-        edges[pair[0]].twin = *edges[pair[1]];
-        edges[pair[1]].twin = *edges[pair[0]];
-    }
-
-
-    // mesh.edges = *edges[0]; //its a table
-    for *edges {
-        // log("%| e==ett %==%", it_index ,it, it.twin.twin);
-        assert(it == it.twin.twin, "not twinning");
-        find_or_add(*mesh.edges, it);
-    }
-
-    mesh.edgeCount = 24;
-
-    // Set up faces
-    faces := mesh.faceBuffer;
-    face_normals := Vector3.[
-        .{0, 0, -1},  // Back face
-        .{0, 0, 1},   // Front face
-        .{0, -1, 0},  // Bottom face
-        .{0, 1, 0},   // Top face
-        .{-1, 0, 0},  // Left face
-        .{1, 0, 0}    // Right face
-    ];
-
-    for i: 0..5 {
-        faces[i].edge = *edges[face_edge_groups[i][0]];
-        faces[i].face_plane_normal = face_normals[i];
-        faces[i].face_plane_distance = 0.5; // Distance from origin to face
-        faces[i].vertexCount = 4;
-        faces[i].prev = *faces[(i + 5) % 6];
-        faces[i].next = *faces[(i + 1) % 6];
-
-        // Set face reference for all edges of this face
-        for j: 0..3 {
-            edges[face_edge_groups[i][j]].face = *faces[i];
+    //
+    // Fill faces free lists
+    //
+    {
+        cursor: *Hull_Face;
+        for 0..f_count - 1
+        {
+            face_ptr := *mesh.faceBuffer[it];
+            if cursor
+            {
+                face_ptr.linked_list_prev = cursor;
+                cursor.linked_list_next = face_ptr;
+            }
+            cursor = face_ptr;
         }
+        //because this is a special case its safe to do the following line.
+        mesh.face_free_list = *mesh.faceBuffer[0];
+    }
+    //
+    // Fill half edges free lists
+    //
+    {
+        cursor: *Hull_Half_Edge;
+        for 0..he_count - 1
+        {
+            hedge_ptr := *mesh.edgeBuffer[it];
+            if cursor
+            {
+                hedge_ptr.linked_list_prev = cursor;
+                cursor.linked_list_next = hedge_ptr;
+            }
+            cursor = hedge_ptr;
+        }
+        //because this is a special case its safe to do the following line.
+        mesh.edge_free_list = *mesh.edgeBuffer[0];
     }
 
-    assert(faces.data==faces[5].next);
-    mesh.faces = *faces[0];
-    mesh.faceCount = 6;
+    // cube (8 vertices)
+    //convention  Vector3.{forward, left, up); right haned, LEFT IS POSITIVE, in opengl left is negative or something like that
+    v0 := add_vertex(*mesh, vertex=.{-0.5, -0.5, -0.5});//back-right-bottom
+    v1 := add_vertex(*mesh, vertex=.{+0.5, -0.5, -0.5});//front-right-bottom
+    v2 := add_vertex(*mesh, vertex=.{+0.5, +0.5, -0.5});//front-left-bottom
+    v3 := add_vertex(*mesh, vertex=.{-0.5, +0.5, -0.5});//back-left-bottom
+    v4 := add_vertex(*mesh, vertex=.{-0.5, -0.5, +0.5});//back-right-top
+    v5 := add_vertex(*mesh, vertex=.{+0.5, -0.5, +0.5});//front-right-top
+    v6 := add_vertex(*mesh, vertex=.{+0.5, +0.5, +0.5});//front-left-top
+    v7 := add_vertex(*mesh, vertex=.{-0.5, +0.5, +0.5});//back-left-top
+
+    //Back face   (X = -0.5): v0, v3, v7, v4 <- TWINS are repeated vertices v4->v0
+    //Front face  (X = +0.5): v1, v5, v6, v2 <- TWINS are repeated vertices
+    //Left face   (Y = +0.5): v3, v2, v6, v7 <- TWINS are repeated vertices         and so on, im too tired to fill this comment
+    //Right face  (Y = -0.5): v0, v4, v5, v1 <- TWINS are repeated vertices v0->v4
+    //Bottom face (Z = -0.5): v0, v1, v2, v3 <- TWINS are repeated vertices
+    //Top face    (Z = +0.5): v4, v5, v6, v7 <- TWINS are repeated vertices
+    face_back, fb_e0, fb_e1, fb_e2, fb_e3           := create_face_from_vertices(*mesh, v0, v4, v7, v3);
+    face_front, ff_e0, ff_e1, ff_e2, ff_e3          := create_face_from_vertices(*mesh, v1, v2, v6, v5);
+    face_left, fl_e0, fl_e1, fl_e2, fl_e3           := create_face_from_vertices(*mesh, v3, v7, v6, v2);
+    face_right, fr_e0, fr_e1, fr_e2, fr_e3          := create_face_from_vertices(*mesh, v0, v1, v5, v4);
+    face_bottom, fbot_e0, fbot_e1, fbot_e2, fbot_e3 := create_face_from_vertices(*mesh, v0, v3, v2, v1);
+    face_top, ft_e0, ft_e1, ft_e2, ft_e3            := create_face_from_vertices(*mesh, v4, v5, v6, v7);
 
 
-    for it: 0..5 {
-        log("% %",it, mesh.faces[it]);
+    {   link_two_faces_by_edge(fb_e0, fr_e3);  // back: v0->v4, right: v4->v0
+        link_two_faces_by_edge(fb_e2, fl_e0);  // back: v7->v3, left: v3->v7
+        link_two_faces_by_edge(ff_e1, fl_e2);  // front: v2->v6, left: v6->v2
+        link_two_faces_by_edge(ff_e3, fr_e1);  // front: v5->v1, right: v1->v5
+        link_two_faces_by_edge(fb_e3, fbot_e0);  // back: v3->v0, bottom: v0->v3
+        link_two_faces_by_edge(fb_e1, ft_e3);  // back: v4->v7, top: v7->v4
+        link_two_faces_by_edge(ff_e0, fbot_e2);  // front: v1->v2, bottom: v2->v1
+        link_two_faces_by_edge(ff_e2, ft_e1);  // front: v6->v5, top: v5->v6
+        link_two_faces_by_edge(fl_e3, fbot_e1);  // left: v2->v3, bottom: v3->v2
+        link_two_faces_by_edge(fl_e1, ft_e2);  // left: v7->v6, top: v6->v7
+        link_two_faces_by_edge(fr_e0, fbot_e3);  // right: v0->v1, bottom: v1->v0
+        link_two_faces_by_edge(fr_e2, ft_e0);  // right: v5->v4, top: v4->v5
     }
 
-    // Set vertex edge references (one outgoing edge per vertex)
-    vertices[0].edge = *edges[0];   // 0->1
-    vertices[1].edge = *edges[1];   // 1->2
-    vertices[2].edge = *edges[2];   // 2->3
-    vertices[3].edge = *edges[3];   // 3->0
-    vertices[4].edge = *edges[4];   // 4->7
-    vertices[5].edge = *edges[7];   // 5->4
-    vertices[6].edge = *edges[6];   // 6->5
-    vertices[7].edge = *edges[5];   // 7->6
 
-    // Set leaving_edge (same as edge for this simple case)
-    for i: 0..7 {
-        vertices[i].leaving_edge = vertices[i].edge;
-    }
-
-    mesh.num_allocated_vertex = 8;
-    mesh.num_allocated_edge = 24;
-    mesh.num_allocated_face = 6;
-
-
-    // assert(edges.data==edges[23].next);
 
     return mesh;
 }

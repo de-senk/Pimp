@@ -3,7 +3,7 @@ Camera :: struct
 	FLY_SPEED :: 1.0;
 	ROTATION_SPEED :: 0.3;
 	ROTATION_SMOOTHING :: 0.3;
-
+    FOCUS := Vector3.{0, 1, 0};
 	position : Vector3;
 	euler_angles : Vector3;
 	rotation : Quaternion;
@@ -43,17 +43,6 @@ WorldToScreen :: (position: Vector3) -> Vector3, is_inside_frustrum: bool {
     return screen_pos, is_inside_frustrum;
 }
 
-
-WorldToScreenw :: (position: Vector3) -> Vector3, is_inside_frustrum: bool {
-    is_inside_frustrum: bool = true; //hardcoded for now
-    vx, vy, vw, vh := get_dimensions (g_window, false);
-	camera_position := g_camera.position;
-    half := Vector3.{ vw * 0.5, vh * 0.5,0 };
-    // return (position - camera_position) * camera_zoom() + half;
-    _, inv_view := inverse(g_camera.view_projection_matrix);
-    _, inv_proj := inverse(g_camera.projection_matrix);
-    return inv_proj*inv_view*(position - camera_position), is_inside_frustrum;
-}
 
 do_touch_input := OS == .ANDROID; // kinda hacky
 
@@ -112,7 +101,7 @@ update_flying_camera :: (using camera : *Camera, delta_time : float)
 	// @Hack orbit camera movment.
 	if orbitting {
 		ORBIT_DISTANCE :: 2.5;
-		FOCUS :: Vector3.{0, 1, 0};
+
 		offset := rotate (.{0, 0, ORBIT_DISTANCE}, rotation); // -z is forward!
 		position = FOCUS + offset;
 	}
@@ -136,7 +125,7 @@ update_flying_camera :: (using camera : *Camera, delta_time : float)
 
     // screen dimensions
     vx, vy, vw, vh := get_screen_dimensions();
-    aspect_ratio := vw / cast(float) vh;
+    aspect_ratio := vw / cast(float) vh; //unused
 
     ndc_x := (2.0 * (mouse_x - vx)) / vw - 1.0;
     ndc_y := 1.0 - (2.0 * (mouse_y - vy)) / vh; // flip Y openGL?

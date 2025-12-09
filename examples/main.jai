@@ -588,6 +588,7 @@ find_and_load_meshes_and_animations :: inline () {
 // #import "SIMD_Math";
 using Input :: #import "Input";
 
+#if !#exists(DEBUG)
 DEBUG :: false;
 
 #if OS == {

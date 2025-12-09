@@ -1,14 +1,21 @@
-SHOULD_RUN_TESTS :: false; //Not a single test exists right now. I was prototypyng in how would I add tests in the code.
+
 //some of these procedures are inspired from the book realtime collision detection by Chris Ericson.
 
-// Given three noncollinear points (ordered ccw), compute plane equation
+//
+// [IMPORTANT] Plane definition: a point in plane satisfy this: dot(plane_normal, point) - plane_d = signed_distance, if 0 then point on plane.
+//
+
+create_plane_distance :: (point_on_plane: Vector3, plane_normal: Vector3) -> d: float {
+    return dot(point_on_plane, plane_normal);
+}
+
+//use this thinking you are at the ORIGIN, looking at a, b and c
 create_plane :: (a: Vector3, b: Vector3, c: Vector3) -> normal: Vector3, d: float {
     plane_normal := normalize(cross_product(b - a, c - a));
-    d := dot(plane_normal, a);
+    d := create_plane_distance(a, plane_normal);
     return plane_normal, d;
 }
 
-#if SHOULD_RUN_TESTS #run intersect_plane_with_plane(.{}, 0, .{}, 0);
 intersect_plane_with_plane :: (plane1_normal: Vector3, plane1_d: float, plane2_normal: Vector3, plane2_d: float) -> (success: bool, intersection_point_on_line: Vector3, line_direction: Vector3)
 {
     EPSILON7 :: 0.00000001;
@@ -22,10 +29,8 @@ intersect_plane_with_plane :: (plane1_normal: Vector3, plane1_d: float, plane2_n
 }
 
 
-#if SHOULD_RUN_TESTS #run intersect_three_planes(.{}, 0, .{}, 0, .{}, 0);
 intersect_three_planes:: (plane1_normal: Vector3, plane1_d: float, plane2_normal: Vector3, plane2_d: float, plane3_normal: Vector3, plane3_d: float) -> (success: bool, intersection_point: Vector3)
 {
-    FILLSTAC:float = 111111111;
     intersection_point: Vector3 = ---;
     EPSILON7 :: 0.00000001;
     line_direction_from_intersec_plane2with3 := cross_product(plane2_normal, plane3_normal);
@@ -36,7 +41,6 @@ intersect_three_planes:: (plane1_normal: Vector3, plane1_d: float, plane2_normal
 }
 
 
-#if SHOULD_RUN_TESTS #run intersect_segment_with_plane(.{}, .{}, .{}, 0.0,cast(*float) *context); //danger, never uncomment.
 intersect_segment_with_plane :: (start: Vector3, end: Vector3, plane_normal: Vector3, plane_distance: float, t: *float) -> (success: bool, intersect_point: Vector3)
 {
     ab := end - start;
@@ -47,7 +51,6 @@ intersect_segment_with_plane :: (start: Vector3, end: Vector3, plane_normal: Vec
 }
 
 
-#if SHOULD_RUN_TESTS #run intersect_segment_with_plane(.{}, .{}, .{},.{},.{}, cast(*float) *context); //danger, never uncomment.
 intersect_segment_with_plane :: (start: Vector3, end: Vector3, triangle_a: Vector3, triangle_b: Vector3, triangle_c: Vector3, t: *float) -> (success: bool, intersect_point: Vector3)
 {
     plane_normal := cross_product(triangle_b - triangle_a, triangle_c - triangle_a);
@@ -87,14 +90,14 @@ distance_point_to_line:: inline (point: Vector3, line_start: Vector3, line_end: 
     return length(orth_diff);
 }
 
-distance_point_to_plane :: inline (point: Vector3, plane_normal: Vector3, plane_distance: float) -> float
-{
-    return abs((dot(plane_normal, point) - plane_distance));
-}
-
 distance_point_to_plane_signed :: inline (point: Vector3, plane_normal: Vector3, plane_distance: float) -> float
 {
-    return (dot(plane_normal, point) - plane_distance);
+    return (dot(point, plane_normal) - plane_distance);
+}
+
+distance_point_to_plane :: inline (point: Vector3, plane_normal: Vector3, plane_distance: float) -> float
+{
+    return abs(distance_point_to_plane_signed(point, plane_normal, plane_distance));
 }
 
 closest_point_to_plane :: (point: Vector3, plane_normal: Vector3, plane_distance: float) -> Vector3
@@ -314,7 +317,6 @@ OBB :: struct { //confusing data structure
     half_extents: Vector3;
 };
 
-#if SHOULD_RUN_TESTS #run TestOBBPlane(.{}, .{}, 0);
 TestOBBPlane :: (obb: OBB,  plane_normal: Vector3, plane_distance: float) -> bool
 {
     // Compute the projection interval radius of b onto L(t) = b.c + t * plane_normal
@@ -328,7 +330,6 @@ TestOBBPlane :: (obb: OBB,  plane_normal: Vector3, plane_distance: float) -> boo
 }
 
 
-// #if SHOULD_RUN_TESTS #run TestAABBAABB(.{},.{}, .CENTER_RADIUS);
 TestAABBAABB :: (a: AABB, b: AABB, $mode: enum{MIN_MAX;MIN_EXTENT;CENTER_RADIUS;} = .MIN_MAX) -> bool
 {
     // Exit with no intersection if separated along an axis
@@ -354,7 +355,6 @@ TestAABBAABB :: (a: AABB, b: AABB, $mode: enum{MIN_MAX;MIN_EXTENT;CENTER_RADIUS;
 
 
 // Given point p, return the point q on or in AABB b that is closest to p
-#if SHOULD_RUN_TESTS #run closest_point_to_aabb(.{},.{});
 closest_point_to_aabb :: ( point: Vector3, b: AABB) ->Vector3
 {
     closest: Vector3 = ---;
@@ -369,7 +369,6 @@ closest_point_to_aabb :: ( point: Vector3, b: AABB) ->Vector3
 }
 
 
-#if SHOULD_RUN_TESTS #run distance_point_to_aabb_squared(.{},.{});
 distance_point_to_aabb_squared :: (point: Vector3, aabb: AABB) -> float
 {
     sqDist := 0.0;
@@ -498,7 +497,6 @@ ClosestPtPointRect :: (point: Vector3, rect: Rect) -> (closest: Vector3)
 // }
 
 
-#if SHOULD_RUN_TESTS #run () => {result := closest_point_to_triangle(.{1.1,1,0},.{0,0,0},.{1,0,0},.{1,1,0}); assert(result==.{1,1,0}, tprint("%",result));}();
 closest_point_to_triangle :: (point: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Vector3
 {
     ab := b - a;
@@ -560,7 +558,6 @@ is_point_outside_plane :: inline (point: Vector3, a: Vector3, b: Vector3, c: Vec
 }
 
 
-#if SHOULD_RUN_TESTS #run closest_point_to_tetrahedron(.{},.{},.{},.{},.{});
 closest_point_to_tetrahedron :: (point: Vector3, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> (closest: Vector3)
 {
     //tetrahedron: ABC, ACD,ADB, BDC are CCW
@@ -605,7 +602,6 @@ Sphere :: struct {
     radius: float;
 };
 
-#if SHOULD_RUN_TESTS #run TestSpherePlane(.{}, .{}, 0);
 TestSpherePlane :: (sphere: Sphere, plane_normal: Vector3, plane_distance: float) -> bool
 {
   dist := dot(sphere.center, plane_normal) - plane_distance;
@@ -613,14 +609,12 @@ TestSpherePlane :: (sphere: Sphere, plane_normal: Vector3, plane_distance: float
 }
 
 
-#if SHOULD_RUN_TESTS #run InsideSpherePlane(.{}, .{}, 0);
 InsideSpherePlane :: (sphere: Sphere, plane_normal: Vector3, plane_distance: float) -> bool
 {
     dist := dot(sphere.center, plane_normal) - plane_distance;
     return dist < -sphere.radius;
 }
 
-#if SHOULD_RUN_TESTS #run TestSphereHalfspace(.{}, .{}, 0);
 TestSphereHalfspace :: (sphere: Sphere, plane_normal: Vector3, plane_distance: float) -> bool
 {
     dist := dot(sphere.center, plane_normal) - plane_distance;
@@ -628,7 +622,6 @@ TestSphereHalfspace :: (sphere: Sphere, plane_normal: Vector3, plane_distance: f
 }
 
 
-#if SHOULD_RUN_TESTS #run TestAABBPlane(.{}, .{}, 0);
 TestAABBPlane :: (aabb: AABB,  plane_normal: Vector3, plane_distance: float) -> bool
 {
     // These two lines not necessary with a (center, extents) AABB representation
@@ -643,14 +636,12 @@ TestAABBPlane :: (aabb: AABB,  plane_normal: Vector3, plane_distance: float) -> 
 }
 
 
-#if SHOULD_RUN_TESTS #run TestSphereAABB(Sphere.{}, AABB.{});
 TestSphereAABB :: (sphere: Sphere, aabb: AABB) -> bool
 {
     sqDist := distance_point_to_aabb_squared(sphere.center, aabb);
     return sqDist <= sphere.radius * sphere.radius;
 }
 
-#if SHOULD_RUN_TESTS #run TestSphereAABB(Sphere.{}, precomputed_closest_point_to_aabb=.{});
 TestSphereAABB :: (sphere: Sphere, precomputed_closest_point_to_aabb: Vector3) -> bool
 {
     sqDist := length_squared(precomputed_closest_point_to_aabb);
@@ -659,7 +650,6 @@ TestSphereAABB :: (sphere: Sphere, precomputed_closest_point_to_aabb: Vector3) -
 
 
 
-#if SHOULD_RUN_TESTS #run TestSphereTriangle(.{},.{},.{},.{});
 TestSphereTriangle :: (sphere: Sphere, a: Vector3, b: Vector3, c: Vector3) -> (success: bool, closest: Vector3)
 {
     closest := closest_point_to_triangle(sphere.center, a, b, c);
@@ -743,7 +733,6 @@ TestSphereTriangle :: (sphere: Sphere, a: Vector3, b: Vector3, c: Vector3) -> (s
 
 */
 
-#if SHOULD_RUN_TESTS #run IntersectRaySphere(.{}, .{}, .{}, cast(*float) *context); //danger, never uncomment.
 IntersectRaySphere :: (ray_start: Vector3, ray_dir: Vector3, sphere: Sphere, t: *float) -> (success: bool, intersect_point: Vector3)
 {
     sphere_to_ray := ray_start - sphere.center;
@@ -757,7 +746,6 @@ IntersectRaySphere :: (ray_start: Vector3, ray_dir: Vector3, sphere: Sphere, t: 
     return true, ray_start + (t.*) * ray_dir;
 }
 
-#if SHOULD_RUN_TESTS #run TestRaySphere(.{}, .{}, .{});
 TestRaySphere :: (ray_start: Vector3, ray_dir: Vector3, sphere: Sphere) -> bool
 {
     sphere_to_ray := ray_start - sphere.center;
@@ -771,7 +759,6 @@ TestRaySphere :: (ray_start: Vector3, ray_dir: Vector3, sphere: Sphere) -> bool
 }
 
 
-#if SHOULD_RUN_TESTS #run IntersectRayAABB(.{}, .{}, .{}, cast(*float) *context); //danger, never uncomment.
 IntersectRayAABB :: (ray_start: Vector3, ray_dir: Vector3, aabb: AABB, tmin: *float) -> (success: bool, intersect_point: Vector3)
 {
     EPSILON7 :: 0.00000001; //random small number, to twak I guess... @Todo create epsilons EPSILON4 EPSILON5 EPSILON6 EPSILON7 xD
@@ -795,7 +782,6 @@ IntersectRayAABB :: (ray_start: Vector3, ray_dir: Vector3, aabb: AABB, tmin: *fl
 }
 
 
-#if SHOULD_RUN_TESTS #run TestSegmentAABB(.{}, .{}, .{});
 TestSegmentAABB :: (segment_start: Vector3, segment_end: Vector3, aabb: AABB) -> bool
 {
     EPSILON7 :: 0.00000001; //random small number, to twak I guess... @Todo create epsilons EPSILON4 EPSILON5 EPSILON6 EPSILON7 xD
@@ -832,8 +818,6 @@ TestSegmentAABB :: (segment_start: Vector3, segment_end: Vector3, aabb: AABB) ->
 }
 
 
-
-#if SHOULD_RUN_TESTS #run IntersectLineTriangle(.{}, .{}, .{},.{},.{});
 IntersectLineTriangle :: (line_start: Vector3, line_end: Vector3, a: Vector3, b: Vector3, c: Vector3) -> (success: bool, barycentric_coordinates: Vector3)
 {
     barycentric_coordinates: Vector3;
@@ -859,7 +843,6 @@ IntersectLineTriangle :: (line_start: Vector3, line_end: Vector3, a: Vector3, b:
 }
 
 
-#if SHOULD_RUN_TESTS #run IntersectLineQuad(.{}, .{}, .{},.{},.{},.{});
 IntersectLineQuad :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b: Vector3,  c: Vector3,  d: Vector3) -> (success: bool, intersection_point: Vector3)
 {
     intersection_point: Vector3;
@@ -909,8 +892,6 @@ IntersectLineQuad :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b:
 // Given segment pq and triangle abc, returns whether segment intersects
 // triangle and if so, also returns the barycentric coordinates (u,v,w)
 // of the intersection point
-
-#if SHOULD_RUN_TESTS #run IntersectSegmentTriangle(.{}, .{}, .{},.{},.{});
 IntersectSegmentTriangle :: ( line_start: Vector3,  line_end: Vector3,  a: Vector3,  b: Vector3,  c: Vector3) -> (success: bool, barycentric_coordinates: Vector3, slider_t: float)
 {
     barycentric_coordinates: Vector3;
@@ -966,34 +947,69 @@ Triangle :: struct {
 };
 
 
-#if SHOULD_RUN_TESTS #run create_triangle(.{}, .{}, .{});
 create_triangle :: (a: Vector3, b: Vector3, c: Vector3) -> Triangle
 {
     tri: Triangle = ---;
-    //idk how to name d. but I dont like d, its not descriptive enough.
-    big_d := cross_product(b-a,c-a);
+
+    // face plane normal and distance
+    big_d := cross_product(b - a, c - a);
     tri.face_plane_normal = normalize(big_d);
-    tri.face_plane_distance = length(big_d);
+    tri.face_plane_distance = dot(tri.face_plane_normal, a);
 
+    // for barycentric coordinate u, corresponding to vertex A
+    edge1_d := cross_product(big_d, c - b);
+    tri.edge1_plane_normal = normalize(edge1_d);
+    tri.edge1_plane_distance = dot(tri.edge1_plane_normal, b);
 
-    edge1_d := cross_product(big_d,c-b);
-    tri.edge1_plane_normal = normalize(edge1_d);;
-    tri.edge1_plane_distance = length(edge1_d);
+    // for barycentric coordinate v, corresponding to vertex B
+    edge2_d := cross_product(big_d, a - c);
+    tri.edge2_plane_normal = normalize(edge2_d);
+    tri.edge2_plane_distance = dot(tri.edge2_plane_normal, c);
 
-
-    edge2_d := cross_product(big_d,a-c);
-    tri.edge2_plane_normal = normalize(edge2_d);;
-    tri.edge2_plane_distance = length(edge2_d);
-
-    //@Investigate this crap
+    // Precompute jacobians for barycentric coordinates
     edge1_precomputed_barycentric_jacobian := 1.0 / (dot(a, tri.edge1_plane_normal) - tri.edge1_plane_distance);
     tri.edge1_plane_distance *= edge1_precomputed_barycentric_jacobian;
+    tri.edge1_plane_normal.x *= edge1_precomputed_barycentric_jacobian;
+    tri.edge1_plane_normal.y *= edge1_precomputed_barycentric_jacobian;
+    tri.edge1_plane_normal.z *= edge1_precomputed_barycentric_jacobian;
 
     edge2_precomputed_barycentric_jacobian := 1.0 / (dot(b, tri.edge2_plane_normal) - tri.edge2_plane_distance);
     tri.edge2_plane_distance *= edge2_precomputed_barycentric_jacobian;
+    tri.edge2_plane_normal.x *= edge2_precomputed_barycentric_jacobian;
+    tri.edge2_plane_normal.y *= edge2_precomputed_barycentric_jacobian;
+    tri.edge2_plane_normal.z *= edge2_precomputed_barycentric_jacobian;
 
     return tri;
 }
+
+//old, I dont remember if this works, the above one works tho!
+// create_triangle :: (a: Vector3, b: Vector3, c: Vector3) -> Triangle
+// {
+//     tri: Triangle = ---;
+//     //idk how to name d. but I dont like d, its not descriptive enough.
+//     big_d := cross_product(b-a,c-a);
+//     tri.face_plane_normal = normalize(big_d);
+//     tri.face_plane_distance = length(big_d);
+
+
+//     edge1_d := cross_product(big_d,c-b);
+//     tri.edge1_plane_normal = normalize(edge1_d);;
+//     tri.edge1_plane_distance = length(edge1_d);
+
+
+//     edge2_d := cross_product(big_d,a-c);
+//     tri.edge2_plane_normal = normalize(edge2_d);;
+//     tri.edge2_plane_distance = length(edge2_d);
+
+//     //@Investigate this crap
+//     edge1_precomputed_barycentric_jacobian := 1.0 / (dot(a, tri.edge1_plane_normal) - tri.edge1_plane_distance);
+//     tri.edge1_plane_distance *= edge1_precomputed_barycentric_jacobian;
+
+//     edge2_precomputed_barycentric_jacobian := 1.0 / (dot(b, tri.edge2_plane_normal) - tri.edge2_plane_distance);
+//     tri.edge2_plane_distance *= edge2_precomputed_barycentric_jacobian;
+
+//     return tri;
+// }
 
 distance_point_to_triangle :: (point: Vector3, a: Vector3,b: Vector3,c: Vector3) -> distance: float {
     return distance=abs(distance_point_to_triangle_signed(point, a, b, c));
@@ -1017,9 +1033,76 @@ distance_point_to_triangle_signed :: inline (point: Vector3, tri: Triangle) -> d
     return distance=dot(point, tri.face_plane_normal) - tri.face_plane_distance;;
 }
 
+//Untested
+intersect_segment_triangle_no_culling :: (start: Vector3, end: Vector3, tri: Triangle) -> (success: bool, intersection_point: Vector3, barycentric_coordinates: Vector3, slider_t: float)
+{
+    intersection_point: Vector3;
+    barycentric_coordinates: Vector3;
+    slider_t: float;
 
+    start_dist := distance_point_to_plane_signed(start, tri.face_plane_normal, tri.face_plane_distance);
+    end_dist := distance_point_to_plane_signed(end, tri.face_plane_normal, tri.face_plane_distance);
 
-#if SHOULD_RUN_TESTS #run IntersectSegmentTriangle(.{}, .{}, .{}, cast(*Vector3)*context); //danger dont uncomment
+    if start_dist * end_dist > 0.0  return false, .{}, .{}, 0.0;
+
+    // Compute t value and point s of intersection with triangle plane
+    denom := abs(start_dist - end_dist);
+    slider_t = start_dist / denom;
+    intersection_point = start + slider_t * (end - start);
+
+    // Compute the barycentric coordinate u; exit if outside 0..1 range
+    x := dot(intersection_point, tri.edge1_plane_normal) - tri.edge1_plane_distance;
+    if x < 0.0 || x > 1.0 return false, .{}, .{}, 0.0;
+
+    // Compute the barycentric coordinate v; exit if negative
+    y := dot(intersection_point, tri.edge2_plane_normal) - tri.edge2_plane_distance;
+    if y < 0.0 return false, .{}, .{}, 0.0;
+
+    // Compute the barycentric coordinate w; exit if negative
+    z := 1.0 - x - y;
+    if z < 0.0 return false, .{}, .{}, 0.0;
+
+    barycentric_coordinates = .{x, y, z};
+
+    return true, intersection_point, barycentric_coordinates, slider_t;
+}
+
+//Tested
+intersect_segment_triangle_culling :: (p: Vector3, q: Vector3, tri: Triangle) -> (success: bool, intersection_point: Vector3, barycentric_coordinates: Vector3, slider_t: float)
+{
+    intersection_point: Vector3;
+    barycentric_coordinates: Vector3;
+    slider_t: float;
+
+    distp := distance_point_to_plane_signed(p, tri.face_plane_normal, tri.face_plane_distance);
+    if distp < 0.0 return false, .{}, .{}, 0.0; // Exit if p lies behind plane
+
+    distq := distance_point_to_plane_signed(q, tri.face_plane_normal, tri.face_plane_distance);
+    if distq >= 0.0 return false, .{}, .{}, 0.0; // Exit if q lies in front of plane
+
+    // Compute t value and point s of intersection with triangle plane
+    denom := distp - distq;
+    slider_t = distp / denom;
+    intersection_point = p + slider_t * (q - p);
+
+    // Compute the barycentric coordinate u; exit if outside 0..1 range
+    x := dot(intersection_point, tri.edge1_plane_normal) - tri.edge1_plane_distance;
+    if x < 0.0 || x > 1.0 return false, .{}, .{}, 0.0;
+
+    // Compute the barycentric coordinate v; exit if negative
+    y := dot(intersection_point, tri.edge2_plane_normal) - tri.edge2_plane_distance;
+    if y < 0.0 return false, .{}, .{}, 0.0;
+
+    // Compute the barycentric coordinate w; exit if negative
+    z := 1.0 - x - y;
+    if z < 0.0 return false, .{}, .{}, 0.0;
+
+    barycentric_coordinates = .{x, y, z};
+
+    return true, intersection_point, barycentric_coordinates, slider_t;
+}
+
+//Original, maybe I have a typo here from the book.
 IntersectSegmentTriangle :: (segment_start: Vector3, segment_end: Vector3, tri: Triangle,  intersection_point: *Vector3) -> (success: bool, barycentric_coordinates: Vector3, slider_t: float)
 {
     barycentric_coordinates: Vector3;
@@ -1049,7 +1132,6 @@ IntersectSegmentTriangle :: (segment_start: Vector3, segment_end: Vector3, tri: 
 }
 
 
-#if SHOULD_RUN_TESTS #run IntersectSegmentPolyhedron(.{},.{},.[]);
 IntersectSegmentPolyhedron :: (segment_start: Vector3, segment_end: Vector3, planes: []struct{plane_normal: Vector3; plane_distance: float;}) -> (success: bool,  tfirst: float, tlast:float )
 {
     segment_dir := segment_end - segment_start;

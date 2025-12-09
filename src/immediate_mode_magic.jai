@@ -186,15 +186,43 @@ doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis:
     door.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
 }
 
-doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, identifier:s64=0, loc := #caller_location) -> *Body {
+
+
+// doBall :: (position: *Vector3, orienation: *Quaternion, radius: float32 = 0.1, mass: float32 = .01, user_callback:#type (body: *Body) = null, identifier:s64=0,  loc := #caller_location) -> *Body {
+//     CheckInit();
+//     ball_position := get_translation(transform);
+//     hash := get_hash(loc, identifier);
+//     ball, did_just_created_a_new_one := find_or_create_ball(hash, ball_position, radius, mass);
+//     // if did_just_created_a_new_one {//unused for now}
+//     ball.position = ball_position;
+//     ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
+//     ball.user_data = transform;
+//     reflect_results_callback :: (body: *Body) {
+//         transform := cast(*Matrix4)body.user_data;
+//         previous_t, previous_q, previous_s := koda_decompose_transform(transform);
+
+//         delta_pos := body.position - previous_t;
+
+//         next_q := body.orientation;
+//         next_q_minus_previous := next_q*conjugate(previous_q);
+
+//         MODEL := Matrix4_Identity;
+//         MODEL = translate(MODEL, previous_t + delta_pos);
+//         MODEL = rotate(MODEL, normalize(next_q_minus_previous*previous_q));
+//         transform.* = MODEL;
+
+//     }
+
+//     ball.end_frame_callback = ifx user_callback else reflect_results_callback;
+//     return ball;
+// }
+
+doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, user_callback:#type (body: *Body) = null, identifier:s64=0,  loc := #caller_location) -> *Body {
     CheckInit();
     ball_position := get_translation(transform);
     hash := get_hash(loc, identifier);
     ball, did_just_created_a_new_one := find_or_create_ball(hash, ball_position, radius, mass);
-
-    if did_just_created_a_new_one {
-
-    }
+    // if did_just_created_a_new_one {//unused for now}
     ball.position = ball_position;
     ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
     ball.user_data = transform;
@@ -213,7 +241,8 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, iden
         transform.* = MODEL;
 
     }
-    ball.end_frame_callback = reflect_results_callback;
+
+    ball.end_frame_callback = ifx user_callback else reflect_results_callback;
     return ball;
 }
 

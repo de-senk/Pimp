@@ -1,23 +1,14 @@
 QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
-    early_return := false;
     result: FaceQuery;
     result.face = null;
     result.distance = -FLOAT32_INFINITY;
 
-    // for :each_face current_face: hullA.mesh {
-    start := hullA.mesh.faces;
-    current_face := start;
-    assert(current_face != null, "[ERROR] hullA.mesh.faces==null... are hullA and hullB created?");
-
-    while true { defer if current_face == start break;
+    for :all_faces current_face: hullA.mesh {
         world_planeA := transform_plane(.{current_face.face_plane_normal, current_face.face_plane_distance}, hullA.worldSpace, hullA.inv_worldSpace);
-
         local_direction_in_hull1 := transform_normal(-world_planeA.normal, hullB.worldSpace);
-        {
-            // push_grid(closest_point_to_plane(.{5,5,5}, n, d), n, color=.{abs(n.x),abs(n.y),abs(n.z),1});
-        }
+        // push_grid(closest_point_to_plane(.{5,5,5}, world_planeA.normal, world_planeA.distance), world_planeA.normal, color=.{1.1,1.1,1.1,1});
 
-        furthest_vertex_local, vertex_index := find_furthest_point_along_local_dir(hullB, local_direction_in_hull1);
+        furthest_ptr, furthest_vertex_local, vertex_index := find_furthest_point_along_local_dir(hullB, local_direction_in_hull1);
         furthest_vertex_world := transform_point(furthest_vertex_local, hullB.worldSpace);
 
         distance := distance_point_to_plane_signed(
@@ -26,29 +17,72 @@ QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
             plane_distance = world_planeA.distance
         );
 
-
+        // Keep track of largest distance index
         if distance > result.distance {
             result.face = current_face;
             result.distance = distance; //most separating OR if negative: most closest to the penetration separation
             result.world_furthest_point = furthest_vertex_world; //:tagHerePseudoGJK
             result.world_normal = world_planeA.normal; //:tagHerePseudoGJK
             basically_separating := result.distance > EPSILON4;
-            if basically_separating && early_return {
-                result.distance  = FLOAT32_INFINITY;
+            if basically_separating {
+                result.distance  = FLOAT32_INFINITY; //this will exit SAT because we found a separating axis
+                // push_grid(closest_point_to_plane(.{5,5,5}, world_planeA.normal, world_planeA.distance), world_planeA.normal, color=.{1.1,1.1,1.1,1});
+                push_grid(furthest_vertex_world, world_planeA.normal,area_length=2, color=.{1.1,1.1,1.1,1});
                 return result;
             }
         }
 
-        current_face = current_face.next;
 
     }
 
     return result;
 }
 
+compute_centroid :: (points: []Vector3) -> Vector3
+{
+    sum: Vector3;
+    for points {
+        sum.x += it.x;
+        sum.y += it.y;
+        sum.z += it.z;
+    }
+    inv_count := 1.0 / cast(float)points.count;
+    return Vector3.{ sum.x * inv_count, sum.y * inv_count, sum.z * inv_count };
+}
+
+
 //NOTE: Quickhull should  make the geometric center at {0,0,0}
-project_all_vertices_of_hull_into_axis :: (hull: Convex_Hull, axis: Vector3)-> left_interval: float, right_interval:float {
-    axis_n := normalize(axis);
+project_all_vertices_of_hull_into_axis :: (hull: Convex_Hull, axis_n: Vector3)-> left_interval: float, right_interval:float {
+    // left_interval: float = FLOAT32_INFINITY;
+    // right_interval: float = -FLOAT32_INFINITY;
+    world_center := Vector3.{hull.worldSpace._14, hull.worldSpace._24, hull.worldSpace._34};
+    world_geometric_center := world_center; //lets assume geometric center is in the middle, otherwise, user did hull wrong
+
+    center_proj := dot(world_geometric_center, axis_n);
+
+   //so we expand the interval [left, right] from the world hull center because I cannot brain how to do it with ininity's
+    left_interval: float = center_proj;
+    right_interval: float = center_proj;
+    for :all_vertices current_vertex: hull.mesh {
+        local_vertex := current_vertex.vertex;
+        world_vertex := transform_point(local_vertex, hull.worldSpace);
+        // proj := dot(world_vertex, axis_n);
+        //I dont use continue here because I want to hint the compiler to make this branchless
+        // if proj > right_interval then right_interval = proj;
+        // if proj < left_interval  then left_interval = proj;
+
+
+        proj := dot(world_vertex - world_center, axis_n); // projection relative to center
+        left_interval  = min(left_interval, proj);
+        right_interval = max(right_interval, proj);
+        }
+    return left_interval, right_interval;
+}
+
+//NOTE: Quickhull should  make the geometric center at {0,0,0}
+project_all_vertices_of_hull_into_local_axis :: (hull: Convex_Hull, local_axis: Vector3)-> left_interval: float, right_interval:float {
+    // axis_n := normalize(local_axis); //NOTE: DONT NOTMALIZE ;WE NEED THE SCALING FACTOR!!!!!!!!!!!
+    axis_n := local_axis; //NOTE: DONT NOTMALIZE ;WE NEED THE SCALING FACTOR!!!!!!!!!!!
     // left_interval: float = FLOAT32_INFINITY;
     // right_interval: float = -FLOAT32_INFINITY;
     translation := Vector3.{hull.worldSpace._14, hull.worldSpace._24, hull.worldSpace._34};
@@ -58,92 +92,146 @@ project_all_vertices_of_hull_into_axis :: (hull: Convex_Hull, axis: Vector3)-> l
     //so we expand the interval [left, right] from the world hull center because I cannot brain how to do it with ininity's
     left_interval: float = center_proj;
     right_interval: float = center_proj;
-//TODO: convert axis to local space then recover!!!!!!!!!!!!!!!!!!!!!!!!! inverse matrix is already on hull memory
-    //THOUGHTS(tr):
-    //I think I can embed the dot product inside hull.worlSpace, so I would create a copy of the model matrix and modify it so it also applies dot product
-    //even better: we can just recreate the hull in world space, combined with caching per frame, its worth it maybe, double memory tho.
-    //but we only use hulls in SAT calculations, so maybe we need to combine all these with the SAT caching logic.
-    start := hull.mesh.vertices;
-    current := start;
-    while true {
-        defer current = current.next; //executed second //TODO: replace defers with normal code here.
-        defer if current.next == start then break; //executed first
-        local_vertex := current.vertex;
-        world_vertex := hull.worldSpace * local_vertex;
-        proj := dot(world_vertex, axis_n);
-        //I dont use continue here because I want to hint the compiler to make this branchless
+
+    for :all_vertices current_vertex: hull.mesh {
+        local_vertex := current_vertex.vertex;
+        // world_vertex := hull.worldSpace * local_vertex;
+        proj := dot(local_vertex, axis_n);
+        //hint branchless
         if proj > right_interval then right_interval = proj;
         if proj < left_interval  then left_interval = proj;
-        }
+    }
     return left_interval, right_interval;
 }
 
-//this is no gaussmap, n^2 or n^3, very expensive.
-QueryEdgeDirections_bruteforce :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQuery
+hull_center :: inline (hull: Convex_Hull) -> Vector3 { return Vector3.{hull.worldSpace._14, hull.worldSpace._24, hull.worldSpace._34};}
+
+
+
+//this is no gaussmap, n^2, very fast.
+QueryEdgeDirections_deSenk :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQuery
 {
-    //ahh I need to rewatch the video on gauss map from dirk gregorius...
+    #run TODO("Maybe change the system, so its always faceA+edge points OR faceB +edge points");
+    DRAW :: false;
 
-	result := EdgeQuery.{ distance = -FLOAT32_INFINITY };
-    //are the dot accesors my bottleneck? NOTE: [IMPORTANT] the dot product is not my bottleneck, it was the profiler instrumentation that made the dot product slow, They are fast!
-    //we store the edges in the key of the hashtable I think.
-	for indexA, edgeA : hullA.mesh.edges //traverse hash table
+    hullA_center := Vector3.{hullA.worldSpace._14, hullA.worldSpace._24, hullA.worldSpace._34};
+    #if DRAW {
+        hullB_center := Vector3.{hullB.worldSpace._14, hullB.worldSpace._24, hullB.worldSpace._34};
+    }
+
+    result := EdgeQuery.{ distance = -FLOAT32_INFINITY }; //NOTE: I dont know what default distance to use
+    // result := EdgeQuery.{ distance = -0 }; //NOTE: I use -0 that is different than 0.
+	for :all_edges edgeA, indexA : hullA.mesh
 	{
-		assert(edgeA  != null, "edgeA  is null");
-		assert(edgeA .twin != null, "edgeA .twin is null % ",hullB.mesh.edges);
-		assert(edgeA .twin.twin != null, "edgeA .twin.twin is null");
-		assert(edgeA .twin.twin == edgeA , "edge != edge.twin.twin % %", edgeA , edgeA .twin.twin);
-
-		for indexB, edgeB : hullB.mesh.edges //traverse hash table
+        edgeA_start := hullA.worldSpace * (edgeA.tail.vertex);
+        edgeA_end := hullA.worldSpace   * (edgeA.next.tail.vertex);
+        triA := create_triangle(hullA_center, edgeA_start,edgeA_end );
+		for :all_edges edgeB, indexB: hullB.mesh
 		{
-			assert(edgeB != null, "edgeB is null");
-			assert(edgeB.twin != null, "edgeB.twin is null % ",hullB.mesh.edges);
-			assert(edgeB.twin.twin != null, "edgeB.twin.twin is null");
-			assert(edgeB.twin.twin == edgeB, "edge != edge.twin.twin");
+            edgeB_start := hullB.worldSpace * (edgeB.tail.vertex);
+            edgeB_end := hullB.worldSpace   * (edgeB.next.tail.vertex);
 
+            intersects, intersection_point, bary_coord, slider_t := intersect_segment_triangle_culling(edgeB_start, edgeB_end, triA);
+            if intersects {
+                closest_point_on_A:, closest_point_on_B:, sss:, slider_t2:, this_separation := closest_point_segment_to_segment(edgeA_start, edgeA_end, edgeB_start, edgeB_end);
+                this_separation = -this_separation;
+                result.edgeA = edgeA;
+                result.edgeB = edgeB;
+                result.distance = this_separation;
+                result.world_furthest_point = intersection_point;
 
-            edgeA_dir: Vector3;
-            {
-               edgeOrigin := hullA.worldSpace      * (edgeA.tail.vertex);
-	           edgeDestination := hullA.worldSpace * (edgeA.twin.tail.vertex);
-	           edgeA_dir = edgeDestination - edgeOrigin;
-	        }
+                #if DRAW {
+                  // result.world_normal = world_plane_normal;
+                  //draw triangle
+                  push_arrow(hullA_center,   edgeA_start- hullA_center , color=.{1,1,1,1} );
+                  push_arrow(edgeA_start,   edgeA_end- edgeA_start  , color=.{1,1,1,1});
+                  push_arrow(edgeA_end,   hullA_center- edgeA_end  , color=.{1,1,1,1});
 
-            edgeB_dir: Vector3;
-            {
-               edgeOrigin := hullB.worldSpace      * (edgeB.tail.vertex);
-	           edgeDestination := hullB.worldSpace * (edgeB.twin.tail.vertex);
-	           edgeB_dir = edgeDestination - edgeOrigin;
-    	    }
+                  //draw contact points
+                  push_square(intersection_point,   size=0.1  , color=.{1,0,0,1});
+                }
+            }
 
-            axis := cross_product(edgeA_dir, edgeB_dir);
-            leftA, rightA := project_all_vertices_of_hull_into_axis(hullA, axis);
-            leftB, rightB := project_all_vertices_of_hull_into_axis(hullB, axis);
-
-            //check your milton diagrams:
-            this_separation: float = ---;
-            //I probably did a mistake here
-            if leftB>leftA && rightB > rightA
-                then this_separation  = leftB-rightA;
-                else this_separation  = leftA-rightB;
-            //if penetrationg then this_separation is negative. but, we want to ignore such cases I guess? idk why, I would use them anyways saving them as penetration distance
-
-            if this_separation >= result.distance //NOTE: switching this seems important
-            // if this_separation <= result.distance
-            	continue;
-
-            result = .{ edgeA,edgeB , this_separation };
-            if result.distance > EPSILON4
-            	return result;
 		}
+
 	}
+
 
 	return result;
 }
 
+
+//this is no gaussmap, n^3, very expensive.
+//deSenk version  is way better.
+// QueryEdgeDirections_bruteforce :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQuery
+// {
+
+// }
+
+
+draw_current_edge :: (e: *Hull_Half_Edge, hull: Convex_Hull, color: Vector4= .{1,1,1,1}) {
+    push_arrow(hull.worldSpace*e.tail.vertex, hull.worldSpace*e.next.tail.vertex-hull.worldSpace*e.tail.vertex,color=color);
+}
+draw_current_edge_normal :: (e_origin: Vector3, e: *Hull_Half_Edge, inv_world: Matrix4) {
+        v0 := e.tail;
+        v1 := e.next.tail;
+        v2 := e.next.next.tail;
+        plane_normal, plane_d := create_plane(v0.vertex, v1.vertex, v2.vertex);
+        {
+            n := transform_normal(plane_normal, inv_world);
+            push_arrow(e_origin, n,color=.{abs(n).x,abs(n).y,abs(n).z, 1.0});
+    	}
+}
+
+draw_hull_properties :: (hull: Convex_Hull){
+    // return;
+    color_idx := 0;
+    for :all_edges e: hull.mesh {
+
+        color_idx +=1; if color_idx==7 then color_idx = 0;
+        color := colors[color_idx];
+
+        plane_normal :=  transform_normal(e.face.face_plane_normal, hull.inv_worldSpace);
+        off := ( 0.01 )*plane_normal;
+        ncol := Vector4.{abs(plane_normal).x,abs(plane_normal).y,abs(plane_normal).z, 1.0};
+
+		e_origin:= hull.worldSpace * ( e.tail.vertex) +off;
+        e_end := hull.worldSpace * ( e.twin.tail.vertex)+off;
+        push_arrow(e_origin,e_end-e_origin,0.05, color=ncol);
+        // draw_current_edge_normal(e_origin, e, hull.inv_worldSpace);
+
+	}
+}
+
+//from slide 34, test if arcs a b intersects on sphere.
+IsMinkowskyFace :: (A: Vector3, B: Vector3, C: Vector3, D: Vector3) -> bool {
+    B_x_A := cross_product(B,A);
+    D_x_C := cross_product(D,C);
+    CBA := dot(C, B_x_A);
+    DBA := dot(D, B_x_A);
+    ADC := dot(A, D_x_C);
+    BDC := dot(B, D_x_C);
+    return CBA*DBA<0.0 && ADC*BDC<0 && CBA*BDC>0;
+}
+
+arcs_intersect_on_sphere :: (arcA_start: Vector3, arcA_end: Vector3, arcB_start: Vector3, arcB_end: Vector3) -> bool {
+    B_x_A := cross_product(arcA_end,arcA_start); //cross product of face A1 normal with face A2 normal
+    D_x_C := cross_product(arcB_end,arcB_start); //no need to normalize
+    CBA := dot(arcB_start, B_x_A);
+    DBA := dot(arcB_end, B_x_A);
+    ADC := dot(arcA_start, D_x_C);
+    BDC := dot(arcA_end, D_x_C);
+    intersect_test1 := CBA*DBA<0.0;
+    intersect_test2 := ADC*BDC<0.0;
+    hemisphere_test := CBA*BDC>0.0;
+    return intersect_test1 && intersect_test2 && hemisphere_test;
+}
+
 //this is gaussian mapping, I think we can use this for faces, I need to do some testings, I will say these keywords so I remember in the future: store array angle prject hull into sphere radius sphere farthest point from center, cornercases arise, store stereoradians in flat array or something. Compare two spheres faces == see if orientaion angle from default (default maybe farthest)  matchs array slots.
 //maybe delete comments, this is so hard to udnerstand.
-QueryEdgeDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQuery
+QueryEdgeDirections_gauss :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQuery
 {
+    //NOTE: deSenk version seems to be more robust than this, but you need to change contact creation.
     //:tagIshouldREallyDoThis99percentsure  --> I think it is extremely important to precompute the convex hulls per frame (each vertex in world space)...maybe ask dirk gregorius?...
     //this code is from minute -9.34 or minute 24:07, maybe I should delete all the comments once I unedrstand this...
     //ahh I need to rewatch the video on gauss map from dirk gregorius...
@@ -159,87 +247,41 @@ QueryEdgeDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQuery
     //      Hemispehre test: we build plane with any vertex of arc one, same for the other arc
     //      remaining vertices has to be on the same SIDE of that plane(@Investigate what side means)
 	result := EdgeQuery.{ distance = -FLOAT32_INFINITY };
-
-    //NOTE(tr): @Important We dont need to traverse all edges! because we have duplicated edges! rememebr twin's!! wait? do we? @Investigate figure that out.
-    //I will leave the old version commented overlapped with the correct version
-	for unused1, edgeA : hullA.mesh.edges //traverse hash table
+    hullA_center := Vector3.{hullA.worldSpace._14, hullA.worldSpace._24, hullA.worldSpace._34};
+	for :all_edges edgeA: hullA.mesh
 	{
-		assert(edgeA != null, "edgeA is null");
-		assert(edgeA.twin != null, "edgeA.twin is null % ",hullB.mesh.edges);
-		assert(edgeA.twin.twin != null, "edgeA.twin.twin is null");
-		assert(edgeA.twin.twin == edgeA, "edge != edge.twin.twin % %", edgeA, edgeA.twin.twin);
-        //for some reason I got a performance boost flattening out BuildMinkowskiFace procedure,but I used an eyemeter...
-
         //we precompute gauss map out of the INNER for loop :tagIshouldREallyDoThis99percentsure
 		edgeA_origin:= hullA.worldSpace * ( edgeA.tail.vertex);
     	edgeA_end := hullA.worldSpace * ( edgeA.twin.tail.vertex);
 
-    	//TODO: (inject information as variable names and delete comments) //how_to: read the naming? to the left edeA_ is what it was, and to the rigght _arc or _vertex is what it becomes after gauss mapping.
 		 arcA := edgeA_end - edgeA_origin;
 		 faceA_vertex := transform_normal(edgeA.face.face_plane_normal, hullA.inv_worldSpace);//faceA_vertex
 		 twin_faceA_vertex := transform_normal(edgeA.twin.face.face_plane_normal, hullA.inv_worldSpace);;//faceA_vertex_twin?
-        //this works, if you change this make sure to run the collision tests
 
-		for unused2, edgeB : hullB.mesh.edges //traverse hash table
+		for :all_edges edgeB: hullB.mesh
 		{
-			assert(edgeB != null, "edgeB is null");
-			assert(edgeB.twin != null, "edgeB.twin is null % ",hullB.mesh.edges);
-			assert(edgeB.twin.twin != null, "edgeB.twin.twin is null");
-			assert(edgeB.twin.twin == edgeB, "edge != edge.twin.twin");
-
         	//TODO: (inject information as variable names and delete comments)
             edgeB_origin:= hullB.worldSpace * (edgeB.tail.vertex);
         	edgeB_end := hullB.worldSpace   * (edgeB.twin.tail.vertex);
        		arcB := edgeB_end - edgeB_origin;
 
+            //vertex becausse in Gauss world faces are vertex
     		faceB_vertex := transform_normal(edgeB.face.face_plane_normal, hullB.inv_worldSpace);//faceB_vertex
     		twin_faceB_vertex := transform_normal(edgeB.twin.face.face_plane_normal, hullB.inv_worldSpace);;//faceB_vertex_twin?
 
-			//minute -15:19 Final Overlap Test: Formulas
-			is_minkowsky_face: bool;
-			{
+			//minute -15:19 Final Overlap Test: Formulas minute 19, we can avoid cross products. and we dont need to normalize.
+          	is_minkowsky_face := arcs_intersect_on_sphere(faceA_vertex, twin_faceA_vertex, -faceB_vertex, -twin_faceB_vertex);
 
-			   //minute 19, we can avoid cross products. and we dont need to normalize.
-                /*  for this comment: "." is dot product, "x" is cross product
-                    //intersection tests: TODO: explanation, I still dont understand what side means in this context, I need diagrams.
-                    [c . (bxa)] . [d . (bxa)] < 0
-                    [a . (dxc)] . [b . (dxc)] < 0
-                    //hemisphere test: are the remaining vertices on the same side
-                    [a . (cxb)] . [d . (cxb)] > 0
-
-                    using albegra rules...final minimal test
-                    |CBA| . |DBA| < 0 C and D test intersectsBA
-                    |ADC| . |BDC| < 0 A and B test intersectsDC
-                    |CBA| . |BDC| > 0
-                */
-
-            	//plane test using Scalar Triple Products - only need sign
-            	//I think the new naming make these more intuitive:
-            	CBA := dot(-faceB_vertex,     -arcA); //- SIGN why? because it is minkowski difference! but what about the edgeArcs
-            	DBA := dot(-twin_faceB_vertex,-arcA);
-            	ADC := dot(faceA_vertex,      -arcB);//- SIGN why?  why?
-            	BDC := dot(twin_faceA_vertex, -arcB);//- SIGN why?  why? why?
-
-            	//test for intersections of great arcs - vertices a/b,c/d should be on +/- sides of plane
-            	intersectsBA   := CBA * DBA < 0.0;
-            	intersectsDC   := ADC * BDC < 0.0;
-            	//test both arcs lie on same hemisphere
-            	are_in_same_hemisphere := CBA * BDC > 0.0;
-                is_minkowsky_face = cast(bool)(intersectsBA & intersectsDC & are_in_same_hemisphere);
+            if is_minkowsky_face {
+			    this_separation :=  distance_between_arcs(edgeA_origin, arcA, edgeB_origin, arcB, hullA_center);
+			    bigger := this_separation >= result.distance;
+                if bigger {
+		           result = .{ edgeA, edgeB, this_separation,.{},.{}  };
+			     }
 
 			}
-
-            if !is_minkowsky_face then continue; //early skip
-            translation := Vector3.{hullA.worldSpace._14, hullA.worldSpace._24, hullA.worldSpace._34};
-			this_separation :=  distance_between_arcs(edgeA_origin, arcA, edgeB_origin, arcB, translation);
-            // if this_separation <= result.distance continue;  //early skip
-            if this_separation >= result.distance continue;  //early skip
-
-			result = .{ edgeA, edgeB, this_separation };
-			if result.distance > EPSILON4 then return result;  //early return
 		}
 	}
-
 	return result;
 }
 
@@ -254,7 +296,7 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
 	reference_face := faceQuery.face;
 	world_ref_plane_n, world_ref_plane_d := transform_plane(reference_face.face_plane_normal, reference_face.face_plane_distance, referenceHull.worldSpace, referenceHull.inv_worldSpace);
 	localtoinc_ref_plane_n, localtoinc_ref_plane_d := transform_plane(world_ref_plane_n, world_ref_plane_d, incidentHull.inv_worldSpace, incidentHull.worldSpace);
-	push_grid(closest_point_to_plane(.{5,5,5}, world_ref_plane_n, world_ref_plane_d), world_ref_plane_n, color=.{1,0,0,1});
+    // push_grid(closest_point_to_plane(.{5,5,5}, world_ref_plane_n, world_ref_plane_d), world_ref_plane_n, color=.{1,0,0,1});
 	incident_face: *Hull_Face;
 
     /* from slide 91
@@ -265,21 +307,15 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
     */
     {
         mostAntiParallel := FLOAT32_MAX;
-
-        start := incidentHull.mesh.faces;
-        current_face := start;
-        while true
-        {
+        for :all_faces incidentHull.mesh.faces {
             // incidentPlaneWorld_normal, incidentPlaneWorld_distance := transform_plane(current_face.face_plane_normal, current_face.face_plane_distance , incidentHull.worldSpace );
-            incident_plane_normal := current_face.face_plane_normal;
+            incident_plane_normal := it.face_plane_normal;
             projection := dot(localtoinc_ref_plane_n, incident_plane_normal);
             if projection < mostAntiParallel
             {
                 mostAntiParallel = projection;
-                incident_face = current_face;
+                incident_face = it;
             }
-            current_face = current_face.next;
-            if current_face == start then break;
         }
         assert(mostAntiParallel < 9999.0, "most antiparallel not found");
         assert(incident_face != null, "incident face not found!");
@@ -287,7 +323,7 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
 
     {
 	n, d := transform_plane(incident_face.face_plane_normal, incident_face.face_plane_distance, incidentHull.worldSpace, incidentHull.inv_worldSpace);
-	push_grid(closest_point_to_plane(.{5,5,5}, n, d), n, color=.{.2,.2,1,1});
+    // push_grid(closest_point_to_plane(.{5,5,5}, n, d), n, color=.{.2,.2,1,1});
 	}
 	//collect incident edge vertices
 	incident_world_vertices: [..]Vector3;
@@ -296,7 +332,7 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
     assert(incident_world_vertices.count == 0);
 
     //fill incident_world_vertices traversing incident face edges
-    for :each_edge current_edge: incident_face {
+    for :traverse_edge_ring current_edge: incident_face {
 			point_in_world := incidentHull.worldSpace * current_edge.tail.vertex;
 			array_add(*incident_world_vertices, point_in_world);
             // push_square(point_in_world, .2, normal=incident_face.face_plane_normal);
@@ -305,11 +341,16 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
 
 	//slide 92: We clip the incident face polygon against the side planes of the reference face Then we keep all points below the reference face
 
-	for :each_edge current_edge: reference_face {
-		referenceSideFace := ifx current_edge.face !=  reference_face then current_edge.face else current_edge.twin.face;
-        // referenceSideFace = current_edge.face; //HARDOCED
+	for :traverse_edge_ring current_edge: reference_face {
+	    c1 := current_edge.face ==  reference_face;
+        referenceSideFace := current_edge.face;
+
+        //NOTE: I think this logic makes no sense and I should delete
+        if c1 && current_edge.twin
+            then referenceSideFace = current_edge.twin.face;
+
 		world_plane_normal, world_plane_dist  := transform_plane(referenceSideFace.face_plane_normal, referenceSideFace.face_plane_distance, referenceHull.worldSpace, referenceHull.inv_worldSpace);
-        // push_grid(closest_point_to_plane(.{5,5,5}, world_plane_normal, world_plane_dist), world_plane_normal, color=.{0,1,0,1});
+        // push_grid( referenceHull.worldSpace*current_edge.tail.vertex, world_plane_normal,area_length=1, color=.{0,1,0,1});
         clipped_vertices := Sutherland_Hodgman(world_plane_normal,world_plane_dist , incident_world_vertices);
 
          if clipped_vertices.count == 0 {
@@ -321,19 +362,11 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
         array_copy(*incident_world_vertices, clipped_vertices);
         incident_world_vertices.count = clipped_vertices.count;
 	}
-    // for :each_edge current_edge: incident_face
 
+    //NOTE: maybe I should clip using reference face too-
 
-    // // project world vertices that survived clipping onto reference plane
-    // for i: 0..incident_world_vertices.count - 1 {
-    //     incident_world_vertices[i] = closest_point_to_plane(point=incident_world_vertices[i], world_ref_plane_n, world_ref_plane_d);
-    // }
-
-    // result.points = incident_world_vertices;
     array_copy(*result.points, incident_world_vertices);
     array_free(incident_world_vertices);
-
-
 
 
     // for result.points if it.y < 0 then add_to_array_of_contact_points(it, radii = .1, color=.{0,0,1,1});
@@ -343,7 +376,6 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
     assert(result.points.count <= 4, "we aer supposued o get 4 or less contact points here, we got %", result.points.count);
 
     // push_grid(closest_point_to_plane(.{5,5,5}, inc_plane_n, inc_plane_d), inc_plane_n, color=.{.2,1,1,1});
-    for result.points    push_X(it, 0.1, color=.{0,1,0,1});
     for *result.points {
         // len := distance_point_to_plane_signed(point=it.*, inc_plane_n, inc_plane_d);
         len := distance_point_to_plane_signed(point=it.*, world_ref_plane_n, world_ref_plane_d*1.0);
@@ -351,18 +383,19 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
         // doLabel(tprint("is_separating_basically %            < %            == %          ",len, EPSILON3, is_separating_basically), WorldToScreen(.{.5,-2.2-it_index.(float),10.0}));
         if is_separating_basically {
         //     doLabel(tprint("is_separating_basically %            < %            == %          ",len, EPSILON3, is_separating_basically), WorldToScreen(.{.5,1.2+it_index.(float),10.0}));
+    //         push_circle(it.*, 0.1, color=.{1,0,0,0});
 
             // push_circle(it.*, 0.1, color=.{0,0,0,1});
             remove it;
          }
     }
+    // for result.points    push_circle(it, 0.1, color=.{0,1,0,1});
 
     // slide 93: Project world vertices that survived clipping onto reference plane
     //  This helps with coherence and (as we will see later) with contact point reduction
     //  where we assume that the contact points are in common plane
     for *result.points {
         it.* = closest_point_to_plane(point=it, world_ref_plane_n, world_ref_plane_d);
-            // push_circle(it.*, 0.1, color=.{1,1,1,1});
     }
     // for result.points   push_X(it, 0.3, color=.{1,0,0,1});
   	return result;
@@ -374,21 +407,27 @@ CreateEdgeContact :: (edgeQuery: EdgeQuery, hullA: Convex_Hull, hullB: Convex_Hu
 	result.query = edgeQuery;
 
 	//compute closest points between two edges
-	edgeA0 :=  hullA.worldSpace * (edgeQuery.edgeA.tail.vertex);
-	edgeA1 :=  hullA.worldSpace * (edgeQuery.edgeA.twin.tail.vertex);
+	edgeA := edgeQuery.edgeA;
+	edgeA0 :=  hullA.worldSpace * (edgeA.tail.vertex);
+	edgeA1 :=  hullA.worldSpace * (edgeA.next.tail.vertex);
 	//variant is half edge
 	edgeB := edgeQuery.edgeB;
 	edgeB0 := hullB.worldSpace * (edgeB.tail.vertex);
-	edgeB1 := hullB.worldSpace * (edgeB.twin.tail.vertex);
+	edgeB1 := hullB.worldSpace * (edgeB.next.tail.vertex);
 
 
 	L0, L1, s, t, distdist := closest_point_segment_to_segment(edgeA0, edgeA1, edgeB0, edgeB1);
+
+    // push_circle(edgeA0,.1);
+    // push_circle(edgeA1,.1);
+    // push_X(edgeB0,.1);
+    // push_X(edgeB1,.1);
 	//compute center of closest points as contact point
 	result.midpoint = (L0 + L1) * 0.5;
 	//compute separating axis between two edges
 	result.separationAxis = normalize(L0 - L1);
-	translation:= Vector3.{hullA.worldSpace._14 , hullA.worldSpace._24, hullA.worldSpace._34 };
-    if (dot(result.separationAxis, edgeA0 - translation) < 0.0)
+	translation:= Vector3.{hullB.worldSpace._14 , hullB.worldSpace._24, hullB.worldSpace._34 };
+    if (dot(result.separationAxis, edgeB0 - translation) > 0.0)
     	result.separationAxis = -result.separationAxis;
 	return result;
 };
@@ -830,14 +869,18 @@ quickhull_3D :: (/*read only*/cloud_of_points: []Vector3) -> Convex_Hull {
             vert_ptr.vertex = it;
             if prev
             {
-                vert_ptr.prev = prev;
-                prev.next = vert_ptr;
+                vert_ptr.linked_list_prev = null;//<- important null
+                prev.linked_list_next = vert_ptr;
             }
             prev = vert_ptr;
         }
         //because this is a special case its safe to do the following line.
         new_hull.mesh.vertex_free_list = *mesh.vertexBuffer[0];
 
+
+        for mesh.vertexBuffer {
+        log("idx % v %", it_index, it);
+        }
     }
 
 
@@ -851,8 +894,8 @@ quickhull_3D :: (/*read only*/cloud_of_points: []Vector3) -> Convex_Hull {
             face_ptr := *mesh.faceBuffer[it];
             if prev
             {
-                face_ptr.prev = prev;
-                prev.next = face_ptr;
+                face_ptr.linked_list_prev = null; //<- important null
+                prev.linked_list_next = face_ptr;
             }
             prev = face_ptr;
         }
@@ -866,8 +909,8 @@ quickhull_3D :: (/*read only*/cloud_of_points: []Vector3) -> Convex_Hull {
             hedge_ptr := *mesh.edgeBuffer[it];
             if prev
             {
-                hedge_ptr.prev = prev;
-                prev.next = hedge_ptr;
+                hedge_ptr.linked_list_prev = null;  //<- important null
+                prev.linked_list_next = hedge_ptr;
             }
             prev = hedge_ptr;
         }
@@ -892,7 +935,7 @@ quickhull_3D :: (/*read only*/cloud_of_points: []Vector3) -> Convex_Hull {
         dist1 := distance_point_to_plane(t1, plane_normal, plane_dist);
         dist2 := distance_point_to_plane(t2, plane_normal, plane_dist);
         dist_1_is_farther := dist1 > dist2;
-        p3 = ifx dist_1_is_farther then t1 else t2;
+        p3   = ifx dist_1_is_farther then t1 else t2;
         idx3 = ifx dist_1_is_farther then tmp_idx1 else tmp_idx2;
     }
 
@@ -901,175 +944,50 @@ quickhull_3D :: (/*read only*/cloud_of_points: []Vector3) -> Convex_Hull {
     {//I think this is ok to be hardcoded, its just to build the first tetrahedron
         using mesh;
         //we remove the 4 vertices from freelist, takind advantage of continuos memory
-        v0 := __pop_free_vertex_at(*mesh, idx0);
-        v1 := __pop_free_vertex_at(*mesh, idx1);
-        v2 := __pop_free_vertex_at(*mesh, idx2);
-        v3 := __pop_free_vertex_at(*mesh, idx3);
+        v0 := add_vertex_from_slot(*mesh,p0, idx0);
+        v1 := add_vertex_from_slot(*mesh,p1, idx1);
+        v2 := add_vertex_from_slot(*mesh,p2, idx2);
+        v3 := add_vertex_from_slot(*mesh,p3, idx3);
 
-        v0.vertex = p0;
-        v1.vertex = p1;
-        v2.vertex = p2;
-        v3.vertex = p3;
-        vertexCount += 4;
-        v0.prev = v3;
-        v0.next = v1;
-        v0.referenceCount = 3; // Each vertex used by 3faces
+        face_A, e01, e12, e20 := create_face_from_vertices(*mesh, v0, v1, v2);
+        face_B, e02, e23, e30 := create_face_from_vertices(*mesh, v0, v2, v3);
+        face_C, e31, e10, e03 := create_face_from_vertices(*mesh, v3, v1, v0);
+        face_D, e21, e13, e32 := create_face_from_vertices(*mesh, v2, v1, v3);
 
-        v1.prev = v0;
-        v1.next = v2;
-        v1.referenceCount = 3; // Each vertex used by 3faces
+        link_two_faces_by_edge(e01, e10);
+        link_two_faces_by_edge(e02, e20);
+        link_two_faces_by_edge(e03, e30);
+        link_two_faces_by_edge(e12, e21);
+        link_two_faces_by_edge(e23, e32);
+        link_two_faces_by_edge(e31, e13);
+        #if 1
+            { //This is just to veryfy that we are in centroid 0 0 0
+            pp:[4]Vector3;
+            pp[0] = p0;
+            pp[1] = p1;
+            pp[2] = p2;
+            pp[3] = p3;
+            centroid := compute_centroid(pp);
+            log("pp2 % %", pp,centroid);
 
-        v2.prev = v1;
-        v2.next = v3;
-        v2.referenceCount = 3; // Each vertex used by 3faces
+            v0.vertex -= centroid;
+            v1.vertex -= centroid;
+            v2.vertex -= centroid;
+            v3.vertex -= centroid;
 
-        v3.prev = v2;
-        v3.next = v0;
-        v3.referenceCount = 3; // Each vertex used by 3faces
-        //
-        // I just followed the Image I uploaded on github, initial_tetrahedron.jpg
-        //
-        //step 0 TWINS assings
-        //I figured it out I think: every time you add an edge check tails and traverse edges and check if twin face is free to create face
-        #if 0 {
-        e0, te0 := add_edge_and_twin_and_maybe_face(*mesh, v0, v1);
-        e1, te1 := add_edge_and_twin_and_maybe_face(*mesh, v1, v2);
-        e2, te2 := add_edge_and_twin_and_maybe_face(*mesh, v2, v0);
 
-        e3, te3 := add_edge_and_twin_and_maybe_face(*mesh, v0, v1);
-        e4, te4 := add_edge_and_twin_and_maybe_face(*mesh, v1, v2);
-        e5, te5 := add_edge_and_twin_and_maybe_face(*mesh, v2, v0);
-        } else  {
-        twin_pairs := [2]int.[
-        .[0,  8],
-        .[1,  9],
-        .[2,  3],
-        .[4, 11],
+            pp[0] = v0.vertex;
+            pp[1] = v1.vertex;
+            pp[2] = v2.vertex;
+            pp[3] = v3.vertex;
 
-        .[5, 6],
-        .[7, 10],
-        .[8, 0]
-        ];
 
-        for pair: twin_pairs {
-            edgeBuffer[pair[0]].twin = *edgeBuffer[pair[1]];
-            edgeBuffer[pair[1]].twin = *edgeBuffer[pair[0]];
+
+            centroid = compute_centroid(pp);
+            log("pp2 % %", pp,centroid);
+            assert(length_squared(centroid) < 0.000001, "%",centroid);
+
         }
-
-       //step 1 prev next and tail assings
-       LittlePacket :: struct {
-         tail: *Hull_Vertex;
-         prev: int;//*Hull_Half_Edge; TODO: this!
-         next: int;//*Hull_Half_Edge; TODO: this!
-       }
-
-       edges_tail_prev_next := LittlePacket.[
-        //RED: p0,p1, p2 from the image
-        .{v0,  2, 1}, //edge[0]
-        .{v1,  0, 2}, //edge[1]
-        .{v2,  1, 0}, //edge[2]
-
-        //PINK: p3, p0, p2.
-        .{v3,  5, 4}, //edge[3]->tail is p3, prev is edge[5], next is edge[4], same logic for all others
-        .{v0,  3, 5}, //edge[4]
-        .{v2,  4, 3}, //edge[5]
-
-        //GREEN: p0, p3, p1.
-        .{v0,  8, 7}, //edge[6]
-        .{v3,  6, 8}, //edge[7]
-        .{v1,  7, 6}, //edge[8]
-
-        //YELLOW: p2, p1, p3.
-        .{v2,  11, 10}, //edge[9]
-        .{v1,  9, 11}, //edge[10]
-        .{v3,  10, 9}, //edge[11]
-        ];
-
-        for edges_tail_prev_next {
-            prev_idx := it.prev;
-            next_idx := it.next;
-            edgeBuffer[it_index].tail = it.tail;
-            edgeBuffer[it_index].prev = *edgeBuffer[prev_idx];
-            edgeBuffer[it_index].next = *edgeBuffer[next_idx];
-            find_or_add(*mesh.edges, *edgeBuffer[it_index]);
-        }
-        edgeCount = edges_tail_prev_next.count;
-
-        }//#if 0
-        //step 2 FACE assigns, 4 planes
-
-        red_plane_normal, red_plane_dist := create_plane(p0,p1,p2);
-        pink_plane_normal, pink_plane_dist := create_plane(p0,p2,p3);
-        green_plane_normal, green_plane_dist := create_plane(p0,p3,p1);
-        yellow_plane_normal, yellow_plane_dist := create_plane(p1,p3,p2);
-
-        //red
-        faceBuffer[0].edge = *edgeBuffer[0];
-        faceBuffer[0].face_plane_normal = red_plane_normal;
-        faceBuffer[0].face_plane_distance = red_plane_dist;
-        faceBuffer[0].vertexCount = 3;
-          edgeBuffer[0].face = *faceBuffer[0];
-          edgeBuffer[1].face = *faceBuffer[0];
-          edgeBuffer[2].face = *faceBuffer[0];
-        faceBuffer[0].prev = *faceBuffer[3];
-        faceBuffer[0].next = *faceBuffer[1];
-
-        //pink
-        faceBuffer[1].edge = *edgeBuffer[3];
-        faceBuffer[1].face_plane_normal = pink_plane_normal;
-        faceBuffer[1].face_plane_distance = pink_plane_dist;
-        faceBuffer[1].vertexCount = 3;
-          edgeBuffer[3].face = *faceBuffer[1];
-          edgeBuffer[4].face = *faceBuffer[1];
-          edgeBuffer[5].face = *faceBuffer[1];
-        faceBuffer[1].prev = *faceBuffer[0];
-        faceBuffer[1].next = *faceBuffer[2];
-
-        //green
-        faceBuffer[2].edge = *edgeBuffer[6];
-        faceBuffer[2].face_plane_normal = green_plane_normal;
-        faceBuffer[2].face_plane_distance = green_plane_dist;
-        faceBuffer[2].vertexCount = 3;
-          edgeBuffer[6].face = *faceBuffer[2];
-          edgeBuffer[7].face = *faceBuffer[2];
-          edgeBuffer[8].face = *faceBuffer[2];
-        faceBuffer[2].prev = *faceBuffer[1];
-        faceBuffer[2].next = *faceBuffer[3];
-
-        //yellow
-        faceBuffer[3].edge = *edgeBuffer[9];
-        faceBuffer[3].face_plane_normal = yellow_plane_normal;
-        faceBuffer[3].face_plane_distance = yellow_plane_dist;
-        faceBuffer[3].vertexCount = 3;
-          edgeBuffer[9].face = *faceBuffer[3];
-          edgeBuffer[10].face = *faceBuffer[3];
-          edgeBuffer[11].face = *faceBuffer[3];
-        faceBuffer[3].prev = *faceBuffer[2];
-        faceBuffer[3].next = *faceBuffer[0];
-
-        faceCount = 4;
-
-        // NOTE: Im not sure about these
-         // Set vertex edge references (one outgoing edge per vertex)
-         v0.edge = *edgeBuffer[0];
-         v1.edge = *edgeBuffer[1];
-         v2.edge = *edgeBuffer[2];
-         v3.edge = *edgeBuffer[3];
-
-         // // Set leaving_edge (same as edge for this simple case)
-         // for i: 0..2 {
-         //     vertexBuffer[i].leaving_edge = vertexBuffer[i].edge;
-         // }
-        // NOTE: end note.
-
-    #run log("this is hardoced here!");
-
-    mesh.vertices = v0;
-    mesh.faces = *faceBuffer[0];
-    mesh.edgeCount = 12;
-    mesh.faceCount = 4;
-    mesh.vertexCount = 4;
-
     } //block hardcored initial tetrahedron
 
     //
@@ -1092,19 +1010,252 @@ quickhull_3D :: (/*read only*/cloud_of_points: []Vector3) -> Convex_Hull {
 };
 
 
+are_coplanar :: (p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, error_margin: float = 0.00001) -> bool {
+    u := p1 - p0;
+    v := p2 - p0;
+    w := p3 - p0;
 
-createfaceasd ::  (using mesh: *Half_Edge_Mesh, v0: *Hull_Vertex, v1: *Hull_Vertex ) -> new_edge0: *Hull_Half_Edge, new_edge1: *Hull_Half_Edge {
-    //idea 1
-    /*
-        check if v0 has face already
-            true-> go check which edges TWINS share the vetex
-                if foud == {
-                    0;
-                    1;
-                    2;
-    */
-    return null, null;
+    normal := cross(u, v);
+    signed_volume := dot(normal, w);
+
+    return abs(signed_volume) <= error_margin;
 }
+
+
+link_two_faces_by_edge :: (edge1: *Hull_Half_Edge, edge2: *Hull_Half_Edge) {
+    assert(edge1.tail == edge2.next.tail, "Edges must form opposite directions of same geometric edge");
+    assert(edge1.next.tail == edge2.tail, "Edges must form opposite directions of same geometric edge");
+    #run TODO("maybe add a linkedlist of main edges and twin edges separated");
+    edge1.twin = edge2;
+    edge2.twin = edge1;
+}
+
+
+is_plane_pointing_away_from_center :: (hull: Convex_Hull, n: Vector3, point_on_plane: Vector3) -> bool {
+    start := hull_center(hull);
+    end :=point_on_plane;
+    is_pointing_away := (dot(n,end - start)>0.0);
+    return is_pointing_away;
+
+}
+
+is_plane_pointing_away_from_origin :: (n: Vector3, point_on_plane: Vector3) -> bool {
+    end :=point_on_plane;
+    is_pointing_away := (dot(n,end )>0.0);
+    return is_pointing_away;
+
+}
+
+create_face_from_vertices ::  (using mesh: *Half_Edge_Mesh, v0: *Hull_Vertex, v1: *Hull_Vertex, v2: *Hull_Vertex , v3: *Hull_Vertex  ) -> face:*Hull_Face, new_edge0: *Hull_Half_Edge, new_edge1: *Hull_Half_Edge,new_edge2: *Hull_Half_Edge, new_edge3: *Hull_Half_Edge {
+    assert(are_coplanar(v0.vertex,v1.vertex,v2.vertex,v3.vertex));
+    e0 := pop_free_edge(mesh);
+    e1 := pop_free_edge(mesh);
+    e2 := pop_free_edge(mesh);
+    e3 := pop_free_edge(mesh);
+
+    assert(e0 != null);
+    assert(e1 != null);
+    assert(e2 != null);
+    assert(e3 != null);
+
+    e0.prev = e3;
+    e0.next = e1;
+    e1.prev = e0;
+    e1.next = e2;
+    e2.prev = e1;
+    e2.next = e3;
+    e3.prev = e2;
+    e3.next = e0;
+
+    //assign vertex
+    e0.tail = v0;
+    e1.tail = v1;
+    e2.tail = v2;
+    e3.tail = v3;
+
+
+    //add to edge linked list
+    {
+        e0.linked_list_next = e1;
+        e1.linked_list_next = e2;
+        e2.linked_list_next = e3;
+        e3.linked_list_next = mesh.edges; //:tag_if_list_is_empty_this_is_null_perfect!
+        mesh.edges = e0;
+        mesh.edgeCount += 4;
+    }
+
+
+    // plane_normal, plane_d := create_plane(v0.vertex, v1.vertex, v2.vertex);
+    plane_normal, plane_d := create_plane(v0.vertex, v1.vertex, v2.vertex);
+    assert(is_plane_pointing_away_from_origin(plane_normal, v3.vertex), "your vertex ordering is not CCW! % ",v3.vertex);
+
+    face0 := pop_free_face(mesh);
+    assert(face0 != null);
+
+    face0.edge =  e0;//because we do this when linking 2 faces throug 1 edge
+    face0.face_plane_normal = plane_normal;
+    face0.face_plane_distance = plane_d; // Distance from origin to face
+    face0.vertexCount = 4;
+
+    e0.face = face0;
+    e1.face = face0;
+    e2.face = face0;
+    e3.face = face0;
+
+
+    //prepend to faces
+    {
+        face0.linked_list_next = mesh.faces;  //:tag_if_list_is_empty_this_is_null_perfect!
+        mesh.faces = face0;
+        mesh.faceCount += 1;
+    }
+    return face0, e0, e1, e2, e3;
+}
+
+
+create_face_from_vertices ::  (using mesh: *Half_Edge_Mesh, v0: *Hull_Vertex, v1: *Hull_Vertex, v2: *Hull_Vertex) -> f:*Hull_Face, e0: *Hull_Half_Edge, e1: *Hull_Half_Edge,e2: *Hull_Half_Edge {
+    // assert(are_coplanar(v0.vertex,v1.vertex,v2.vertex,v3.vertex));
+    e0 := pop_free_edge(mesh);
+    e1 := pop_free_edge(mesh);
+    e2 := pop_free_edge(mesh);
+
+    assert(e0 != null);
+    assert(e1 != null);
+    assert(e2 != null);
+
+    assert(e0.linked_list_prev == null);
+    assert(e1.linked_list_prev == null);
+    assert(e2.linked_list_prev == null);
+    assert(e0.linked_list_next == null);
+    assert(e1.linked_list_next == null);
+    assert(e2.linked_list_next == null);
+
+    e0.prev = e2;
+    e0.next = e1;
+    e1.prev = e0;
+    e1.next = e2;
+    e2.prev = e1;
+    e2.next = e0;
+
+    //assign vertex
+    e0.tail = v0;
+    e1.tail = v1;
+    e2.tail = v2;
+
+    //add to edge linked list
+    {
+        e0.linked_list_next = e1;
+        e1.linked_list_next = e2;
+        e2.linked_list_next = mesh.edges;  //:tag_if_list_is_empty_this_is_null_perfect!
+        mesh.edges = e0;
+        mesh.edgeCount += 3;
+    }
+
+    plane_normal, plane_d := create_plane(v0.vertex, v1.vertex, v2.vertex);
+    // assert(is_plane_pointing_away_from_origin(plane_normal, v2.vertex), "your vertex ordering is not CCW! % % %, % %, cross:%", v0.vertex, v1.vertex, v2.vertex, v1.vertex-v0.vertex, v2.vertex-v0.vertex, plane_normal);
+
+    face0 := pop_free_face(mesh);
+    assert(face0 != null);
+
+    face0.edge =  e0;
+    face0.face_plane_normal = plane_normal;
+    face0.face_plane_distance = plane_d;
+    face0.vertexCount = 3;
+
+    e0.face = face0;
+    e1.face = face0;
+    e2.face = face0;
+
+    //prepend to faces
+    {
+        face0.linked_list_next = mesh.faces; //:tag_if_list_is_empty_this_is_null_perfect!
+        mesh.faces = face0;
+        mesh.faceCount += 1;
+    }
+    return face0, e0, e1, e2;
+}
+
+Ring_Linked_List :: struct {
+    linked_list_prev: *#this;
+    linked_list_next: *#this;
+}
+
+// place_left_before_right :: (to_place: *$T/interface Ring_Linked_List, /*linked_list_node*/NODE: *T) {
+
+
+//             //bookeeping, hard.
+//             in_the_middle := NODE.linked_list_prev && NODE.linked_list_next;
+//             in_the_next_extreme := !NODE.linked_list_next;
+//             in_the_prev_extreme := !NODE.linked_list_prev;
+
+//             assert((in_the_prev_extreme.(int) + in_the_next_extreme.(int) + in_the_middle.(int)) == 1, "bad free list");
+//             if in_the_middle {
+//                 NODE.linked_list_prev.linked_list_next = NODE.linked_list_next;
+//                 NODE.linked_list_next.linked_list_prev = NODE.linked_list_prev;
+//             } else if in_the_prev_extreme {
+//                 NODE.linked_list_next.linked_list_prev = null;
+//                 mesh.vertex_free_list = NODE.linked_list_next; //<-important here
+//             } else if in_the_next_extreme {
+//                 NODE.linked_list_prev.linked_list_next = null;
+//             } else {
+//                 assert(false);
+//             }
+// }
+
+add_edge_and_twin_and_maybe_face ::  (using mesh: *Half_Edge_Mesh, v0: *Hull_Vertex, v1: *Hull_Vertex, v2: *Hull_Vertex , v3: *Hull_Vertex  ) -> new_edge0: *Hull_Half_Edge, new_edge1: *Hull_Half_Edge,new_edge2: *Hull_Half_Edge, new_edge3: *Hull_Half_Edge {
+    //WHY COMMENTED OUT (because I think there is no deterministic wway to attach 1 vertex to some of the multiple available edges imagine cube corner vertex, 3 edges shared that vertex)check if v0 and v1 are already attached to an edge
+    // assert(v0.edge == null);
+    // assert(v1.edge == null);
+
+    //allocate edges and twins
+    e0 := pop_free_edge(mesh); te0 := pop_free_edge(mesh);
+    e1 := pop_free_edge(mesh); te1 := pop_free_edge(mesh);
+    e2 := pop_free_edge(mesh); te2 := pop_free_edge(mesh);
+    e3 := pop_free_edge(mesh); te3 := pop_free_edge(mesh);
+
+    assert(e0 != null);  assert(te0 != null);
+    assert(e1 != null);  assert(te1 != null);
+    assert(e2 != null);  assert(te2 != null);
+    assert(e3 != null);  assert(te3 != null);
+
+    //assign twins
+    e0.twin = te0; te0.twin = e0;
+    e1.twin = te1; te1.twin = e1;
+    e2.twin = te2; te2.twin = e2;
+    e3.twin = te3; te3.twin = e3;
+
+    //assign prev next ring (extra care for twins)
+    //example, e0.twin.next.twin.tail == e3.tail == e0.next.tail == v3
+    e0.prev = e3;  te0.prev = te1;
+    e0.next = e1;  te0.next = te3;
+    e1.prev = e0;  te1.prev = te2;
+    e1.next = e2;  te1.next = te0;
+    e2.prev = e1;  te2.prev = te3;
+    e2.next = e3;  te2.next = te1;
+    e3.prev = e2;  te3.prev = te0;
+    e3.next = e0;  te3.next = te2;
+
+    //assign vertex (extra care for twins) ordered by .next
+    e0.tail = v0; te0.tail = v1;//te0 = v1            is correct
+    e1.tail = v1; te3.tail = v0;//te3 = te0.next = v0 is correct
+    e2.tail = v2; te2.tail = v3;//te2 = te3.next = v3 is correct
+    e3.tail = v3; te1.tail = v2;//te1 = te2next = v2  is correct
+
+
+    //because edges are rings, I need another next to traverse nontrwin edges, I sure this will not work for now
+    //I try to avoid twins, but this probably is not gonna work
+    e0.linked_list_next = e1;
+    e1.linked_list_next = e2;
+    e2.linked_list_next = e3;
+
+    e3.linked_list_next = mesh.edges;
+    mesh.edges = e0;
+
+    edgeCount += 8;
+
+    return e0, e1, e2, e3;
+}
+
 
 add_edge_and_twin_and_maybe_face ::  (using mesh: *Half_Edge_Mesh, v0: *Hull_Vertex, v1: *Hull_Vertex ) -> new_edge0: *Hull_Half_Edge, new_edge1: *Hull_Half_Edge {
     //WHY COMMENTED OUT (because I think there is no deterministic wway to attach 1 vertex to some of the multiple available edges imagine cube corner vertex, 3 edges shared that vertex)check if v0 and v1 are already attached to an edge
@@ -1142,29 +1293,93 @@ add_edge_and_twin_and_maybe_face ::  (using mesh: *Half_Edge_Mesh, v0: *Hull_Ver
     return e0, e1;
 }
 
-traverse_vertex_ring :: (vertex: *Hull_Vertex, body: Code, flags: For_Flags) #expand {
+all_vertices :: (vertex: *Hull_Vertex, body: Code, flags: For_Flags) #expand {
     `start_vertex := vertex;
     `it := start_vertex;
     `it_index := 0;
      while true {
-        defer if it == start_vertex break;
+        defer if it == null || it == start_vertex break;
+        defer it = it.linked_list_next;
+        defer it_index += 1;
+        #insert body;
+    }
+}
+
+all_vertices :: (mesh: Half_Edge_Mesh, body: Code, flags: For_Flags) #expand {
+    `start_vertex := mesh.vertices;
+    `it := start_vertex;
+    `it_index := 0;
+     while true {
+        defer if it == null || it == start_vertex break;
+        defer it = it.linked_list_next;
+        defer it_index += 1;
+        #insert body;
+    }
+}
+
+all_faces :: (face: *Hull_Face, body: Code, flags: For_Flags) #expand {
+    `start_face := face;
+    `it := start_face;
+    `it_index := 0;
+     while true {
+        defer if it == null || it == start_face break;
+        defer it = it.linked_list_next;
+        defer it_index += 1;
+        #insert body;
+    }
+}
+
+all_faces :: (mesh: Half_Edge_Mesh, body: Code, flags: For_Flags) #expand {
+    `start_face := mesh.faces;
+    `it := start_face;
+    `it_index := 0;
+     while true {
+        defer if it == null || it == start_face break;
+        defer it = it.linked_list_next;
+        defer it_index += 1;
+        #insert body;
+    }
+}
+
+all_edges :: (mesh: Half_Edge_Mesh, body: Code, flags: For_Flags) #expand {
+    `start_edge := mesh.faces.edge;
+    `it := start_edge;
+    `it_index := 0;
+     while true {
+        defer if it == null ||it == start_edge break;
+        defer it = it.linked_list_next;
+        defer if it.linked_list_next == null {doLabel(tprint("NULL, %   ->idx %           ->start%              ->end", it_index, start_edge, it), WorldToScreen(.{2,2 + it_index.(float)*0.2,2}));};
+        defer it_index += 1;
+        #insert body;
+    }
+}
+
+
+all_edges :: (face: Hull_Face, body: Code, flags: For_Flags) #expand {
+    `start_edge := face.edge;
+    `it := start_edge;
+    `it_index := 0;
+     while true {
+        defer if it == null ||it == start_edge break;
+        defer it = it.linked_list_next;
+        defer it_index += 1;
+        #insert body;
+    }
+}
+
+
+traverse_edge_ring :: (face: Hull_Face, body: Code, flags: For_Flags) #expand {
+    `start_edge := face.edge;
+    `it := start_edge;
+    `it_index := 0;
+     while true {
+        defer if it == start_edge break;
         defer it = it.next;
         defer it_index += 1;
         #insert body;
     }
 }
 
-traverse_face_ring :: (face: *Hull_Face, body: Code, flags: For_Flags) #expand {
-    `start_face := face;
-    `it := start_face;
-    `it_index := 0;
-     while true {
-        defer if it == start_face break;
-        defer it = it.next;
-        defer it_index += 1;
-        #insert body;
-    }
-}
 
 traverse_edge_ring :: (edge: *Hull_Half_Edge, body: Code, flags: For_Flags) #expand {
     `start_edge := edge;
@@ -1178,41 +1393,8 @@ traverse_edge_ring :: (edge: *Hull_Half_Edge, body: Code, flags: For_Flags) #exp
     }
 }
 
-each_vertex :: (mesh: Half_Edge_Mesh, body: Code, flags: For_Flags) #expand {
-    `start_vertex := mesh.vertex;
-    `it := start_vertex;
-    `it_index := 0;
-     while true {
-        defer if it == start_vertex break;
-        defer it = it.next;
-        defer it_index += 1;
-        #insert body;
-    }
-}
 
-each_face :: (mesh: Half_Edge_Mesh, body: Code, flags: For_Flags) #expand {
-    `start_face := mesh.faces;
-    `it := start_face;
-    `it_index := 0;
-     while true {
-        defer if it == start_face break;
-        defer it = it.next;
-        defer it_index += 1;
-        #insert body;
-    }
-}
 
-each_edge :: (face: Hull_Face, body: Code, flags: For_Flags) #expand {
-    `start_edge := face.edge;
-    `it := start_edge;
-    `it_index := 0;
-     while true {
-        defer if it == start_edge break;
-        defer it = it.next;
-        defer it_index += 1;
-        #insert body;
-    }
-}
 
 AddVertexToHull :: (mesh:  *Half_Edge_Mesh, conflict_vertex: *Hull_Vertex){
 	// Remove conflict_vertex from conflict face
@@ -1222,7 +1404,7 @@ AddVertexToHull :: (mesh:  *Half_Edge_Mesh, conflict_vertex: *Hull_Vertex){
     assert(removed);
 
     //  Add to hull
-	new_vert := add_vertex(mesh);
+	new_vert := add_vertex(mesh, vertex=conflict_vertex.vertex);
 	new_vert.* = conflict_vertex;
 
     // Find the horizon edges
@@ -1230,7 +1412,7 @@ AddVertexToHull :: (mesh:  *Half_Edge_Mesh, conflict_vertex: *Hull_Vertex){
     // BuildHorizon(conflict_vertex, conflict_face, *horizon);
 
     NewFaces: [..]*Hull_Face;
-    BuildNewFaces(mesh, conflict_vertex, *NewFaces, *horizon);
+    // BuildNewFaces(mesh, conflict_vertex, *NewFaces, *horizon);
     // MergeFaces(hull, NewFaces);
 
     // ResolveOrphans(hull, NewFaces);
@@ -1242,15 +1424,16 @@ NextConflictVertex :: ( mesh:  *Half_Edge_Mesh) -> *Hull_Vertex
     conflict_vertex: *Hull_Vertex = null;
     max_so_far: float = -FLOAT32_INFINITY;
 
-    start_face := mesh.faces;
-    current_face := start_face;
-    while true { defer if current_face == start_face break;
+    // start_face := mesh.faces;
+    // current_face := start_face;
+    for :all_faces current_face: mesh {
+    // while true { defer if current_face == start_face break;
         if current_face.conflict_list.count != 0 {
 
             vertex := current_face.conflict_list[0];
             while true {
-                defer if vertex == vertex.next then break;
-                defer vertex = vertex.next;
+                defer if vertex == vertex.linked_list_next then break;
+                defer vertex = vertex.linked_list_next;
                 assert(vertex.conflict_face == current_face, "seems like the conflic list is wrong");
                 this_dist := distance_point_to_plane_signed(vertex.vertex, current_face.face_plane_normal, current_face.face_plane_distance);
                 if this_dist > max_so_far {
@@ -1260,7 +1443,7 @@ NextConflictVertex :: ( mesh:  *Half_Edge_Mesh) -> *Hull_Vertex
             }
         }
         //while loop face related:
-        current_face = current_face.next;
+    //     current_face = current_face.linked_list_next;
     }
     return conflict_vertex;
 }
@@ -1271,8 +1454,8 @@ pop_from_free_list :: (free_list: **$T/.[Hull_Vertex,Hull_Half_Edge, Hull_Face ]
     if free_list.* == null
         return null; //early return;
     popped := free_list.*;
-    free_list.* = popped.next;
-    if free_list.* free_list.*.prev = null;//little sanitization
+    free_list.* = popped.linked_list_next;
+    if free_list.* free_list.*.linked_list_prev = null;//little sanitization
     if zero_init popped.* = .{};
     return popped;
 }
@@ -1292,37 +1475,27 @@ pop_free_face :: (mesh: *Half_Edge_Mesh, zero_init := true) -> *Hull_Face {
 
 //I dont like having this procedure, so I put 2 underscore to it until I figure out a better way to do this
 __pop_free_vertex_at :: (mesh: *Half_Edge_Mesh, idx: int) -> *Hull_Vertex {
-    idx_0 := cast(int)mesh.vertexBuffer.data;
-    idx_to_remove := idx_0 + idx;
+    ptr_to_remove := *mesh.vertexBuffer[idx];
     popped: *Hull_Vertex;
-    for :traverse_vertex_ring mesh.vertex_free_list
-    {
-        should_remove := it.(int) == idx_to_remove;
-
-        if idx_to_remove
-        {
+    previous: *Hull_Vertex;
+    for :all_vertices mesh.vertex_free_list {
+        should_remove := it == ptr_to_remove;
+        if should_remove  {
             popped = it;
-            //bookeeping, hard.
-            in_the_middle := it.prev && it.next;
-            in_the_next_extreme := !it.next;
-            in_the_prev_extreme := !it.prev;
-
-            assert((in_the_prev_extreme.(int) + in_the_next_extreme.(int) + in_the_middle.(int)) == 1, "bad free list");
-            if in_the_middle {
-                it.prev.next = it.next;
-                it.next.prev = it.prev;
-            } else if in_the_prev_extreme {
-                it.next.prev = null;
-                mesh.vertex_free_list = it.next; //<-important here
-            } else if in_the_next_extreme {
-                it.prev.next = null;
+            if previous {
+                previous.linked_list_next = popped.linked_list_next; //if in middle, squash list
             } else {
-                assert(false);
+                mesh.vertex_free_list = popped.linked_list_next; //if remove first then shove popped next.
             }
+            popped.linked_list_next = null; //sanitization
 
-            break;
+            assert(popped!=null);
+            break; //early break;
         }
+        previous = it;
     }
+
+    assert(popped!=null);
     return popped;
 }
 
@@ -1374,7 +1547,7 @@ __pop_free_face_at :: (mesh: *Half_Edge_Mesh, idx: int) -> *Hull_Face {
     idx_0 := cast(int)mesh.faceBuffer.data;
     idx_to_remove := idx_0 + idx;
     popped: *Hull_Face;
-    for :traverse_face_ring mesh.face_free_list
+    for :all_faces mesh.face_free_list
     {
         should_remove := it.(int) == idx_to_remove;
 
@@ -1382,19 +1555,19 @@ __pop_free_face_at :: (mesh: *Half_Edge_Mesh, idx: int) -> *Hull_Face {
         {
             popped = it;
             //bookeeping, hard.
-            in_the_middle := it.prev && it.next;
-            in_the_next_extreme := !it.next;
-            in_the_prev_extreme := !it.prev;
+            in_the_middle := it.linked_list_prev && it.linked_list_next;
+            in_the_next_extreme := !it.linked_list_next;
+            in_the_prev_extreme := !it.linked_list_prev;
 
             assert((in_the_prev_extreme.(int) + in_the_next_extreme.(int) + in_the_middle.(int)) == 1, "bad free list");
             if in_the_middle {
-                it.prev.next = it.next;
-                it.next.prev = it.prev;
+                it.linked_list_prev.linked_list_next = it.linked_list_next;
+                it.linked_list_next.linked_list_prev = it.linked_list_prev;
             } else if in_the_prev_extreme {
-                it.next.prev = null;
-                mesh.face_free_list = it.next; //<-important here
+                it.linked_list_next.linked_list_prev = null;
+                mesh.face_free_list = it.linked_list_next; //<-important here
             } else if in_the_next_extreme {
-                it.prev.next = null;
+                it.linked_list_prev.linked_list_next = null;
             } else {
                 assert(false);
             }
@@ -1424,15 +1597,15 @@ append_feature :: (using mesh: *Half_Edge_Mesh, new_feat: *$T, to: *T) {
         if (to)
 		{
 		    feat_to_add = to;
-			backup := feat_to_add.prev;
-			backup.next = new_feat;
-			new_feat.prev = backup;
+			backup := feat_to_add.linked_list_prev;
+			backup.linked_list_next = new_feat;
+			new_feat.linked_list_prev = backup;
 		}
 		else
 			feat_to_add = new_feat;
 
-		new_feat.next = feat_to_add;
-		feat_to_add.prev = new_feat;
+		new_feat.linked_list_next = feat_to_add;
+		feat_to_add.linked_list_prev = new_feat;
 
 }
 
@@ -1455,15 +1628,24 @@ remove_feature :: (using mesh: *Half_Edge_Mesh, to_remove: *$T, to_iterate_helpe
 }
 
 
-add_vertex :: (using mesh: *Half_Edge_Mesh ) -> new_vertex: *Hull_Vertex {
-    result := pop_free_vertex(mesh);
-    if !result {
-        result = *vertexBuffer[vertexCount];
-        assert(vertexCount <= num_allocated_vertex);
-    }
-
+add_vertex_from_slot :: (using mesh: *Half_Edge_Mesh, vertex: Vector3, free_list_slot_idx: int) -> new_vertex: *Hull_Vertex {
+    //this procedure is for when we use free_list also as our cloud of points source of information.
+    v0 := __pop_free_vertex_at(mesh, free_list_slot_idx);
+    v0.linked_list_prev = null;
+    v0.linked_list_next = mesh.vertices;
+    assert(v0.vertex == vertex, "idx % vertex not equal % == %",free_list_slot_idx, v0.vertex, vertex);
+    mesh.vertices = v0;
     vertexCount += 1;
-    return result;
+    return v0;
+}
+
+add_vertex :: (using mesh: *Half_Edge_Mesh, vertex: Vector3) -> new_vertex: *Hull_Vertex {
+    v0 := pop_free_vertex(mesh);
+    v0.linked_list_next = mesh.vertices;
+    v0.vertex = vertex;
+    mesh.vertices = v0;
+    vertexCount += 1;
+    return v0;
 }
 
 add_edge :: (using mesh: *Half_Edge_Mesh) -> new_edge: *Hull_Half_Edge {
@@ -1487,71 +1669,71 @@ add_face :: (using mesh: *Half_Edge_Mesh ) -> new_face: *Hull_Face {
 }
 
 //this is from NotARealCaveman/SAT
-BuildNewFaces :: (mesh: *Half_Edge_Mesh, vertex: *Hull_Vertex, newFaces: *[..]*Hull_Face, horizon: *[..]*Hull_Half_Edge)
-{
-    newEdges: *[..]*Hull_Half_Edge;
+// BuildNewFaces :: (mesh: *Half_Edge_Mesh, vertex: *Hull_Vertex, newFaces: *[..]*Hull_Face, horizon: *[..]*Hull_Half_Edge)
+// {
+//     newEdges: *[..]*Hull_Half_Edge;
 
-	//pairs newly created edges with their twins
-	FindTwin :: (vertex: *Hull_Vertex, edge: *Hull_Half_Edge, newEdges: [..]*Hull_Half_Edge) -> *Hull_Half_Edge
-	{
-	twin:  *Hull_Half_Edge;
-	   for potentialTwin: newEdges {
-            if edge.tail == vertex {
-                if potentialTwin.tail == edge.next.tail {
-                    twin = potentialTwin;
-                    break;
-                }
-                if potentialTwin.tail == vertex && potentialTwin.next.tail == edge.tail
-                    twin = potentialTwin;
-                    break;
-            }
-	   }
+// 	//pairs newly created edges with their twins
+// 	FindTwin :: (vertex: *Hull_Vertex, edge: *Hull_Half_Edge, newEdges: [..]*Hull_Half_Edge) -> *Hull_Half_Edge
+// 	{
+// 	twin:  *Hull_Half_Edge;
+// 	   for potentialTwin: newEdges {
+//             if edge.tail == vertex {
+//                 if potentialTwin.tail == edge.toponext.tail {
+//                     twin = potentialTwin;
+//                     break;
+//                 }
+//                 if potentialTwin.tail == vertex && potentialTwin.next.tail == edge.tail
+//                     twin = potentialTwin;
+//                     break;
+//             }
+// 	   }
 
-		if twin == newEdges[newEdges.count-1] return null;
+// 		if twin == newEdges[newEdges.count-1] return null;
 
-		return twin;
-	};
+// 		return twin;
+// 	};
 
 
-	for edge : horizon.*
-	{
-		e0 :=  add_edge(mesh);
-		e1 :=  edge;
-		e2 :=  add_edge(mesh);
+// 	for edge : horizon.*
+// 	{
+// 		e0 :=  add_edge(mesh);
+// 		e1 :=  edge;
+// 		e2 :=  add_edge(mesh);
 
-		face := add_face(mesh);
+// 		face := add_face(mesh);
 
-		//set inital edge/vertex count
-		face.vertexCount = 3;
-		//set pointers
-		face.edge = e0;
-		e0.face = face;
-		e1.face = face;
-		e2.face = face;
-		//eye point
-		e0.prev = e2;
-		e0.next = e1;
-		e0.tail = vertex;
-		//store e2 tail before updating horizon edge
-		e2.tail = edge.next.tail;
-		//horizon edge, retains old tail and twin
-		e1.prev = e0;
-		e1.next = e2;
-		//adjoining edge
-		e2.prev = e1;
-		e2.next = e0;
-		//add new edges and faces
-		array_add(newEdges, e0);
-		array_add(newEdges, e2);
-		array_add(newFaces, face);
-		append_feature(mesh, face, null);
-		for newEdge: newEdges.* {
-			if newEdge.twin == FindTwin(vertex, newEdge, newEdges.*) {
-				newEdge.twin.twin = newEdge;
-			}
-		}
-	}
-}
+// 		//set inital edge/vertex count
+// 		face.vertexCount = 3;
+// 		//set pointers
+// 		face.edge = e0;
+// 		e0.face = face;
+// 		e1.face = face;
+// 		e2.face = face;
+// 		//eye point
+// 		e0.prev = e2;
+// 		e0.next = e1;
+// 		e0.tail = vertex;
+// 		//store e2 tail before updating horizon edge
+// 		e2.tail = edge.next.tail;
+// 		//horizon edge, retains old tail and twin
+// 		e1.prev = e0;
+// 		e1.next = e2;
+// 		//adjoining edge
+// 		e2.prev = e1;
+// 		e2.next = e0;
+// 		//add new edges and faces
+// 		array_add(newEdges, e0);
+// 		array_add(newEdges, e2);
+// 		array_add(newFaces, face);
+// 		append_feature(mesh, face, null);
+// 		for newEdge: newEdges.* {
+// 			if newEdge.twin == FindTwin(vertex, newEdge, newEdges.*) {
+// 				newEdge.twin.twin = newEdge;
+// 			}
+// 		}
+// 	}
+// }
 
 //another possible name collide_convex_vs_convex
 collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
@@ -1579,25 +1761,45 @@ collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
     hull0 = hull_A;
     hull1 = hull_B;
 
-
+    draw_hull_properties(hull0);
+    draw_hull_properties(hull1);
     collision := SAT_dirk_gregorius(hull0, hull1, *query);
+
+    faceDistanceA :=  query.faceQuery_AB.distance ;
+	faceDistanceB :=  query.faceQuery_BA.distance ;
+	edgeDist := query.edgeQuery.distance;
+
+
+    if query.edgeQuery.edgeA {
+    draw_current_edge(query.edgeQuery.edgeA, hull0,color=.{1,1,1,1});
+    draw_current_edge(query.edgeQuery.edgeB, hull1,color=.{1,1,1,1});
+    }
+    doLabel(tprint("e %",edgeDist), WorldToScreen(.{.1,2.0,2.0}));
+    doLabel(tprint("A %",faceDistanceA), WorldToScreen(.{.1,1.5,2.0}));
+    doLabel(tprint("B %",faceDistanceB), WorldToScreen(.{.1,1.8,2.0}));
     if collision {
-
-		faceDistance0 :=  query.faceQuery_AB.distance ;
-		faceDistance1 :=  query.faceQuery_BA.distance ;
-
 		//grep this from https://www.gamedev.net/forums/topic/667499-3d-sat-problem/?page=2
 		//slide 90+: The solution is simple and we apply a bias (or weighting) to prefer face contacts
         //  over edge contacts and one face axis over another
+        // kLinearSlop ::  0.005 ;
+        // kRelEdgeTolerance ::  0.90 ;
+        // kRelFaceTolerance ::  0.98 ;
+        // kAbsTolerance ::  0.5 * kLinearSlop ;
 
 		kLinearSlop ::  0.005 ;
 		kRelEdgeTolerance ::  0.90 ;
 		kRelFaceTolerance ::  0.98 ;
 		kAbsTolerance ::  0.5 * kLinearSlop ;
 
-        is_near_edge := query.edgeQuery.distance > kRelEdgeTolerance * max(faceDistance0, faceDistance1) + kAbsTolerance;
-        is_near_face0 := faceDistance1 > (kRelFaceTolerance* faceDistance0 + kAbsTolerance);
-        is_near_face1 := !is_near_face0;//not used
+        is_near_edge := query.edgeQuery.distance > kRelEdgeTolerance * max(faceDistanceA, faceDistanceB) + kAbsTolerance;
+        is_near_faceA := faceDistanceB > (kRelFaceTolerance* faceDistanceA + kAbsTolerance);
+        // is_near_edge = collider_switch_face;
+        is_near_faceB := !is_near_faceA;
+
+        // if query.edgeQuery.distance != -FLOAT32_INFINITY
+        //   if faceDistanceB > edgeDist || faceDistanceB > edgeDist {
+        //    is_near_edge=true;
+        //   };
 
 		if is_near_edge
 		{
@@ -1605,8 +1807,8 @@ collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
 			contact : EdgeContact = CreateEdgeContact(query.edgeQuery,hull0,hull1);
 			{
                 world_normal_towards_A = -contact.separationAxis;
-                penetration = contact.query.distance * length_squared(world_normal_towards_A);
-
+                assert(is_normalized(world_normal_towards_A));
+                penetration = contact.query.distance;
                 if penetration < 0 {
                     num_contacts = 1;
                     world_midpoints[0] = contact.midpoint;
@@ -1615,20 +1817,21 @@ collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
                 }
 			}
 
-            doLabel(tprint("is_near_edge % ",penetration), WorldToScreen(.{0.5,1.2,0}));
+            doLabel(tprint("is_near_edge % ",penetration), WorldToScreen(.{0.5,1.2,3.0}));
 		}
-		else if is_near_face0
+		else if is_near_faceA
 		{
 		    contact :FaceContact= CreateFaceContact(query.faceQuery_BA, hull1,hull0); //reference,incindet
             {
                 world_normal_towards_A           = transform_normal(contact.query.face.face_plane_normal,hull1.inv_worldSpace);
-                penetration                      = contact.query.distance * length_squared(world_normal_towards_A);
+                assert(is_normalized(world_normal_towards_A));
+                penetration                      = contact.query.distance;
                 assert(contact.points.count <= 4, "we got more than 4 contact points! contact.points.count == %",contact.points.count);
                 if penetration < 0
                 {
+                    num_contacts = contact.points.count;
                     for point_in_B: contact.points
                     {
-                        num_contacts += 1;
                         world_midpoints[it_index]           = point_in_B + (penetration/2.0) * world_normal_towards_A;
                         world_contact_points_on_A[it_index] = point_in_B + penetration * world_normal_towards_A;
                         world_contact_points_on_B[it_index] = point_in_B;
@@ -1636,60 +1839,34 @@ collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
 
                 }
             }
-            doLabel(tprint("is_near_face0 %",penetration), WorldToScreen(.{0.5,1.2,0}));
+            doLabel(tprint("is_near_faceA %",penetration), WorldToScreen(.{.1,1.2,2.0}));
 		}
 		else
 		{
 		    contact := CreateFaceContact(query.faceQuery_AB, hull0, hull1);
             {
                 world_normal_towards_A = -transform_normal(contact.query.face.face_plane_normal,hull0.inv_worldSpace);
-                penetration = contact.query.distance * length_squared(world_normal_towards_A);
+                assert(is_normalized(world_normal_towards_A));
+                penetration = contact.query.distance;
 
                 assert(contact.points.count <= 4, "we got more than 4 contact points! AB contact.points.count == %",contact.points.count);
                 if penetration < 0
                 {
+                    num_contacts = contact.points.count;
                     for point_in_A: contact.points
                     {
-                        num_contacts += 1;
                         world_midpoints[it_index]           = point_in_A - (penetration/2.0) * world_normal_towards_A;
                         world_contact_points_on_A[it_index] = point_in_A;
                         world_contact_points_on_B[it_index] = point_in_A - penetration*world_normal_towards_A;
                     }
                 }
-            doLabel(tprint("is_near_face1 %",penetration), WorldToScreen(.{0.5,1.2,0}));
+            doLabel(tprint("is_near_faceB %",penetration), WorldToScreen(.{.1,1.2,2.0}));
             }
 
 
 		} //end edge or faceBA or faceAB test
 
-	//
-	//FALLBACK PSEUDOGJK
-	//
-    should_try_support_point :=  (is_near_face0 || is_near_face1) &&  num_contacts == 0;
-    if should_try_support_point {
-
-        if is_near_face0 {
-            point_in_B := query.faceQuery_BA.world_furthest_point; //:tagHerePseudoGJK
-            world_normal_towards_A := query.faceQuery_BA.world_normal ; //:tagHerePseudoGJK
-            penetration := query.faceQuery_BA.distance ; //:tagHerePseudoGJK
-            world_midpoints[0]           = point_in_B + (penetration/2.0) * world_normal_towards_A;
-            world_contact_points_on_A[0] = point_in_B + penetration * world_normal_towards_A;
-            world_contact_points_on_B[0] = point_in_B;
-
-        } else {
-            point_in_A := query.faceQuery_AB.world_furthest_point; //:tagHerePseudoGJK
-            world_normal_towards_A := -query.faceQuery_AB.world_normal ; //:tagHerePseudoGJK
-            penetration := query.faceQuery_AB.distance ; //:tagHerePseudoGJK
-            world_midpoints[0]           = point_in_A - (penetration/2.0) * world_normal_towards_A;
-            world_contact_points_on_A[0] = point_in_A;
-            world_contact_points_on_B[0] = point_in_A - penetration*world_normal_towards_A;
-        }
-        num_contacts = 1;
-
-        doLabel(tprint("N % FALLBACK  % ",num_contacts, is_near_face0 ), WorldToScreen(.{0.5,.2,2}));
-
-    }
-    } //end if collision
+	} //end if collision
 
     doLabel(tprint("N % edgedistance  % ",num_contacts, query.edgeQuery.distance ), WorldToScreen(.{0.5,2.2,2}));
     return num_contacts, penetration, world_normal_towards_A, world_midpoints, world_contact_points_on_A, world_contact_points_on_B ;
@@ -1799,47 +1976,76 @@ find_furthest_point_along_dir :: (vertices: []Vector3, local_direction: Vector3)
 }
 
 
-find_furthest_point_along_local_dir :: (hull: Convex_Hull, local_direction: Vector3) -> local_furhtest_point: Vector3, idx: int
+
+find_furthest_point_along_dir :: (hull: Convex_Hull, world_direction: Vector3) -> vertex_ptr: *Hull_Vertex, world_furhtest_point: Vector3, idx: int
+{
+	world_furhtest_point: Vector3;
+	max := -FLOAT32_INFINITY;
+	idx :int= -1;
+	vertex_ptr: *Hull_Vertex;
+
+    for :all_vertices hull.mesh.vertices {
+		localPoint := it.vertex;
+		current_dist := dot(hull.worldSpace*localPoint, world_direction);
+		if current_dist > max
+		{
+			idx = it_index;
+			world_furhtest_point = hull.worldSpace*localPoint;
+			max = current_dist;
+			vertex_ptr = it;
+		}
+    }
+
+	return  vertex_ptr, world_furhtest_point, idx;
+}
+
+
+find_furthest_point_along_local_dir :: (hull: Convex_Hull, local_direction: Vector3) -> vertex_ptr: *Hull_Vertex, local_furhtest_point: Vector3, idx: int
 {
 	local_furhtest_point: Vector3;
 	max := -FLOAT32_INFINITY;
 	idx := -1;
+	vertex_ptr: *Hull_Vertex;
 
-	start := hull.mesh.vertices;
-	vertex := start;
-	currentIndex: int;
-	while true
-	{
-		localPoint := vertex.vertex;
+    for :all_vertices hull.mesh.vertices {
+		localPoint := it.vertex;
 		current_dist := dot(localPoint, local_direction);
 		if current_dist > max
 		{
-			idx = currentIndex;
+			idx = it_index;
 			local_furhtest_point = localPoint;
 			max = current_dist;
+			vertex_ptr = it;
 		}
-		vertex = vertex.next;
-		currentIndex += 1;
-		if vertex == hull.mesh.vertices then break;
 	}
 
-	return  local_furhtest_point, idx;
+	return  vertex_ptr, local_furhtest_point, idx;
 }
+slide43 :: #string CPP
+ Distance(edgeA, edgeB, poly)-> float {
+dirA := edgeA.end -edgeA.start;
+dirB := edgeB.end -edgeB.start;
+pointA := edgeA.Head();
+pointB := edgeB.Head()
+;
 
-distance_between_arcs :: (edgeA_origin: Vector3, arcA: Vector3, edgeB_origin: Vector3, arcB: Vector3, world_hull_centroid: Vector3) -> float
+}
+CPP;
+distance_between_arcs :: (pointA: Vector3, arcA: Vector3, pointB: Vector3, arcB: Vector3, world_hull_centroid: Vector3) -> float
 {
-	gauss_face_area := cross_product(arcA, arcB);
+    //slide 43,
+	crossAB := cross_product(arcA, arcB);
 
-	area := length(gauss_face_area);
+	area := length(crossAB);
 	are_edges_parallel := area <= EPSILON3 * sqrt(length_squared(arcA) * length_squared(arcB) ) ;
 	if are_edges_parallel return -FLOAT32_INFINITY;
 
-	gauss_face_n := gauss_face_area / area;
+	normal := crossAB / area;
 
-	n_points_from_B_to_A := dot(edgeA_origin - world_hull_centroid, gauss_face_n) < 0.0;
-	if n_points_from_B_to_A then gauss_face_n = -gauss_face_n;
+	points_towards_A := dot(normal, pointA - world_hull_centroid) < 0.0;
+	if points_towards_A then normal = -normal;
 
-	return dot(edgeB_origin - edgeA_origin, gauss_face_n); //no need to compute support points: O(1)
+	return dot(normal, pointB - pointA); //no need to compute support points: O(1)
 }
 
 

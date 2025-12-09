@@ -451,35 +451,46 @@ push_debug_polygon :: (vertices: [] Vector3, color := Vector4.{ 1, 1, 1, 1 }) {
     }
 }
 
+colors :: Vector4.[
+    .{1,0,0,1},
+    .{0,1,0,1},
+    .{0,1,1,1},
+    .{.75,.5,0,1},
+    .{0,.5,.5,1},
+    .{.5,0,.5,1},
+    .{.5,.75,.5,1},
+    .{1,1,1,1},
+    .{0.1,0.73,0.8,1},
+];
 
 push_debug_hull :: (position: Vector3, orientation: Quaternion, hull_shape: Convex_Hull) {
     vert_count: u32;
     vertices_tmp: [4]Vector3;
-    for :each_face current_face: hull_shape.mesh {
-        for :each_edge current_edge: current_face {
+
+    color_idx:=0;
+    for :all_faces current_face: hull_shape.mesh {
+        color_idx += 1;
+        for :traverse_edge_ring current_edge: current_face {
 	        localPoint := current_edge.tail.vertex;
     		vertices_tmp[vert_count] = localPoint;
     		vert_count += 1;
         }
 
+        n := transform_normal(current_face.face_plane_normal, hull_shape.inv_worldSpace);
+        color := colors[color_idx];
+        normalize(*color);
+
         if vert_count == {
             case 4;
-    		    v0 := hull_shape.worldSpace*vertices_tmp[0];// old: l2w(position, orientation, vertices_tmp[0]);
-                v1 := hull_shape.worldSpace*vertices_tmp[1];// old: l2w(position, orientation, vertices_tmp[1]);
-                v2 := hull_shape.worldSpace*vertices_tmp[2];// old: l2w(position, orientation, vertices_tmp[2]);
-                v3 := hull_shape.worldSpace*vertices_tmp[3];// old: l2w(position, orientation, vertices_tmp[3]);
-                n := current_face.face_plane_normal;
-                color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), 1 };
-                normalize(*color);
+    		    v0 := hull_shape.worldSpace*vertices_tmp[0];
+                v1 := hull_shape.worldSpace*vertices_tmp[1];
+                v2 := hull_shape.worldSpace*vertices_tmp[2];
+                v3 := hull_shape.worldSpace*vertices_tmp[3];
                 push_debug_polygon(.[ v0, v1, v2, v3 ], color);
             case 3;
-    		    v0 := hull_shape.worldSpace*vertices_tmp[0];// old: l2w(position, orientation, vertices_tmp[0]);
-                v1 := hull_shape.worldSpace*vertices_tmp[1];// old: l2w(position, orientation, vertices_tmp[1]);
-                v2 := hull_shape.worldSpace*vertices_tmp[2];// old: l2w(position, orientation, vertices_tmp[2]);
-                n := current_face.face_plane_normal;
-                color := Vector4.{ abs(n.x), abs(n.y), abs(n.z), .11 };
-                normalize(*color);
-                push_arrow(v0,n,color=color); // push_arrow(v1,n,color=color); // push_arrow(v2,n,color=color);
+    		    v0 := hull_shape.worldSpace*vertices_tmp[0];
+                v1 := hull_shape.worldSpace*vertices_tmp[1];
+                v2 := hull_shape.worldSpace*vertices_tmp[2];
                 push_debug_triangle( v0, v1, v2, color);
 
             case;
@@ -488,7 +499,6 @@ push_debug_hull :: (position: Vector3, orientation: Quaternion, hull_shape: Conv
 	   vert_count = 0; //to use vertices_tmp array as a ring buffer
 	}
 }
-
 
 // Push a wireframe box
 push_wireframe_box :: (center: Vector3, size: Vector3 = .{0.9,0.9,0.9}, color: Vector4 = .{.5,.7,.5,1}) {
