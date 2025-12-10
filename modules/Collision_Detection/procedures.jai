@@ -1,4 +1,5 @@
 QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
+//NOTE: I think we dont need to query for faces because this procedure already give us the most probable faces.
     result: FaceQuery;
     result.face = null;
     result.distance = -FLOAT32_INFINITY;
@@ -27,7 +28,8 @@ QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
             if basically_separating {
                 result.distance  = FLOAT32_INFINITY; //this will exit SAT because we found a separating axis
                 // push_grid(closest_point_to_plane(.{5,5,5}, world_planeA.normal, world_planeA.distance), world_planeA.normal, color=.{1.1,1.1,1.1,1});
-                push_grid(furthest_vertex_world, world_planeA.normal,area_length=2, color=.{1.1,1.1,1.1,1});
+                // push_grid(furthest_vertex_world, world_planeA.normal,area_length=2, color=.{1.1,1.1,1.1,1});
+                // doLabel("SEPARATING AXIS FOUND!", WorldToScreen(furthest_vertex_world));
                 return result;
             }
         }
@@ -112,13 +114,15 @@ hull_center :: inline (hull: Convex_Hull) -> Vector3 { return Vector3.{hull.worl
 QueryEdgeDirections_deSenk :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQuery
 {
     #run TODO("Maybe change the system, so its always faceA+edge points OR faceB +edge points");
-    DRAW :: false;
+    DRAW :: true;
 
     hullA_center := Vector3.{hullA.worldSpace._14, hullA.worldSpace._24, hullA.worldSpace._34};
     #if DRAW {
         hullB_center := Vector3.{hullB.worldSpace._14, hullB.worldSpace._24, hullB.worldSpace._34};
     }
-
+    dist2_between_points: float = -FLOAT32_INFINITY;
+    best_point_1:Vector3;
+    best_point_2:Vector3;
     result := EdgeQuery.{ distance = -FLOAT32_INFINITY }; //NOTE: I dont know what default distance to use
     // result := EdgeQuery.{ distance = -0 }; //NOTE: I use -0 that is different than 0.
 	for :all_edges edgeA, indexA : hullA.mesh
@@ -138,7 +142,11 @@ QueryEdgeDirections_deSenk :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQu
                 result.edgeA = edgeA;
                 result.edgeB = edgeB;
                 result.distance = this_separation;
+
+
                 result.world_furthest_point = intersection_point;
+                result.num_inersecting_points +=1;
+
 
                 #if DRAW {
                   // result.world_normal = world_plane_normal;
@@ -246,8 +254,16 @@ QueryEdgeDirections_gauss :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQue
     //      Overlap test:
     //      Hemispehre test: we build plane with any vertex of arc one, same for the other arc
     //      remaining vertices has to be on the same SIDE of that plane(@Investigate what side means)
+
 	result := EdgeQuery.{ distance = -FLOAT32_INFINITY };
     hullA_center := Vector3.{hullA.worldSpace._14, hullA.worldSpace._24, hullA.worldSpace._34};
+
+    bcenter: Vector3;
+    acenter: Vector3;
+    b1: Vector3;
+    b2: Vector3;
+    a1: Vector3;
+    a2: Vector3;
 	for :all_edges edgeA: hullA.mesh
 	{
         //we precompute gauss map out of the INNER for loop :tagIshouldREallyDoThis99percentsure
@@ -272,16 +288,35 @@ QueryEdgeDirections_gauss :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQue
 			//minute -15:19 Final Overlap Test: Formulas minute 19, we can avoid cross products. and we dont need to normalize.
           	is_minkowsky_face := arcs_intersect_on_sphere(faceA_vertex, twin_faceA_vertex, -faceB_vertex, -twin_faceB_vertex);
 
-            if is_minkowsky_face {
+            if is_minkowsky_face
+            {
 			    this_separation :=  distance_between_arcs(edgeA_origin, arcA, edgeB_origin, arcB, hullA_center);
 			    bigger := this_separation >= result.distance;
-                if bigger {
-		           result = .{ edgeA, edgeB, this_separation,.{},.{}  };
-			     }
-
+                if bigger
+                {
+		           result.edgeA = edgeB;
+		           result.edgeB = edgeB;
+		           result.distance = this_separation;
+                    acenter  =edgeA_origin;
+                    bcenter  =edgeB_origin;
+                    a1       =faceA_vertex;
+                    a2       =twin_faceA_vertex;
+                    b1       =faceB_vertex;
+                    b2       =twin_faceB_vertex;
+                   // push_grid(edgeA_origin, faceA_vertex,area_length=1, color=.{1,0,0,1});
+                   // push_grid(edgeA_origin, twin_faceA_vertex,area_length=1, color=.{0,1,0,1});
+                   // push_grid(edgeB_origin, faceB_vertex,area_length=1, color=.{0,1,0,1});
+                   // push_grid(edgeB_origin, twin_faceB_vertex,area_length=1, color=.{0,1,0,1});
+			    }
 			}
 		}
 	}
+
+                   // push_grid(acenter, a1,density=2.1,area_length=1, color=.{1,0,0,1});
+                   // push_grid(acenter, a2,density=2.1,area_length=1, color=.{1,0.6,0.6,1});
+                   // push_grid(bcenter, b1,density=2.1,area_length=1, color=.{0,1,0,1});
+                   // push_grid(bcenter, b2,density=2.1,area_length=1, color=.{0.6,1,0.6,1});
+
 	return result;
 }
 
@@ -1325,6 +1360,7 @@ all_faces :: (face: *Hull_Face, body: Code, flags: For_Flags) #expand {
         defer if it == null || it == start_face break;
         defer it = it.linked_list_next;
         defer it_index += 1;
+
         #insert body;
     }
 }
@@ -1353,20 +1389,6 @@ all_edges :: (mesh: Half_Edge_Mesh, body: Code, flags: For_Flags) #expand {
         #insert body;
     }
 }
-
-
-all_edges :: (face: Hull_Face, body: Code, flags: For_Flags) #expand {
-    `start_edge := face.edge;
-    `it := start_edge;
-    `it_index := 0;
-     while true {
-        defer if it == null ||it == start_edge break;
-        defer it = it.linked_list_next;
-        defer it_index += 1;
-        #insert body;
-    }
-}
-
 
 traverse_edge_ring :: (face: Hull_Face, body: Code, flags: For_Flags) #expand {
     `start_edge := face.edge;
@@ -1836,6 +1858,8 @@ collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
                         world_contact_points_on_A[it_index] = point_in_B + penetration * world_normal_towards_A;
                         world_contact_points_on_B[it_index] = point_in_B;
                     }
+if num_contacts push_grid(contact.points[0]+world_normal_towards_A*0.2, world_normal_towards_A,density=3,area_length=1, color=.{.6,1.1,.6,1});
+
 
                 }
             }
@@ -1859,6 +1883,8 @@ collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
                         world_contact_points_on_A[it_index] = point_in_A;
                         world_contact_points_on_B[it_index] = point_in_A - penetration*world_normal_towards_A;
                     }
+if num_contacts push_grid(contact.points[0]+world_normal_towards_A*0.2, world_normal_towards_A,density=3,area_length=1, color=.{1.1,1.1,1.1,1});
+
                 }
             doLabel(tprint("is_near_faceB %",penetration), WorldToScreen(.{.1,1.2,2.0}));
             }

@@ -566,15 +566,15 @@ push_grid :: (plane_origin: Vector3, plane_normal: Vector3, min_for: s64, max_fo
             start := plane_origin + horizontal * i.(float)/density + min_for.(float)*vertical;
             end :=  plane_origin + horizontal * i.(float)/density + max_for.(float)*vertical;
   	        push_line(start, end, color);
-  	        if i == min_for*density.(s64) || i==max_for*density.(s64)-1 push_arrow(start,plane_normal, color=color);
-  	        if i == min_for*density.(s64) || i==max_for*density.(s64)-1 push_arrow(end,plane_normal, color=color);
+  	        if i == min_for*density.(s64) || i==max_for*density.(s64)-1 push_arrow(start,plane_normal*0.1,head_size=0.01, color=color);
+  	        if i == min_for*density.(s64) || i==max_for*density.(s64)-1 push_arrow(end,plane_normal*0.1,head_size=0.01, color=color);
   	    }
         {
             start := plane_origin + vertical * i.(float)/density + min_for.(float)*horizontal;
             end :=  plane_origin + vertical * i.(float)/density + max_for.(float)*horizontal;
   	        push_line(start, end, color);
-  	        if i == min_for*density.(s64) || i==max_for*density.(s64)-1 push_arrow(start,plane_normal, color=color);
-  	        if i == min_for*density.(s64) || i==max_for*density.(s64)-1 push_arrow(end,plane_normal, color=color);
+  	        if i == min_for*density.(s64) || i==max_for*density.(s64)-1 push_arrow(start,plane_normal*0.1,head_size=0.01, color=color);
+  	        if i == min_for*density.(s64) || i==max_for*density.(s64)-1 push_arrow(end,plane_normal*0.1,head_size=0.01, color=color);
   	    }
     }
 }

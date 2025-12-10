@@ -2,23 +2,19 @@
 
 SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query) -> bool
 {
-
 	query.faceQuery_AB = QueryFaceDirections(hullA, hullB);
-	if query.faceQuery_AB.distance > EPSILON4
-		return false;
+    if query.faceQuery_AB.distance > EPSILON4 return false;
 
 	query.faceQuery_BA = QueryFaceDirections(hullB, hullA);
-	if query.faceQuery_BA.distance > EPSILON4
-		return false;
-#if 1
-    query.edgeQuery = QueryEdgeDirections(hullA, hullB);
-else
-	query.edgeQuery = QueryEdgeDirections_bruteforce(hullA, hullB);
+    if query.faceQuery_BA.distance > EPSILON4 return false;
 
+    if collider_switch_face {
+        query.edgeQuery = QueryEdgeDirections_deSenk(hullA, hullB); 
+    } else {
+        query.edgeQuery = QueryEdgeDirections_gauss(hullA, hullB);
+    }
 
-	if query.edgeQuery.distance > EPSILON4
-		return false;
-
+    if query.edgeQuery.distance > EPSILON4  return false;
 	return true;
 }
 
@@ -30,7 +26,6 @@ else
 #load "realtime.jai";
 #import "Math";
 #import "Basic"; //for asserts
-//We do an import here, grep this -> :tag_Extra_Import_Here_Maybe_Pull_Out
 
 
 #scope_module

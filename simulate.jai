@@ -183,7 +183,7 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
              .{-0.5,  0.5,  0.5}, // 7: left-top-front]);
              ]);
         // hull1 = hull0;
-        hull0 = hull3;
+        // hull0 = hull3;
         hull0.worldSpace = hull3.worldSpace;
         // hull0.scale = hull3.scale;
         // hull0.scale = .{1, 1, 1};
