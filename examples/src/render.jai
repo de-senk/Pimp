@@ -476,7 +476,7 @@ push_debug_hull :: (position: Vector3, orientation: Quaternion, hull_shape: Conv
     		vert_count += 1;
         }
 
-        n := transform_normal(current_face.face_plane_normal, hull_shape.inv_worldSpace);
+        n := transform_normal(current_face.face_plane_normal, hull_shape.inv_worldSpace_for_bivectors);
         color := colors[color_idx];
         normalize(*color);
 

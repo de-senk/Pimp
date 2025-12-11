@@ -5,7 +5,7 @@ QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
     result.distance = -FLOAT32_INFINITY;
 
     for :all_faces current_face: hullA.mesh {
-        world_planeA := transform_plane(.{current_face.face_plane_normal, current_face.face_plane_distance}, hullA.worldSpace, hullA.inv_worldSpace);
+        world_planeA := transform_plane(.{current_face.face_plane_normal, current_face.face_plane_distance}, hullA.worldSpace, hullA.inv_worldSpace_for_bivectors);
         local_direction_in_hull1 := transform_normal(-world_planeA.normal, hullB.worldSpace);
         // push_grid(closest_point_to_plane(.{5,5,5}, world_planeA.normal, world_planeA.distance), world_planeA.normal, color=.{1.1,1.1,1.1,1});
 
@@ -192,14 +192,14 @@ draw_hull_properties :: (hull: Convex_Hull){
         color_idx +=1; if color_idx==7 then color_idx = 0;
         color := colors[color_idx];
 
-        plane_normal :=  transform_normal(e.face.face_plane_normal, hull.inv_worldSpace);
+        plane_normal :=  transform_normal(e.face.face_plane_normal, hull.inv_worldSpace_for_bivectors);
         off := ( 0.01 )*plane_normal;
         ncol := Vector4.{abs(plane_normal).x,abs(plane_normal).y,abs(plane_normal).z, 1.0};
 
 		e_origin:= hull.worldSpace * ( e.tail.vertex) +off;
         e_end := hull.worldSpace * ( e.twin.tail.vertex)+off;
         push_arrow(e_origin,e_end-e_origin,0.05, color=ncol);
-        // draw_current_edge_normal(e_origin, e, hull.inv_worldSpace);
+        // draw_current_edge_normal(e_origin, e, hull.inv_worldSpace_for_bivectors);
 
 	}
 }
@@ -264,8 +264,8 @@ QueryEdgeDirections_gauss :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQue
     	edgeA_end := hullA.worldSpace * ( edgeA.twin.tail.vertex);
 
 		 arcA := edgeA_end - edgeA_origin;
-		 faceA_vertex := transform_normal(edgeA.face.face_plane_normal, hullA.inv_worldSpace);//faceA_vertex
-		 twin_faceA_vertex := transform_normal(edgeA.twin.face.face_plane_normal, hullA.inv_worldSpace);;//faceA_vertex_twin?
+		 faceA_vertex := transform_normal(edgeA.face.face_plane_normal, hullA.inv_worldSpace_for_bivectors);//faceA_vertex
+		 twin_faceA_vertex := transform_normal(edgeA.twin.face.face_plane_normal, hullA.inv_worldSpace_for_bivectors);;//faceA_vertex_twin?
 
 		for :all_edges edgeB: hullB.mesh
 		{
@@ -275,8 +275,8 @@ QueryEdgeDirections_gauss :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQue
        		arcB := edgeB_end - edgeB_origin;
 
             //vertex becausse in Gauss world faces are vertex
-    		faceB_vertex := transform_normal(edgeB.face.face_plane_normal, hullB.inv_worldSpace);//faceB_vertex
-    		twin_faceB_vertex := transform_normal(edgeB.twin.face.face_plane_normal, hullB.inv_worldSpace);;//faceB_vertex_twin?
+    		faceB_vertex := transform_normal(edgeB.face.face_plane_normal, hullB.inv_worldSpace_for_bivectors);//faceB_vertex
+    		twin_faceB_vertex := transform_normal(edgeB.twin.face.face_plane_normal, hullB.inv_worldSpace_for_bivectors);;//faceB_vertex_twin?
 
 			//minute -15:19 Final Overlap Test: Formulas minute 19, we can avoid cross products. and we dont need to normalize.
           	is_minkowsky_face := arcs_intersect_on_sphere(faceA_vertex, twin_faceA_vertex, -faceB_vertex, -twin_faceB_vertex);
@@ -322,8 +322,8 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
     array_reserve(*result.points, 4);
 
 	reference_face := faceQuery.face;
-	world_ref_plane_n, world_ref_plane_d := transform_plane(reference_face.face_plane_normal, reference_face.face_plane_distance, referenceHull.worldSpace, referenceHull.inv_worldSpace);
-	localtoinc_ref_plane_n, localtoinc_ref_plane_d := transform_plane(world_ref_plane_n, world_ref_plane_d, incidentHull.inv_worldSpace, incidentHull.worldSpace);
+	world_ref_plane_n, world_ref_plane_d := transform_plane(reference_face.face_plane_normal, reference_face.face_plane_distance, referenceHull.worldSpace, referenceHull.inv_worldSpace_for_bivectors);
+	localtoinc_ref_plane_n, localtoinc_ref_plane_d := transform_plane(world_ref_plane_n, world_ref_plane_d, incidentHull.inv_worldSpace_for_bivectors, incidentHull.worldSpace);
     // push_grid(closest_point_to_plane(.{5,5,5}, world_ref_plane_n, world_ref_plane_d), world_ref_plane_n, color=.{1,0,0,1});
 	incident_face: *Hull_Face;
 
@@ -350,7 +350,7 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
     }
 
     {
-	n, d := transform_plane(incident_face.face_plane_normal, incident_face.face_plane_distance, incidentHull.worldSpace, incidentHull.inv_worldSpace);
+	n, d := transform_plane(incident_face.face_plane_normal, incident_face.face_plane_distance, incidentHull.worldSpace, incidentHull.inv_worldSpace_for_bivectors);
     // push_grid(closest_point_to_plane(.{5,5,5}, n, d), n, color=.{.2,.2,1,1});
 	}
 	//collect incident edge vertices
@@ -377,7 +377,7 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
         if c1 && current_edge.twin
             then referenceSideFace = current_edge.twin.face;
 
-		world_plane_normal, world_plane_dist  := transform_plane(referenceSideFace.face_plane_normal, referenceSideFace.face_plane_distance, referenceHull.worldSpace, referenceHull.inv_worldSpace);
+		world_plane_normal, world_plane_dist  := transform_plane(referenceSideFace.face_plane_normal, referenceSideFace.face_plane_distance, referenceHull.worldSpace, referenceHull.inv_worldSpace_for_bivectors);
         // push_grid( referenceHull.worldSpace*current_edge.tail.vertex, world_plane_normal,area_length=1, color=.{0,1,0,1});
         clipped_vertices := Sutherland_Hodgman(world_plane_normal,world_plane_dist , incident_world_vertices);
 
@@ -400,7 +400,7 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
     // for result.points if it.y < 0 then add_to_array_of_contact_points(it, radii = .1, color=.{0,0,1,1});
 
     reduce_contact_points_to_four_or_less(*result);
-    // inc_plane_n,inc_plane_d := transform_plane(incident_face.face_plane_normal, incident_face.face_plane_distance,  incidentHull.worldSpace, incidentHull.inv_worldSpace);
+    // inc_plane_n,inc_plane_d := transform_plane(incident_face.face_plane_normal, incident_face.face_plane_distance,  incidentHull.worldSpace, incidentHull.inv_worldSpace_for_bivectors);
     assert(result.points.count <= 4, "we aer supposued o get 4 or less contact points here, we got %", result.points.count);
 
     // push_grid(closest_point_to_plane(.{5,5,5}, inc_plane_n, inc_plane_d), inc_plane_n, color=.{.2,1,1,1});
@@ -822,6 +822,395 @@ collide_sphere_vs_capsule  :: (sphere_center: Vector3, sphere_radius: float, cap
 
     return num_contacts, penetration, world_normal_towards_A, world_midpoint, world_contact_point_on_A, world_contact_point_on_B;
 };
+
+
+//another possible name collide_convex_vs_convex
+collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
+    num_contacts             : int,
+    penetration              : float,
+    world_normal_towards_A   : Vector3,
+    world_midpoints          : [4]Vector3,
+    world_contact_points_on_A: [4]Vector3,
+    world_contact_points_on_B: [4]Vector3
+{
+
+    num_contacts            : int;
+    penetration             : float;
+    world_normal_towards_A  : Vector3;
+    world_midpoints          : [4]Vector3;
+    world_contact_points_on_A: [4]Vector3;
+    world_contact_points_on_B: [4]Vector3;
+
+
+    query: SAT_Query;
+
+    hull0: Convex_Hull;
+    hull1: Convex_Hull;
+    //:tagCheckTemporaryHackMovedHere_Maybe_Cache_by_orientation_diff
+    hull0 = hull_A;
+    hull1 = hull_B;
+
+    collision := SAT_dirk_gregorius(hull0, hull1, *query);
+
+    faceDistanceA :=  query.faceQuery_AB.distance ;
+	faceDistanceB :=  query.faceQuery_BA.distance ;
+	edgeDist := query.edgeQuery.distance;
+
+
+    if query.edgeQuery.edgeA {
+    draw_current_edge(query.edgeQuery.edgeA, hull0,color=.{1,1,1,1});
+    draw_current_edge(query.edgeQuery.edgeB, hull1,color=.{1,1,1,1});
+    }
+    doLabel(tprint("e %",edgeDist), WorldToScreen(.{.1,2.0,2.0}));
+    doLabel(tprint("A %",faceDistanceA), WorldToScreen(.{.1,1.5,2.0}));
+    doLabel(tprint("B %",faceDistanceB), WorldToScreen(.{.1,1.8,2.0}));
+    if collision {
+		//grep this from https://www.gamedev.net/forums/topic/667499-3d-sat-problem/?page=2
+		//slide 90+: The solution is simple and we apply a bias (or weighting) to prefer face contacts
+        //  over edge contacts and one face axis over another
+        // kLinearSlop ::  0.005 ;
+        // kRelEdgeTolerance ::  0.90 ;
+        // kRelFaceTolerance ::  0.98 ;
+        // kAbsTolerance ::  0.5 * kLinearSlop ;
+
+		kLinearSlop ::  0.005 ;
+		kRelEdgeTolerance ::  0.90 ;
+		kRelFaceTolerance ::  0.98 ;
+		kAbsTolerance ::  0.5 * kLinearSlop ;
+
+        is_near_edge := query.edgeQuery.distance > kRelEdgeTolerance * max(faceDistanceA, faceDistanceB) + kAbsTolerance;
+        is_near_faceA := faceDistanceB > (kRelFaceTolerance* faceDistanceA + kAbsTolerance);
+        // is_near_edge = collider_switch_face;
+        is_near_faceB := !is_near_faceA;
+
+        // if query.edgeQuery.distance != -FLOAT32_INFINITY
+        //   if faceDistanceB > edgeDist || faceDistanceB > edgeDist {
+        //    is_near_edge=true;
+        //   };
+
+		if is_near_edge
+		{
+
+			contact : EdgeContact = CreateEdgeContact(query.edgeQuery,hull0,hull1);
+			{
+                world_normal_towards_A = -contact.separationAxis;
+                assert(is_normalized(world_normal_towards_A));
+                penetration = contact.query.distance;
+                if penetration < 0 {
+                    num_contacts = 1;
+                    world_midpoints[0] = contact.midpoint;
+                    world_contact_points_on_A[0] = contact.midpoint + (penetration/2.0)*world_normal_towards_A;
+                    world_contact_points_on_B[0] = contact.midpoint - (penetration/2.0)*world_normal_towards_A;
+                }
+			}
+
+            doLabel(tprint("is_near_edge % ",penetration), WorldToScreen(.{0.5,1.2,3.0}));
+		}
+		else if is_near_faceA
+		{
+		    contact :FaceContact= CreateFaceContact(query.faceQuery_BA, hull1,hull0); //reference,incindet
+            {
+                world_normal_towards_A           = transform_normal(contact.query.face.face_plane_normal,hull1.inv_worldSpace_for_bivectors);
+                assert(is_normalized(world_normal_towards_A));
+                penetration                      = contact.query.distance;
+                assert(contact.points.count <= 4, "we got more than 4 contact points! contact.points.count == %",contact.points.count);
+                if penetration < 0
+                {
+                    num_contacts = contact.points.count;
+                    for point_in_B: contact.points
+                    {
+                        world_midpoints[it_index]           = point_in_B + (penetration/2.0) * world_normal_towards_A;
+                        world_contact_points_on_A[it_index] = point_in_B + penetration * world_normal_towards_A;
+                        world_contact_points_on_B[it_index] = point_in_B;
+                    }
+if num_contacts push_grid(contact.points[0]+world_normal_towards_A*0.2, world_normal_towards_A,density=3,area_length=1, color=.{.6,1.1,.6,1});
+
+
+                }
+            }
+            doLabel(tprint("is_near_faceA %",penetration), WorldToScreen(.{.1,1.2,2.0}));
+		}
+		else
+		{
+		    contact := CreateFaceContact(query.faceQuery_AB, hull0, hull1);
+            {
+                world_normal_towards_A = -transform_normal(contact.query.face.face_plane_normal,hull0.inv_worldSpace_for_bivectors);
+                assert(is_normalized(world_normal_towards_A));
+                penetration = contact.query.distance;
+
+                assert(contact.points.count <= 4, "we got more than 4 contact points! AB contact.points.count == %",contact.points.count);
+                if penetration < 0
+                {
+                    num_contacts = contact.points.count;
+                    for point_in_A: contact.points
+                    {
+                        world_midpoints[it_index]           = point_in_A - (penetration/2.0) * world_normal_towards_A;
+                        world_contact_points_on_A[it_index] = point_in_A;
+                        world_contact_points_on_B[it_index] = point_in_A - penetration*world_normal_towards_A;
+                    }
+if num_contacts push_grid(contact.points[0]+world_normal_towards_A*0.2, world_normal_towards_A,density=3,area_length=1, color=.{1.1,1.1,1.1,1});
+
+                }
+            doLabel(tprint("is_near_faceB %",penetration), WorldToScreen(.{.1,1.2,2.0}));
+            }
+
+
+		} //end edge or faceBA or faceAB test
+
+	} //end if collision
+
+    doLabel(tprint("N % edgedistance  % ",num_contacts, query.edgeQuery.distance ), WorldToScreen(.{0.5,2.2,2}));
+    return num_contacts, penetration, world_normal_towards_A, world_midpoints, world_contact_points_on_A, world_contact_points_on_B ;
+
+};
+
+
+
+
+
+////////////
+// START OF AI-GENERATED CODE
+
+
+collide_sphere_vs_hull :: (
+    sphere_center: Vector3, sphere_radius: float,
+    hull: Convex_Hull
+) ->
+    num_contacts: int,
+    penetration: float,
+    world_normal_towards_A: Vector3,
+    world_midpoint: Vector3,
+    world_contact_point_on_A: Vector3,
+    world_contact_point_on_B: Vector3
+{
+    num_contacts: int;
+    penetration: float;
+    world_normal_towards_A: Vector3;
+    world_midpoint: Vector3;
+    world_contact_point_on_A: Vector3;
+    world_contact_point_on_B: Vector3;
+
+    smallest_penetration: float = FLOAT32_INFINITY;
+    best_point_on_hull: Vector3;
+    best_normal: Vector3;
+    best_normal2: Vector3;
+    on_hull: Vector3;
+
+    hull_center := Vector3.{hull.worldSpace._14, hull.worldSpace._24, hull.worldSpace._34};
+    for :all_edges e, e_idx : hull.mesh
+    {
+
+        v0 := hull.worldSpace *e.tail.vertex;
+        v1 := hull.worldSpace *e.next.tail.vertex;
+        v2 := hull.worldSpace *e.next.next.tail.vertex;
+
+        // Face plane already in local space
+        face_normal, face_distance := transform_plane(e.face.face_plane_normal, e.face.face_plane_distance, hull.worldSpace, hull.inv_worldSpace_for_bivectors);
+        assert(length_squared(face_normal) > 0.001, "invalid normal %", face_normal);
+        // Distance from sphere center to face plane
+
+
+        // points_towards_A := dot(face_normal, sphere_center - hull_center) < 0.0;
+        // if !points_towards_A then face_normal = -face_normal;
+        dist_to_plane := distance_point_to_plane_signed(sphere_center, face_normal, face_distance);
+        if dist_to_plane > sphere_radius continue;
+        // Early out if sphere is too far from this face
+        // if dist_to_plane > sphere_radius continue;
+        closest_point_on_triangle := closest_point_to_triangle(sphere_center, v0, v1, v2);
+        from_triangle_to_sphere := sphere_center - closest_point_on_triangle;
+        distance_to_surface := length(from_triangle_to_sphere);
+        current_penetration := distance_to_surface - sphere_radius;
+
+        if current_penetration < smallest_penetration {
+                best_normal2 = face_normal;
+                on_hull = v0;
+            smallest_penetration = current_penetration;
+            best_point_on_hull = closest_point_on_triangle;
+            //@Hack
+            if distance_to_surface > 0.0001 {
+                best_normal = normalize(from_triangle_to_sphere);
+            } else {
+                best_normal = face_normal;
+            }
+        }
+    }
+
+    penetration = smallest_penetration;
+
+    if penetration < 0 {
+        d := penetration;
+
+        world_normal_towards_A = best_normal;
+
+        // push_grid(on_hull, world_normal_towards_A, color=.{1,1,0,1});
+        // push_grid(on_hull, best_normal2, color=.{1,1,0,1});
+        points_towards_A := dot(world_normal_towards_A, sphere_center - hull_center) > 0.0;
+        if !points_towards_A then world_normal_towards_A = -world_normal_towards_A;
+
+        assert(length_squared(world_normal_towards_A) > 0.001, "invalid normal %", world_normal_towards_A);
+
+        num_contacts = 1;
+        world_contact_point_on_A = sphere_center - sphere_radius * world_normal_towards_A;
+        world_contact_point_on_B = best_point_on_hull;
+        world_midpoint = best_point_on_hull + (d / 2.0) * world_normal_towards_A;
+    }
+
+    return num_contacts, penetration, world_normal_towards_A, world_midpoint, world_contact_point_on_A, world_contact_point_on_B;
+}
+
+
+collide_capsule_vs_capsule :: (
+    capsule_A_start: Vector3, capsule_A_end: Vector3, capsule_A_radius: float,
+    capsule_B_start: Vector3, capsule_B_end: Vector3, capsule_B_radius: float
+) ->
+    num_contacts: int,
+    penetration: float,
+    world_normal_towards_A: Vector3,
+    world_midpoint: Vector3,
+    world_contact_point_on_A: Vector3,
+    world_contact_point_on_B: Vector3
+{
+    num_contacts: int;
+    penetration: float;
+    world_normal_towards_A: Vector3;
+    world_midpoint: Vector3;
+    world_contact_point_on_A: Vector3;
+    world_contact_point_on_B: Vector3;
+
+    // Find closest points between the two line segments
+	closest_point_on_A, closest_point_on_B, s, t, distdist := closest_point_segment_to_segment(capsule_A_start, capsule_A_end, capsule_B_start, capsule_B_end);
+
+    // Vector from B's closest point to A's closest point
+    from_B_to_A := closest_point_on_A - closest_point_on_B;
+    distance_between_axes := length(from_B_to_A);
+
+    penetration = distance_between_axes - capsule_A_radius - capsule_B_radius;
+
+    if penetration < 0 {
+        d := penetration;
+        world_normal_towards_A = normalize(from_B_to_A, fallback = .{0, 1, 0});
+        assert(length_squared(world_normal_towards_A) > 0.001, "capsule axes coincident");
+        num_contacts = 1;
+
+        // Contact points on the surface of each capsule
+        world_contact_point_on_A = closest_point_on_A - capsule_A_radius * world_normal_towards_A;
+        world_contact_point_on_B = closest_point_on_B + capsule_B_radius * world_normal_towards_A;
+        world_midpoint = closest_point_on_B + (capsule_B_radius + d / 2.0) * world_normal_towards_A;
+    }
+
+    return num_contacts, penetration, world_normal_towards_A, world_midpoint, world_contact_point_on_A, world_contact_point_on_B;
+}
+
+
+
+
+collide_capsule_vs_hull :: (
+    capsule_start: Vector3, capsule_end: Vector3, capsule_radius: float,
+    hull: Convex_Hull
+) ->
+    num_contacts: int,
+    penetration: float,
+    world_normal_towards_A: Vector3,
+    world_midpoint: Vector3,
+    world_contact_point_on_A: Vector3,
+    world_contact_point_on_B: Vector3
+{
+    num_contacts: int;
+    penetration: float;
+    world_normal_towards_A: Vector3;
+    world_midpoint: Vector3;
+    world_contact_point_on_A: Vector3;
+    world_contact_point_on_B: Vector3;
+
+    // Transform capsule to hull's local space
+    local_capsule_start := transform_point(capsule_start, hull.inv_worldSpace_for_bivectors);
+    local_capsule_end := transform_point(capsule_end, hull.inv_worldSpace_for_bivectors);
+
+    // Find closest point on hull to capsule axis
+    closest_point_on_capsule_local: Vector3;
+    closest_point_on_hull_local: Vector3;
+    closest_distance_sq := FLOAT32_INFINITY;
+
+    // Check distance from capsule axis to each face
+    for :all_faces face, face_idx: hull.mesh {
+        // Find closest point on capsule segment to face plane
+        capsule_direction := normalize(local_capsule_end - local_capsule_start);
+        capsule_length := distance(local_capsule_start, local_capsule_end);
+
+        // Project capsule endpoints onto plane and find closest point on segment
+        dist_start := dot(local_capsule_start, face.face_plane_normal) - face.face_plane_distance;
+        dist_end := dot(local_capsule_end, face.face_plane_normal) - face.face_plane_distance;
+
+        // Find where segment intersects plane or get closest endpoint
+        t: float;
+        if abs(dist_start - dist_end) > 0.0001 {
+            t = clamp(dist_start / (dist_start - dist_end), 0.0, 1.0);
+        } else {
+            t = ifx abs(dist_start) < abs(dist_end) then 0.0 else 1.0;
+        }
+
+        point_on_capsule := local_capsule_start + t * capsule_length * capsule_direction;
+        point_on_plane := point_on_capsule - (dot(point_on_capsule, face.face_plane_normal) - face.face_plane_distance) * face.face_plane_normal;
+
+        // Check if point is inside face
+        is_inside := true;
+        for :traverse_edge_ring edge: face {
+            if dot(point_on_plane, edge.face.face_plane_normal) - edge.face.face_plane_distance > 0.0001 {
+                is_inside = false;
+                break;
+            }
+        }
+
+        if is_inside {
+            dist_sq := length_squared(point_on_capsule - point_on_plane);
+            if dist_sq < closest_distance_sq {
+                closest_point_on_capsule_local = point_on_capsule;
+                closest_point_on_hull_local = point_on_plane;
+                closest_distance_sq = dist_sq;
+            }
+        }
+    }
+
+    // Check distance from capsule to all edges
+    for :all_edges edge: hull.mesh {
+        v0 := edge.tail.vertex;
+        v1 := edge.next.tail.vertex;
+
+    	pt_capsule, pt_edge, s, t, distdist := closest_point_segment_to_segment(local_capsule_start, local_capsule_end, v0, v1);
+
+        dist_sq := length_squared(pt_capsule - pt_edge);
+        if dist_sq < closest_distance_sq {
+            closest_point_on_capsule_local = pt_capsule;
+            closest_point_on_hull_local = pt_edge;
+            closest_distance_sq = dist_sq;
+        }
+    }
+
+    // Transform back to world space
+    closest_point_on_capsule := transform_point(closest_point_on_capsule_local, hull.worldSpace);
+    closest_point_on_hull := transform_point(closest_point_on_hull_local, hull.worldSpace);
+
+    // Calculate penetration
+    from_hull_to_capsule := closest_point_on_capsule - closest_point_on_hull;
+    distance_between := length(from_hull_to_capsule);
+    penetration = distance_between - capsule_radius;
+
+    if penetration < 0 {
+        d := penetration;
+        world_normal_towards_A = normalize(from_hull_to_capsule, fallback = .{0, 1, 0});
+        assert(length_squared(world_normal_towards_A) > 0.001, "capsule axis intersects hull");
+        num_contacts = 1;
+
+        world_contact_point_on_A = closest_point_on_capsule - capsule_radius * world_normal_towards_A;
+        world_contact_point_on_B = closest_point_on_hull;
+        world_midpoint = closest_point_on_hull + (d / 2.0) * world_normal_towards_A;
+    }
+
+    return num_contacts, penetration, world_normal_towards_A, world_midpoint, world_contact_point_on_A, world_contact_point_on_B;
+}
+// END OF AI-GENERATED CODE
+////////////
+
 
 //  Quick_hull 2D, O(nlogn)
 /*
@@ -1750,147 +2139,7 @@ add_face :: (using mesh: *Half_Edge_Mesh ) -> new_face: *Hull_Face {
 // 	}
 // }
 
-//another possible name collide_convex_vs_convex
-collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
-    num_contacts             : int,
-    penetration              : float,
-    world_normal_towards_A   : Vector3,
-    world_midpoints          : [4]Vector3,
-    world_contact_points_on_A: [4]Vector3,
-    world_contact_points_on_B: [4]Vector3
-{
 
-    num_contacts            : int;
-    penetration             : float;
-    world_normal_towards_A  : Vector3;
-    world_midpoints          : [4]Vector3;
-    world_contact_points_on_A: [4]Vector3;
-    world_contact_points_on_B: [4]Vector3;
-
-
-    query: SAT_Query;
-
-    hull0: Convex_Hull;
-    hull1: Convex_Hull;
-    //:tagCheckTemporaryHackMovedHere_Maybe_Cache_by_orientation_diff
-    hull0 = hull_A;
-    hull1 = hull_B;
-
-    draw_hull_properties(hull0);
-    draw_hull_properties(hull1);
-    collision := SAT_dirk_gregorius(hull0, hull1, *query);
-
-    faceDistanceA :=  query.faceQuery_AB.distance ;
-	faceDistanceB :=  query.faceQuery_BA.distance ;
-	edgeDist := query.edgeQuery.distance;
-
-
-    if query.edgeQuery.edgeA {
-    draw_current_edge(query.edgeQuery.edgeA, hull0,color=.{1,1,1,1});
-    draw_current_edge(query.edgeQuery.edgeB, hull1,color=.{1,1,1,1});
-    }
-    doLabel(tprint("e %",edgeDist), WorldToScreen(.{.1,2.0,2.0}));
-    doLabel(tprint("A %",faceDistanceA), WorldToScreen(.{.1,1.5,2.0}));
-    doLabel(tprint("B %",faceDistanceB), WorldToScreen(.{.1,1.8,2.0}));
-    if collision {
-		//grep this from https://www.gamedev.net/forums/topic/667499-3d-sat-problem/?page=2
-		//slide 90+: The solution is simple and we apply a bias (or weighting) to prefer face contacts
-        //  over edge contacts and one face axis over another
-        // kLinearSlop ::  0.005 ;
-        // kRelEdgeTolerance ::  0.90 ;
-        // kRelFaceTolerance ::  0.98 ;
-        // kAbsTolerance ::  0.5 * kLinearSlop ;
-
-		kLinearSlop ::  0.005 ;
-		kRelEdgeTolerance ::  0.90 ;
-		kRelFaceTolerance ::  0.98 ;
-		kAbsTolerance ::  0.5 * kLinearSlop ;
-
-        is_near_edge := query.edgeQuery.distance > kRelEdgeTolerance * max(faceDistanceA, faceDistanceB) + kAbsTolerance;
-        is_near_faceA := faceDistanceB > (kRelFaceTolerance* faceDistanceA + kAbsTolerance);
-        // is_near_edge = collider_switch_face;
-        is_near_faceB := !is_near_faceA;
-
-        // if query.edgeQuery.distance != -FLOAT32_INFINITY
-        //   if faceDistanceB > edgeDist || faceDistanceB > edgeDist {
-        //    is_near_edge=true;
-        //   };
-
-		if is_near_edge
-		{
-
-			contact : EdgeContact = CreateEdgeContact(query.edgeQuery,hull0,hull1);
-			{
-                world_normal_towards_A = -contact.separationAxis;
-                assert(is_normalized(world_normal_towards_A));
-                penetration = contact.query.distance;
-                if penetration < 0 {
-                    num_contacts = 1;
-                    world_midpoints[0] = contact.midpoint;
-                    world_contact_points_on_A[0] = contact.midpoint + (penetration/2.0)*world_normal_towards_A;
-                    world_contact_points_on_B[0] = contact.midpoint - (penetration/2.0)*world_normal_towards_A;
-                }
-			}
-
-            doLabel(tprint("is_near_edge % ",penetration), WorldToScreen(.{0.5,1.2,3.0}));
-		}
-		else if is_near_faceA
-		{
-		    contact :FaceContact= CreateFaceContact(query.faceQuery_BA, hull1,hull0); //reference,incindet
-            {
-                world_normal_towards_A           = transform_normal(contact.query.face.face_plane_normal,hull1.inv_worldSpace);
-                assert(is_normalized(world_normal_towards_A));
-                penetration                      = contact.query.distance;
-                assert(contact.points.count <= 4, "we got more than 4 contact points! contact.points.count == %",contact.points.count);
-                if penetration < 0
-                {
-                    num_contacts = contact.points.count;
-                    for point_in_B: contact.points
-                    {
-                        world_midpoints[it_index]           = point_in_B + (penetration/2.0) * world_normal_towards_A;
-                        world_contact_points_on_A[it_index] = point_in_B + penetration * world_normal_towards_A;
-                        world_contact_points_on_B[it_index] = point_in_B;
-                    }
-if num_contacts push_grid(contact.points[0]+world_normal_towards_A*0.2, world_normal_towards_A,density=3,area_length=1, color=.{.6,1.1,.6,1});
-
-
-                }
-            }
-            doLabel(tprint("is_near_faceA %",penetration), WorldToScreen(.{.1,1.2,2.0}));
-		}
-		else
-		{
-		    contact := CreateFaceContact(query.faceQuery_AB, hull0, hull1);
-            {
-                world_normal_towards_A = -transform_normal(contact.query.face.face_plane_normal,hull0.inv_worldSpace);
-                assert(is_normalized(world_normal_towards_A));
-                penetration = contact.query.distance;
-
-                assert(contact.points.count <= 4, "we got more than 4 contact points! AB contact.points.count == %",contact.points.count);
-                if penetration < 0
-                {
-                    num_contacts = contact.points.count;
-                    for point_in_A: contact.points
-                    {
-                        world_midpoints[it_index]           = point_in_A - (penetration/2.0) * world_normal_towards_A;
-                        world_contact_points_on_A[it_index] = point_in_A;
-                        world_contact_points_on_B[it_index] = point_in_A - penetration*world_normal_towards_A;
-                    }
-if num_contacts push_grid(contact.points[0]+world_normal_towards_A*0.2, world_normal_towards_A,density=3,area_length=1, color=.{1.1,1.1,1.1,1});
-
-                }
-            doLabel(tprint("is_near_faceB %",penetration), WorldToScreen(.{.1,1.2,2.0}));
-            }
-
-
-		} //end edge or faceBA or faceAB test
-
-	} //end if collision
-
-    doLabel(tprint("N % edgedistance  % ",num_contacts, query.edgeQuery.distance ), WorldToScreen(.{0.5,2.2,2}));
-    return num_contacts, penetration, world_normal_towards_A, world_midpoints, world_contact_points_on_A, world_contact_points_on_B ;
-
-};
 
 //
 // TODO: a good title for this category.
@@ -2097,4 +2346,22 @@ transform_plane :: (plane_normal: Vector3, plane_distance: float, m: Matrix4, in
     //dirk way is the same as this way? assert will assure that: //after testing-> I think Dirk way doesnt support scaling inside m, so I deleted it.
     transformed_distance := dot(transformed_point, transformed_normal);
     return transformed_normal, transformed_distance;
+}
+
+ calculate_inverse_or_use_transpose :: (hull: Convex_Hull) -> inv_or_t_worldSpace: Matrix4 {
+    inv_worldSpace_for_bivectors: Matrix4 = ---;
+    //because calculating inverses is super expensive.
+    scale_squared := Vector3.{
+        length_squared(Vector3.{hull.worldSpace._11, hull.worldSpace._21, hull.worldSpace._31}),
+        length_squared(Vector3.{hull.worldSpace._12, hull.worldSpace._22, hull.worldSpace._32}),
+        length_squared(Vector3.{hull.worldSpace._13, hull.worldSpace._23, hull.worldSpace._33}),
+    };
+    should_use_transpose := scale_squared.x == 1.0 && scale_squared.y == 1.0 && scale_squared.z == 1.0;
+    if false && should_use_transpose {
+        inv_worldSpace_for_bivectors = transpose(hull.worldSpace);
+    } else {
+        success:, inv_worldSpace_for_bivectors = inverse(hull.worldSpace);
+        assert(success, "error calculating inverse of hull");
+    }
+    return inv_worldSpace_for_bivectors;
 }

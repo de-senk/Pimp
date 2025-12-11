@@ -2,7 +2,7 @@ Convex_Hull :: struct {
     mesh: Half_Edge_Mesh;
     local_geometric_center: Vector3; //I wish I could center the hulls at the origin, but that might be a bad idea at the end.
     worldSpace: Matrix4;
-    inv_worldSpace: Matrix4;
+    inv_worldSpace_for_bivectors: Matrix4; //DONT USE IT TO GET world points! this only works for bivectors
     // scale: Vector3;
 };
 
