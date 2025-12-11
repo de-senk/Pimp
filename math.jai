@@ -559,17 +559,7 @@ is_symmetric :: (a: Matrix6) -> bool{
 }
 
 //begin, from kodaphysics
-get_scale :: (mat: Matrix4) -> Vector3 {
-    column := mat.v[0];
 
-    if column.w == 0 {
-        return .{1, 1, 1};
-    } else {
-        scale := column.xyz;
-        scale /= column.w;
-        return scale;
-    }
-}
 
 compose_transform :: (local_position: Vector3, local_orientation: Vector3, local_scale: Vector3) -> Matrix4 {
     transform: Matrix4;
@@ -590,28 +580,48 @@ compose_transform :: (local_position: Vector3, local_orientation: Vector3, local
     return transform;
 }
 
-koda_decompose_transform :: (matrix: Matrix4) -> translation: Vector3, orientaation: Quaternion, scale: Vector3 {
-    translation := Vector3.{matrix._14, matrix._24, matrix._34};
+//from koda (kuju)
+// get_scale :: (mat: Matrix4) -> Vector3 {
+//     column := mat.v[0];
 
+//     if column.w == 0 {
+//         return .{1, 1, 1};
+//     } else {
+//         scale := column.xyz;
+//         scale /= column.w;
+//         return scale;
+//     }
+// }
+
+//mine, compatible with jai modules.
+get_scale :: inline (m: Matrix4) -> Vector3 {
     scale := Vector3.{
-        length(Vector3.{matrix._11, matrix._21, matrix._31}),
-        length(Vector3.{matrix._12, matrix._22, matrix._32}),
-        length(Vector3.{matrix._13, matrix._23, matrix._33}),
+        length(Vector3.{m._11, m._21, m._31}),
+        length(Vector3.{m._12, m._22, m._32}),
+        length(Vector3.{m._13, m._23, m._33}),
     };
+    return scale;
+}
+
+get_translation :: inline (m: Matrix4) -> Vector3 {
+    return Vector3.{m._14, m._24, m._34};
+}
+
+get_decomposed_transform :: (m: Matrix4) -> pos: Vector3, ori: Quaternion, scale: Vector3 {
+    pos := get_translation(m);
+    scale := get_scale(m);
 
     rotation_matrix := Matrix3.{
-        matrix._11 / scale.x, matrix._12 / scale.y, matrix._13 / scale.z,
-        matrix._21 / scale.x, matrix._22 / scale.y, matrix._23 / scale.z,
-        matrix._31 / scale.x, matrix._32 / scale.y, matrix._33 / scale.z,
+        m._11 / scale.x, m._12 / scale.y, m._13 / scale.z,
+        m._21 / scale.x, m._22 / scale.y, m._23 / scale.z,
+        m._31 / scale.x, m._32 / scale.y, m._33 / scale.z,
     };
-    rotation := get_rotation(rotation_matrix);
+    ori := get_rotation(rotation_matrix);
 
-    return translation, rotation, scale;
+    return pos, ori, scale;
 }
 
-get_translation :: inline (matrix: Matrix4) -> Vector3 {
-    return Vector3.{matrix._14, matrix._24, matrix._34};
-}
+
 // end, from kodaphysics
 
 

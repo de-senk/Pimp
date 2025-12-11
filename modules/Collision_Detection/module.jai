@@ -9,7 +9,7 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
     if query.faceQuery_BA.distance > EPSILON4 return false;
 
     if collider_switch_face {
-        query.edgeQuery = QueryEdgeDirections_deSenk(hullA, hullB); 
+        query.edgeQuery = QueryEdgeDirections_deSenk(hullA, hullB);
     } else {
         query.edgeQuery = QueryEdgeDirections_gauss(hullA, hullB);
     }
@@ -28,8 +28,37 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
 #import "Basic"; //for asserts
 
 
+//mock drawing procedures
 #scope_module
+#if !#exists(WorldToScreen)
+WorldToScreen :: (position: Vector3) -> Vector3, is_inside_frustrum: bool {};
 
+
+#if !#exists(doLabel)
+doLabel :: (text: string, pos: Vector3)  {};
+
+#if !#exists(push_line)
+push_line :: (start : Vector3, end : Vector3, color : Vector4) {};
+
+#if !#exists(push_arrow)
+push_arrow ::  (start: Vector3, vector: Vector3, head_size: float, color: Vector4) {};
+
+
+#if !#exists(push_circle)
+push_circle :: (center: Vector3, radius: float = 0.4, segments: int = 16, normal: Vector3 = .{0,1,0}, color: Vector4 = .{.5,.7,.5,1}) {};
+
+
+#if !#exists(push_vector)
+push_vector :: (start : Vector3, end : Vector3, color : Vector4) {};
+
+#if !#exists(push_grid)
+push_grid :: (plane_origin: Vector3, plane_normal: Vector3, min_for: s64, max_for: s64 , density:float=1.0, color := Vector4.{0.4, 0.4, 0.4, 1}) {};
+#scope_export
+#scope_module
+TODO :: (msg: string,loc:= #caller_location) {
+ //this is for VSCODE |||filepath line:character|||:
+  log("\n[TODO->] %, at-> % %:% [<-TODO]", msg, loc.fully_pathed_filename, loc.line_number, loc.character_number);
+}
 EPSILON7 :: 0.0000001;
 EPSILON6 :: 0.000001;
 EPSILON5 :: 0.00001;

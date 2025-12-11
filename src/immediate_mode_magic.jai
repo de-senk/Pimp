@@ -199,7 +199,7 @@ doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis:
 //     ball.user_data = transform;
 //     reflect_results_callback :: (body: *Body) {
 //         transform := cast(*Matrix4)body.user_data;
-//         previous_t, previous_q, previous_s := koda_decompose_transform(transform);
+//         previous_t, previous_q, previous_s := get_decomposed_transform(transform);
 
 //         delta_pos := body.position - previous_t;
 
@@ -228,7 +228,7 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, user
     ball.user_data = transform;
     reflect_results_callback :: (body: *Body) {
         transform := cast(*Matrix4)body.user_data;
-        previous_t, previous_q, previous_s := koda_decompose_transform(transform);
+        previous_t, previous_q, previous_s := get_decomposed_transform(transform);
 
         delta_pos := body.position - previous_t;
 
@@ -280,82 +280,82 @@ RED :: Vector4.{1,0,0,1};
 GREEN :: Vector4.{0,1,0,1};
 BLUE :: Vector4.{0,0,1,1};
 
-doBall :: (transform: Matrix4, pose: *Skeleton_Pose, bone_id: int = 2, radius: float32 = 0.1, mass: float32 = .01, identifier:s64=0, loc := #caller_location) -> *Body {
-    CheckInit();
-    if pose.joints.count <= bone_id then return null;
-    joint := *pose.joints[bone_id];
+// doBall :: (transform: Matrix4, pose: *Skeleton_Pose, bone_id: int = 2, radius: float32 = 0.1, mass: float32 = .01, identifier:s64=0, loc := #caller_location) -> *Body {
+//     CheckInit();
+//     if pose.joints.count <= bone_id then return null;
+//     joint := *pose.joints[bone_id];
 
-    _, inv_parent := inverse(transform);
-    parent_transform := get_parent_world_transform(joint);
-    bone_world_model :=  joint.model_space_transform;;
-    current_pos, current_ori, current_scale := koda_decompose_transform(bone_world_model);
+//     _, inv_parent := inverse(transform);
+//     parent_transform := get_parent_world_transform(joint);
+//     bone_world_model :=  joint.model_space_transform;;
+//     current_pos, current_ori, current_scale := get_decomposed_transform(bone_world_model);
 
-     {
-        T, R, S := koda_decompose_transform(transform*bone_world_model);
-        push_vector(.{},T,RED);
-     }
-     {
-        T, R, S := koda_decompose_transform(inv_parent*bone_world_model);
-        push_vector(.{},T,GREEN);
-     }
+//      {
+//         T, R, S := get_decomposed_transform(transform*bone_world_model);
+//         push_vector(.{},T,RED);
+//      }
+//      {
+//         T, R, S := get_decomposed_transform(inv_parent*bone_world_model);
+//         push_vector(.{},T,GREEN);
+//      }
 
-    ball_position := current_pos;
-    hash := get_hash(loc, identifier);
-    ball, did_just_created_a_new_one := find_or_create_ball(hash, ball_position, radius, mass);
-    // if did_just_created_a_new_one
-    {
-        ball.position = ball_position;
-        ball.orientation = current_ori;
-    }
+//     ball_position := current_pos;
+//     hash := get_hash(loc, identifier);
+//     ball, did_just_created_a_new_one := find_or_create_ball(hash, ball_position, radius, mass);
+//     // if did_just_created_a_new_one
+//     {
+//         ball.position = ball_position;
+//         ball.orientation = current_ori;
+//     }
 
-    ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
-    ball.user_data = pose;
+//     ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
+//     ball.user_data = pose;
 
-    reflect_results_callback :: (body: *Body) {
+//     reflect_results_callback :: (body: *Body) {
 
-        pose := cast(*Skeleton_Pose)body.user_data;
+//         pose := cast(*Skeleton_Pose)body.user_data;
 
-        for *joint: pose.joints {
-           if it_index != 2 continue;
-         // joint := *pose.joints[1];
-         local_orientation_backup := joint.local_orientation;
-         local_position_backup := joint.local_position;
+//         for *joint: pose.joints {
+//            if it_index != 2 continue;
+//          // joint := *pose.joints[1];
+//          local_orientation_backup := joint.local_orientation;
+//          local_position_backup := joint.local_position;
 
-         parent_transform := get_parent_world_transform(joint);
-         _, inv_parent := inverse(parent_transform);
-
-
-         world_transform := joint.model_space_transform;
+//          parent_transform := get_parent_world_transform(joint);
+//          _, inv_parent := inverse(parent_transform);
 
 
-         previous_t, previous_q, previous_s := koda_decompose_transform(world_transform);
+//          world_transform := joint.model_space_transform;
 
 
-         delta_pos := body.position - previous_t;
-
-         // delta_pos = .{}; // !!!!!!!! translation nullifieds
-         next_q := body.orientation;
-         next_q_minus_previous := next_q*conjugate(previous_q);
-
-         MODEL := Matrix4_Identity;
-         MODEL = translate(MODEL, body.position);  //this is correct, the below is bad. (I think)
-         // MODEL = translate(MODEL, previous_t + delta_pos);
-         MODEL = rotate(MODEL, normalize(next_q)); //this is correct, the below is bad. (I m pretty sure)
-         // MODEL = rotate(MODEL, normalize(next_q_minus_previous*previous_q));
-
-         // new_local_model := MODEL; //phantasmagorical behavior
-         new_local_model := inv_parent*MODEL;
+//          previous_t, previous_q, previous_s := get_decomposed_transform(world_transform);
 
 
-         joint.local_position, joint.local_orientation, joint.local_scale = koda_decompose_transform(new_local_model);
-         // joint.local_position = local_position_backup;
-         // joint.local_orientation = local_orientation_backup;
-        }
+//          delta_pos := body.position - previous_t;
 
-    }
-    ball.end_frame_callback = reflect_results_callback;
-    return ball;
-}
+//          // delta_pos = .{}; // !!!!!!!! translation nullifieds
+//          next_q := body.orientation;
+//          next_q_minus_previous := next_q*conjugate(previous_q);
+
+//          MODEL := Matrix4_Identity;
+//          MODEL = translate(MODEL, body.position);  //this is correct, the below is bad. (I think)
+//          // MODEL = translate(MODEL, previous_t + delta_pos);
+//          MODEL = rotate(MODEL, normalize(next_q)); //this is correct, the below is bad. (I m pretty sure)
+//          // MODEL = rotate(MODEL, normalize(next_q_minus_previous*previous_q));
+
+//          // new_local_model := MODEL; //phantasmagorical behavior
+//          new_local_model := inv_parent*MODEL;
+
+
+//          joint.local_position, joint.local_orientation, joint.local_scale = get_decomposed_transform(new_local_model);
+//          // joint.local_position = local_position_backup;
+//          // joint.local_orientation = local_orientation_backup;
+//         }
+
+//     }
+//     ball.end_frame_callback = reflect_results_callback;
+//     return ball;
+// }
 
 
 //maybe spiderman

@@ -206,10 +206,10 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     SPH_RADIUS:= 0.2;
     SPH_HEIGH:= 2.2;
         push_circle(posA,SPH_RADIUS);
-        push_circle(posA,SPH_RADIUS, normal=game_coordinates.left);
+        push_circle(posA,SPH_RADIUS, normal=.{0,0,1});
         capsule_end := posA+ SPH_HEIGH*rotate(Vector3.{0,1,0}, oriA);
         push_circle(capsule_end,SPH_RADIUS);
-        push_circle(capsule_end,SPH_RADIUS, normal=game_coordinates.left);
+        push_circle(capsule_end,SPH_RADIUS, normal=.{0,0,1});
     draw_hull_properties(hull1);
     num_contacts             :,
     penetration              :,
@@ -222,9 +222,6 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
         P_END := P_START + world_normal_towards_A;
 
         push_arrow(test1pos, world_normal_towards_A);
-        push_X(world_contact_points_on_A,.05);
-        push_X(P_START,.05);
-        push_X(world_midpoints,.05);
         push_arrow(P_START, world_normal_towards_A, color=.{1,1,1,1});
         doLabel("contact!", WorldToScreen(P_END));
         arm := P_START-test1pos;
@@ -258,9 +255,6 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
         P_END := P_START + world_normal_towards_A;
 
         push_arrow(test1pos, world_normal_towards_A);
-        push_X(world_contact_points_on_A,.05);
-        push_X(P_START,.05);
-        push_X(world_midpoints,.05);
         push_arrow(P_START, world_normal_towards_A, color=.{1,1,1,1});
         doLabel("contact!", WorldToScreen(P_END));
         arm := P_START-test1pos;
@@ -295,9 +289,6 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
         P_END := P_START + world_normal_towards_A;
 
         push_arrow(test1pos, world_normal_towards_A);
-        push_X(world_contact_points_on_A[it],.05);
-        push_X(P_START,.05);
-        push_X(world_midpoints[it],.05);
         push_circle(P_START,.05);
         push_arrow(P_START, world_normal_towards_A, color=.{1,1,1,1});
         doLabel("contact!", WorldToScreen(P_END));
@@ -349,10 +340,10 @@ create_cube_half_edge_mesh :: (scale: Vector3) -> Half_Edge_Mesh {
     alloc_size_u8 := v_count*size_of(Hull_Vertex) +
     he_count*size_of(Hull_Half_Edge)+
     f_count*size_of(Hull_Face);
-    alldata := alloc(alloc_size_u8);
+    alldata := basic.alloc(alloc_size_u8);
     memset(alldata, 0, alloc_size_u8);
 
-	assert(alldata!=null, "allocation failed");
+	basic.assert(alldata!=null, "allocation failed");
 
     mesh.vertexBuffer.data = alldata;
     mesh.edgeBuffer.data = cast(*Hull_Half_Edge)(mesh.vertexBuffer.data+mesh.vertexBuffer.count);

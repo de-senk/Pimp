@@ -186,12 +186,7 @@ draw_current_edge_normal :: (e_origin: Vector3, e: *Hull_Half_Edge, inv_world: M
 
 draw_hull_properties :: (hull: Convex_Hull){
     // return;
-    color_idx := 0;
     for :all_edges e: hull.mesh {
-
-        color_idx +=1; if color_idx==7 then color_idx = 0;
-        color := colors[color_idx];
-
         plane_normal :=  transform_normal(e.face.face_plane_normal, hull.inv_worldSpace_for_bivectors);
         off := ( 0.01 )*plane_normal;
         ncol := Vector4.{abs(plane_normal).x,abs(plane_normal).y,abs(plane_normal).z, 1.0};
@@ -2317,7 +2312,7 @@ distance_between_arcs :: (pointA: Vector3, arcA: Vector3, pointB: Vector3, arcB:
 }
 
 
-transform_point :: (point: Vector3, M: Matrix4) -> Vector3 {
+transform_point :: (point: Vector3, M: Matrix4) -> Vector3 #symmetric {
     return Vector3.{
          point.x*M._11 + point.y*M._12 + point.z*M._13 + M._14,
          point.x*M._21 + point.y*M._22 + point.z*M._23 + M._24,

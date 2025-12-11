@@ -15,15 +15,30 @@ physics_coordinates :: struct {
 #add_context solver: *Solver;
 
 //mock drawing procedures
+#scope_module
+#if !#exists(WorldToScreen)
+WorldToScreen :: (position: Vector3) -> Vector3, is_inside_frustrum: bool {};
+
+#if !#exists(push_arrow)
+push_arrow ::  (start: Vector3, vector: Vector3, head_size: float=0.1, color: Vector4 = .{.5,.7,.5,1}) {};
+
+
+#if !#exists(doLabel)
+doLabel :: (text: string, pos: Vector3)  {};
+
 #if !#exists(push_line)
 push_line :: (start : Vector3, end : Vector3, color : Vector4) {};
 
 #if !#exists(push_vector)
 push_vector :: (start : Vector3, end : Vector3, color : Vector4) {};
 
+#if !#exists(push_circle)
+push_circle :: (center: Vector3, radius: float = 0.4, segments: int = 16, normal: Vector3=.{0,1,0}, color: Vector4 = .{.5,.7,.5,1}) {};
+
+
 #if !#exists(push_grid)
 push_grid :: (plane_origin: Vector3, plane_normal: Vector3, min_for: s64, max_for: s64 , density:float=1.0, color := Vector4.{0.4, 0.4, 0.4, 1}) {};
-
+#scope_export
 
 
 //:tagIrrelevantStuffThatMaybeIShouldMOveOrDelete <- STARTS HERE
@@ -129,12 +144,13 @@ deactivate_logger :: () #expand {
 }
 
 
-#scope_export
-
+#scope_module
 TODO :: (msg: string,loc:= #caller_location) {
  //this is for VSCODE |||filepath line:character|||:
   basic.log("\n[TODO->] %, at-> % %:% [<-TODO]", msg, loc.fully_pathed_filename, loc.line_number, loc.character_number);
 }
+
+#scope_export
 
 
 
@@ -325,6 +341,32 @@ Contact_Info :: struct {
 
 };
 
+
+Soft_Body :: struct {
+    is_initialized: bool;
+    is_graphics_initialized: bool;
+    numParticles  : s64     ;
+    numTets       : s64     ;
+    pos           : []float ;
+    prevPos       : []float ;
+    vel           : []float ;
+    tetIds        : []u32   ;
+    edgeIds       : []u32   ;
+    triangleList       : []u32   ;
+    restVol       : []float ;
+    edgeLengths   : []float ;
+    invMass       : []float ;
+    edgeCompliance: float   ;
+    volCompliance : float   ;
+    tempp         : []float ;
+    grads         : []float ;
+    grabId        : s32     ;
+    grabInvMass   : float   ;
+
+
+	volIdOrder: = ([3]u32).[u32.[1,3,2], u32.[0,2,3], u32.[0,3,1], u32.[0,1,2]];
+};
+
 #load "src/body_procs.jai";
 #load "src/joints.jai";
 #load "src/immediate_mode_magic.jai";
@@ -334,10 +376,11 @@ Contact_Info :: struct {
 
 #import "Math";
 #import "Hash_Table";
-#import,file "math.jai";
+// #import,file "math.jai";
+#load "math.jai";
 // #import "SIMD_Math";
-// #import,dir "modules/Collision_Detection";
-#load "modules/Collision_Detection/module.jai";
+#import,dir "modules/Collision_Detection";
+// #load "modules/Collision_Detection/module.jai";
 basic :: #import "Basic";
 
 #scope_module

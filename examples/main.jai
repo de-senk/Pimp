@@ -427,30 +427,6 @@ init_softbody_mesh :: (this: *Soft_Body, idx: int) {
 }
 
 
-Soft_Body :: struct {
-    is_initialized: bool;
-    is_graphics_initialized: bool;
-    numParticles  : s64     ;
-    numTets       : s64     ;
-    pos           : []float ;
-    prevPos       : []float ;
-    vel           : []float ;
-    tetIds        : []u32   ;
-    edgeIds       : []u32   ;
-    triangleList       : []u32   ;
-    restVol       : []float ;
-    edgeLengths   : []float ;
-    invMass       : []float ;
-    edgeCompliance: float   ;
-    volCompliance : float   ;
-    tempp         : []float ;
-    grads         : []float ;
-    grabId        : s32     ;
-    grabInvMass   : float   ;
-
-
-	volIdOrder: = ([3]u32).[u32.[1,3,2], u32.[0,2,3], u32.[0,3,1], u32.[0,1,2]];
-};
 
 populate_mesh :: (this: *Soft_Body, mesh: *Skinned_Mesh) {
 
@@ -647,9 +623,9 @@ is_key_down :: inline (key : Key_Code) -> bool
 simp :: #import "Simp";
 getrect :: #import "GetRect";
 
-CD ::#import,file"../modules/Collision_Detection/module.jai";
-// physics ::#import,file"../module.jai";
-#load "../module.jai";
+using CD ::#import,file"../modules/Collision_Detection/module.jai";
+using physics ::#import,file"../module.jai";
+// #load "../module.jai";
 
 #load "src/parse_utils.jai";
 #load "src/render.jai";

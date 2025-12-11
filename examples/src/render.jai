@@ -482,15 +482,15 @@ push_debug_hull :: (position: Vector3, orientation: Quaternion, hull_shape: Conv
 
         if vert_count == {
             case 4;
-    		    v0 := hull_shape.worldSpace*vertices_tmp[0];
-                v1 := hull_shape.worldSpace*vertices_tmp[1];
-                v2 := hull_shape.worldSpace*vertices_tmp[2];
-                v3 := hull_shape.worldSpace*vertices_tmp[3];
+    		    v0 := transform_point(hull_shape.worldSpace,vertices_tmp[0]);
+                v1 := transform_point(hull_shape.worldSpace, vertices_tmp[1]);
+                v2 := transform_point(hull_shape.worldSpace, vertices_tmp[2]);
+                v3 := transform_point(hull_shape.worldSpace, vertices_tmp[3]);
                 push_debug_polygon(.[ v0, v1, v2, v3 ], color);
             case 3;
-    		    v0 := hull_shape.worldSpace*vertices_tmp[0];
-                v1 := hull_shape.worldSpace*vertices_tmp[1];
-                v2 := hull_shape.worldSpace*vertices_tmp[2];
+    		    v0 := transform_point(hull_shape.worldSpace, vertices_tmp[0]);
+                v1 := transform_point(hull_shape.worldSpace, vertices_tmp[1]);
+                v2 := transform_point(hull_shape.worldSpace, vertices_tmp[2]);
                 push_debug_triangle( v0, v1, v2, color);
 
             case;
