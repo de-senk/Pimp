@@ -226,7 +226,9 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
         doLabel("contact!", WorldToScreen(P_END));
         arm := P_START-test1pos;
         torque := cross_product(arm, -world_normal_towards_A);
+
         push_arrow(test1pos, torque*4.0, color=.{1,1,1,1});
+        doLabel("torque!", WorldToScreen(test1pos));
         // push_line(test1pos, world_contact_points_on_A[it], .{0,1,0,1});
 
         dq :Quaternion;

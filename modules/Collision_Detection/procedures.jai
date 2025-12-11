@@ -114,7 +114,7 @@ hull_center :: inline (hull: Convex_Hull) -> Vector3 { return Vector3.{hull.worl
 QueryEdgeDirections_deSenk :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQuery
 {
     #run TODO("Maybe change the system, so its always faceA+edge points OR faceB +edge points");
-    DRAW :: true;
+    DRAW :: false;
 
     hullA_center := Vector3.{hullA.worldSpace._14, hullA.worldSpace._24, hullA.worldSpace._34};
     #if DRAW {
@@ -123,31 +123,24 @@ QueryEdgeDirections_deSenk :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQu
     dist2_between_points: float = -FLOAT32_INFINITY;
     best_point_1:Vector3;
     best_point_2:Vector3;
-    result := EdgeQuery.{ distance = -FLOAT32_INFINITY }; //NOTE: I dont know what default distance to use
-    // result := EdgeQuery.{ distance = -0 }; //NOTE: I use -0 that is different than 0.
+    result := EdgeQuery.{ distance = -FLOAT32_INFINITY };
 	for :all_edges edgeA, indexA : hullA.mesh
 	{
         edgeA_start := hullA.worldSpace * (edgeA.tail.vertex);
         edgeA_end := hullA.worldSpace   * (edgeA.next.tail.vertex);
-        triA := create_triangle(hullA_center, edgeA_start,edgeA_end );
 		for :all_edges edgeB, indexB: hullB.mesh
 		{
             edgeB_start := hullB.worldSpace * (edgeB.tail.vertex);
             edgeB_end := hullB.worldSpace   * (edgeB.next.tail.vertex);
-
-            intersects, intersection_point, bary_coord, slider_t := intersect_segment_triangle_culling(edgeB_start, edgeB_end, triA);
-            if intersects {
-                closest_point_on_A:, closest_point_on_B:, sss:, slider_t2:, this_separation := closest_point_segment_to_segment(edgeA_start, edgeA_end, edgeB_start, edgeB_end);
+            hit, intersection_point, bary_coord, t_slider, this_separation := intersect_segment_triangle_branchless_rename_me(edgeB_start, edgeB_end, hullA_center, edgeA_start, edgeA_end );
+            if hit {
                 this_separation = -this_separation;
                 result.edgeA = edgeA;
                 result.edgeB = edgeB;
                 result.distance = this_separation;
-
-
+                //experimental, will not use, but I have this as a reference when I figure out what to do with this data.
                 result.world_furthest_point = intersection_point;
                 result.num_inersecting_points +=1;
-
-
                 #if DRAW {
                   // result.world_normal = world_plane_normal;
                   //draw triangle

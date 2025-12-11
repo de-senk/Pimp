@@ -1067,10 +1067,107 @@ intersect_segment_triangle_no_culling :: (start: Vector3, end: Vector3, tri: Tri
     return true, intersection_point, barycentric_coordinates, slider_t;
 }
 
-//Tested
-intersect_segment_triangle_culling :: (p: Vector3, q: Vector3, tri: Triangle) -> (success: bool, intersection_point: Vector3, barycentric_coordinates: Vector3, slider_t: float)
+// Branchless Möller-Trumbore - scalar SIMD
+intersect_segment_triangle_branchless :: (segment_start: Vector3, segment_end: Vector3, v0: Vector3, v1: Vector3, v2: Vector3) -> (hit: bool, hit_point: Vector3, barycentric: Vector3, t: float)
 {
-    intersection_point: Vector3;
+    EPSILON6 :: 0.0000001;
+
+    ray_direction := segment_end - segment_start;
+    segment_length := length(ray_direction);
+    inv_length := 1.0 / segment_length;
+    ray_direction = ray_direction * inv_length;
+
+    edge1 := v1 - v0;
+    edge2 := v2 - v0;
+    h := cross_product(ray_direction, edge2);
+    a := dot(edge1, h);
+
+    // scalar simd, we dont early exit!
+    f := 1.0 / a;
+    s := segment_start - v0;
+    u := f * dot(s, h);
+
+    q := cross_product(s, edge1);
+    v := f * dot(ray_direction, q);
+    t_ray := f * dot(edge2, q);
+
+    w := 1.0 - u - v;
+    t_normalized := t_ray * inv_length;
+
+    hit_point := segment_start + ray_direction * t_ray;
+
+    // maskings tests
+    valid := (a < -EPSILON6 || a > EPSILON6) &&  // not parallel
+             (u >= 0.0 && u <= 1.0) &&          // u in range
+             (v >= 0.0) &&                       // v >= 0
+             (u + v <= 1.0) &&                   // inside triangle
+             (t_ray >= 0.0 && t_ray <= segment_length); // in segment
+
+    return valid, hit_point, .{u, v, w}, t_normalized;
+}
+
+//tested
+intersect_segment_triangle_branchless_rename_me :: (segment_start: Vector3, segment_end: Vector3, v0: Vector3, v1: Vector3, v2: Vector3) -> (hit: bool, hit_point: Vector3, barycentric: Vector3, t: float, distance_to_v1v2: float)
+{ //same as intersect_segment_triangle_branchless but this also returns distance fron v1 v2 to hit point
+    EPSILON6 :: 0.0000001;
+
+    ray_direction := segment_end - segment_start;
+    segment_length := length(ray_direction);
+    inv_length := 1.0 / segment_length;
+    ray_direction = ray_direction * inv_length;
+
+    edge1 := v1 - v0;
+    edge2 := v2 - v0;
+    h := cross_product(ray_direction, edge2);
+    a := dot(edge1, h);
+
+    // scalar simd, we dont early exit!
+    f := 1.0 / a;
+    s := segment_start - v0;
+    u := f * dot(s, h);
+
+    q := cross_product(s, edge1);
+    v := f * dot(ray_direction, q);
+    t_ray := f * dot(edge2, q);
+
+    w := 1.0 - u - v;
+    t_normalized := t_ray * inv_length;
+
+    hit_point := segment_start + ray_direction * t_ray;
+
+    ///////////////
+    //here is the distance from v1v2 to intersection point
+      edge_v1v2 := v2 - v1;
+      edge_length_sq := dot(edge_v1v2, edge_v1v2);
+
+      to_point := hit_point - v1;
+      proj_t := dot(to_point, edge_v1v2) / edge_length_sq;
+
+      proj_t_clamped := proj_t;
+      if proj_t_clamped < 0.0  proj_t_clamped = 0.0;
+      if proj_t_clamped > 1.0  proj_t_clamped = 1.0;
+
+
+      closest_point_on_edge := v1 + edge_v1v2 * proj_t_clamped;
+      distance_to_v1v2 := length(hit_point - closest_point_on_edge);
+    //I think I can improve the above with arrow algebra.
+    ///////////////
+
+    // maskings tests
+    valid := (a < -EPSILON6 || a > EPSILON6) &&  // not parallel
+             (u >= 0.0 && u <= 1.0) &&          // u in range
+             (v >= 0.0) &&                       // v >= 0
+             (u + v <= 1.0) &&                   // inside triangle
+             (t_ray >= 0.0 && t_ray <= segment_length); // in segment
+
+    return valid, hit_point, .{u, v, w}, t_normalized, distance_to_v1v2;
+}
+
+
+//Tested
+intersect_segment_triangle_culling :: (p: Vector3, q: Vector3, tri: Triangle) -> (success: bool, hit_point: Vector3, barycentric_coordinates: Vector3, slider_t: float)
+{
+    hit_point: Vector3;
     barycentric_coordinates: Vector3;
     slider_t: float;
 
@@ -1083,14 +1180,14 @@ intersect_segment_triangle_culling :: (p: Vector3, q: Vector3, tri: Triangle) ->
     // Compute t value and point s of intersection with triangle plane
     denom := distp - distq;
     slider_t = distp / denom;
-    intersection_point = p + slider_t * (q - p);
+    hit_point = p + slider_t * (q - p);
 
     // Compute the barycentric coordinate u; exit if outside 0..1 range
-    x := dot(intersection_point, tri.edge1_plane_normal) - tri.edge1_plane_distance;
+    x := dot(hit_point, tri.edge1_plane_normal) - tri.edge1_plane_distance;
     if x < 0.0 || x > 1.0 return false, .{}, .{}, 0.0;
 
     // Compute the barycentric coordinate v; exit if negative
-    y := dot(intersection_point, tri.edge2_plane_normal) - tri.edge2_plane_distance;
+    y := dot(hit_point, tri.edge2_plane_normal) - tri.edge2_plane_distance;
     if y < 0.0 return false, .{}, .{}, 0.0;
 
     // Compute the barycentric coordinate w; exit if negative
@@ -1099,11 +1196,11 @@ intersect_segment_triangle_culling :: (p: Vector3, q: Vector3, tri: Triangle) ->
 
     barycentric_coordinates = .{x, y, z};
 
-    return true, intersection_point, barycentric_coordinates, slider_t;
+    return true, hit_point, barycentric_coordinates, slider_t;
 }
 
 //Original, maybe I have a typo here from the book.
-IntersectSegmentTriangle :: (segment_start: Vector3, segment_end: Vector3, tri: Triangle,  intersection_point: *Vector3) -> (success: bool, barycentric_coordinates: Vector3, slider_t: float)
+IntersectSegmentTriangle :: (segment_start: Vector3, segment_end: Vector3, tri: Triangle,  hit_point: *Vector3) -> (success: bool, barycentric_coordinates: Vector3, slider_t: float)
 {
     barycentric_coordinates: Vector3;
     slider_t: float;
@@ -1116,14 +1213,14 @@ IntersectSegmentTriangle :: (segment_start: Vector3, segment_end: Vector3, tri: 
     // Compute t value and point s of intersection with triangle plane
     denom := distp - distq;
     slider_t = distp / denom;
-    intersection_point.* = segment_start + slider_t * (segment_end - segment_start);
+    hit_point.* = segment_start + slider_t * (segment_end - segment_start);
     using barycentric_coordinates;
     // Compute the barycentric coordinate u; exit if outside 0..1 range
-    x = dot(intersection_point.*, tri.edge1_plane_normal) - tri.edge1_plane_distance;
+    x = dot(hit_point.*, tri.edge1_plane_normal) - tri.edge1_plane_distance;
 
     if x < 0.0 || x > 1.0 return false, .{}, 0.0;
     // Compute the barycentric coordinate v; exit if negative
-    y = dot(intersection_point.*, tri.edge2_plane_normal) - tri.edge2_plane_distance;
+    y = dot(hit_point.*, tri.edge2_plane_normal) - tri.edge2_plane_distance;
     if y < 0.0 return false, .{}, 0.0;
     // Compute the barycentric coordinate w; exit if negative
     z = 1.0 - x - y;
