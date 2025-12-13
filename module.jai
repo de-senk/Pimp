@@ -14,7 +14,8 @@ physics_coordinates :: struct {
 
 #add_context solver: *Solver;
 
-
+#if !#exists(DEBUG)
+DEBUG :: false;
 
 //:tagIrrelevantStuffThatMaybeIShouldMOveOrDelete <- STARTS HERE
 //Why I implemented this?
@@ -38,9 +39,9 @@ Simplest_Geometric_Shape :: struct {
     b: Vector3;
     c: Vector3;
     d: Vector3;
-    count: int;
+    count: s64;
     #overlay(a) points: [4]Vector3;
-    #overlay(count) state: enum {NONE;POINT;SEGMENT;TRIANGLE;TETRAHEDRON;};
+    #overlay(count) state: enum s64 {NONE;POINT;SEGMENT;TRIANGLE;TETRAHEDRON;};
 }
 
 simplex_add :: (simplex: *Simplest_Geometric_Shape, point: Vector3) {
@@ -58,31 +59,6 @@ simplex_add :: (simplex: *Simplest_Geometric_Shape, point: Vector3) {
 	simplex.points[simplex.count - 1] = point;
 }
 
-#scope_module
-#insert #run maybe_insert_DEBUG();
-maybe_insert_DEBUG :: () -> string
-{
-    basic :: #import "Basic";
-    cmp :: #import "Compiler";
-
-    current_w := get_current_workspace();
-    options := cmp.get_build_options(current_w);
-    should_debug_be_true: bool ;
-    should_debug_be_true = options.backend == .X64;
-    if !should_debug_be_true {
-        //try guess if we are in debug from llvm options
-        should_debug_be_true = options.llvm_options.bitcode_optimization_setting == .O0;
-        should_debug_be_true |= options.llvm_options.machine_code_optimization_setting == .NONE;
-        should_debug_be_true |= options.llvm_options.machine_code_optimization_setting == .UNSET;
-    }
-    //TODO(tr): check if debug already exsts with #if #exists(DEBUG) and... the TODO is to figure out what to do.
-    #if #exists(DEBUG) then return ""; //:tagEarlyReturn
-
-    b: basic.String_Builder;
-    basic.print_to_builder(*b, "DEBUG :: %1; //inserted by maybe_insert_DEBUG", should_debug_be_true);
-    return basic.builder_to_string(*b);
-}
-#scope_export
 
 rotate90aroundx := #run make_quaternion_from_axis_and_angle(.{1,0,0}, 3.141593/2);
 rotate90aroundy := #run make_quaternion_from_axis_and_angle(.{0,1,0}, 3.141593/2);
@@ -94,31 +70,6 @@ DEG_TO_RAD :: 3.141593/180.0; //7 digits bec    ause float32 has a limit of 7 di
 degrees_120_in_radians :: 120.0*DEG_TO_RAD;
 
 
-g_should_log_this_frame: bool;
-deactivate_logger :: () #expand {
-    my_logger :: (message: string, data: *void, info: Log_Info) {
-    };
-    old_logger      := context.logger;
-    old_logger_data := context.logger_data;
-
-    default_logger = old_logger;
-    default_logger_data = old_logger_data;
-
-
-
-    if !g_should_log_this_frame {
-        context.logger      = my_logger;
-        context.logger_data = null;
-        }
-    `defer {
-        // When we are done with this scope, set the logger back.
-        context.logger      = old_logger;
-        context.logger_data = old_logger_data;
-        g_should_log_this_frame = false;
-    }
-}
-
-
 #scope_module
 #if !#exists(TODO)
 TODO :: (msg: string,loc:= #caller_location) {
@@ -127,35 +78,15 @@ TODO :: (msg: string,loc:= #caller_location) {
 }
 
 #scope_export
-
-
-
 //:tagIrrelevantStuffThatMaybeIShouldMOveOrDelete <- ENDS HERE
 
 
 #import "Remap_Context"(VERBOSE=false);
 
-//TODO: Remap_context only if @dll_export, and replace remap_context to nothing when used internally?
-
-// #program_export
-// set_context_solver_memory :: (solver: *Solver) {
-//     context.solver = solver;
-//     // context.logger = logger;
-// } @dll_export
-
-// #program_export
-// create_solver :: () {
-//     Remap_Context();
-//     initialize_physics_solver();
-//     context.solver.world.default_cube_shape = create_cube_hull(.{0, 0, 0}, .{1, 1, 1});
-// } @dll_export
-
-// #program_export
 create_solver_and_world :: () {
-    // Remap_Context();
     context.solver = basic.New(Solver);
     context.solver.world = basic.New(World);
-} @dll_export
+}
 
 
 CheckInit :: () #expand {
@@ -168,10 +99,10 @@ World :: struct {
     COLLISION_MARGIN :: 0.001; //
 
     //Complexity Warning:
-    //this might be pointless, but I just try to makea bucket arrays of the size of a page size of virtual memory, I did this years ago and I never measured it, so there is a very high probability that this is pointless:
-    count_joint_Constraint_Fitted_To_PageSize :: 8*4096 / size_of(Joint_Constraint); // size*count=4096*8bit=bucket_size -> count=4096*8;
-    count_RigidBody_Fitted_To_PageSize :: 8*4096 / size_of(Body); // size*count=4096*8bit=bucket_size -> count=4096*8;
-    count_Manifolds_Fitted_To_PageSize :: 8*4096 / size_of(Collision_Constraint); // size*count=4096*8bit=bucket_size -> count=4096*8;
+        //this might be pointless, but I just try to makea bucket arrays of the size of a page size of virtual memory, I did this years ago and I never measured it, so there is a very high probability that this is pointless:
+        count_joint_Constraint_Fitted_To_PageSize :: 8*4096 / size_of(Joint_Constraint); // size*count=4096*8bit=bucket_size -> count=4096*8;
+        count_RigidBody_Fitted_To_PageSize :: 8*4096 / size_of(Body); // size*count=4096*8bit=bucket_size -> count=4096*8;
+        count_Manifolds_Fitted_To_PageSize :: 8*4096 / size_of(Collision_Constraint); // size*count=4096*8bit=bucket_size -> count=4096*8;
 
     soft_bodies: [1]Soft_Body;
     stub_world_body: Body; //to avoid null check everywhere on the code and maybe soem easi paralellization without masks and branching.
@@ -188,17 +119,6 @@ World :: struct {
     //for CCD
     // number_of_collisions_this_frame: int;
 
-
-    //
-    // These might be removed soon
-    //
-     // drawing_list: Drawing_List;
-     VOLOR :: struct{p: Vector3;radius:float;color:Vector4;}
-     counter: u64;
-     //unused, maybe delete ring buffer draw
-     points_to_draw: [10]VOLOR;
-     points_to_draw_cursor: int;
-
 }
 
 Solver :: struct {
@@ -207,28 +127,22 @@ Solver :: struct {
     gravity     := Vector3.{0,0.0,0};
     iterations  := 10;
     number_of_steps_executed_so_far : u64; //<- used for immediate mode.
-} @dll_export
+}
 
 
 Shape_Kind :: enum_flags u64 {
-    SPHERE;CAPSULE;CUBE;HULL;PLANE;
-
-    //to be removed, because I found a bug using these but I dont remember how to reproduce
-    // but it was like,// try changing to u16 and see
-    //combinatorics SPHERE
-    SPHEREvsSPHERE :: Shape_Kind.SPHERE | Shape_Kind.SPHERE;
-    SPHEREvsCAPSULE :: Shape_Kind.SPHERE | Shape_Kind.CAPSULE;
-    SPHEREvsPLANE :: Shape_Kind.SPHERE | Shape_Kind.PLANE;
-
-
-    //combinatorics CAPSULE
-    CAPSULEvsPLANE :: Shape_Kind.CAPSULE | Shape_Kind.PLANE;
+    SPHERE;
+    CAPSULE;
+    CUBE;
+    HULL;
+    // PLANE;
+    // TRIANGLE_MESH;
 }
 
 //For XPBD, not all these fields are used.
 Body :: struct {
 
-    aabb: AABB;
+    aabb: AABB; //local aabb
     hull_shape: Convex_Hull;
     bucket_locator: Bucket_Locator;
 
@@ -263,7 +177,6 @@ Body :: struct {
     friction:             float32 = 0.5;
     elasticity:           float32 = 1.0; //half means half every collision, you might want .9
 
-    local_aabb: AABB;
 
     //these fields might change based on orientation and shape kind, we try to cache them if possible.
     inv_world_moment_of_inertia:   Matrix3;
@@ -277,6 +190,7 @@ Body :: struct {
 }
 
 
+//Old, can be deleted:
 Basic_Shape :: struct {
     _1, _2, _3: float;
 
@@ -358,7 +272,6 @@ Soft_Body :: struct {
 #import "Math";
 #import "Hash_Table";
 #import,file "math.jai";
-// #load "math.jai";
 
 
 #import "Collision_Detection";
@@ -541,8 +454,6 @@ FLOAT32_EPSILON0 :float32: 0h3f800000; //1.0
     }
 
 */
-
-
 
 //:tagDecisionsReasonings
 //I like to put my decisions and the reasoning behind them, just to avoid information loss.

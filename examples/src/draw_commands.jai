@@ -522,7 +522,7 @@ Draw :: (using body: *Body) {
     if g_should_draw && shape_kind == .CUBE draw_as_cube(body);
     if g_should_draw && shape_kind == .HULL draw_as_hull(body);
     if !g_should_draw && shape_kind == .HULL draw_as_hull_shape(body);
-    if shape_kind == .PLANE draw_as_plane(body);
+    // if shape_kind == .PLANE draw_as_plane(body);
     if shape_kind == .SPHERE draw_as_sphere(body);
     if g_should_draw && shape_kind == .CAPSULE draw_as_capsule(body);
 

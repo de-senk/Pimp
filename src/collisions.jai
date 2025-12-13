@@ -189,7 +189,6 @@ narrow_phase :: ()
         //maybe can be abstracted into a procedure, compressed* into a procedure, the problem is finding a good name for this
         {
             if A.inv_mass == 0 && B.inv_mass == 0 then continue; //otherwise we trigger bad collisions and crash stuff
-            if A.shape_kind == .PLANE && B.shape_kind == .PLANE then continue;
 
             old_manifold: *Collision_Constraint; //pointer, why not?
             are_already_constrained: bool;

@@ -111,7 +111,7 @@ RELEASE_DATE :: #run -> string {
     build_constants := tprint(#string STRING
             VERSION         :: "%";
             RELEASE_DATE    :: "%";
-            DEBUG           :: %;
+            //DEBUG           :: %;
             NO_OUTPUT_BUILD :: %;
         STRING,
             VERSION,
