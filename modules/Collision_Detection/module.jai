@@ -4,13 +4,13 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
 {
     center_A := hull_center(hullA);
 	query.faceQuery_AB = QueryFaceDirections(hullA, hullB);
-    if query.faceQuery_AB.distance > EPSILON4 {
+    if query.faceQuery_AB.distance > FLOAT32_EPSILON4 {
      draw_primitive.doLabel("faceQuery_AB", draw_primitive.WorldToScreen(center_A));
      return false;
      }
 
 	query.faceQuery_BA = QueryFaceDirections(hullB, hullA);
-    if query.faceQuery_BA.distance > EPSILON4 {
+    if query.faceQuery_BA.distance > FLOAT32_EPSILON4 {
      draw_primitive.doLabel("faceQuery_BA", draw_primitive.WorldToScreen(center_A));
      return false;
      }
@@ -21,7 +21,7 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
         query.edgeQuery = QueryEdgeDirections_gauss(hullA, hullB);
     }
 
-    if query.edgeQuery.distance > EPSILON4  {
+    if query.edgeQuery.distance > FLOAT32_EPSILON4  {
      draw_primitive.doLabel("edgeQuery", draw_primitive.WorldToScreen(center_A));
      return false;
      }
@@ -82,14 +82,15 @@ TODO :: (msg: string,loc:= #caller_location) {
  //this is for VSCODE |||filepath line:character|||:
   log("\n[TODO->] %, at-> % %:% [<-TODO]", msg, loc.fully_pathed_filename, loc.line_number, loc.character_number);
 }
-EPSILON7 :: 0.0000001;
-EPSILON6 :: 0.000001;
-EPSILON5 :: 0.00001;
-EPSILON4 :: 0.0001;
-EPSILON3 :: 0.001;
-EPSILON2 :: 0.01;
-EPSILON1 :: 0.1;
-EPSILON0 :: 1.0;
+
+FLOAT32_EPSILON7 :float32: 0h33d6bf95; //0.0000001
+FLOAT32_EPSILON6 :float32: 0h358637bd; //0.000001
+FLOAT32_EPSILON5 :float32: 0h3727c5ac; //0.00001
+FLOAT32_EPSILON4 :float32: 0h38d1b717; //0.0001
+FLOAT32_EPSILON3 :float32: 0h3a83126f; //0.001
+FLOAT32_EPSILON2 :float32: 0h3c23d70a; //0.01
+FLOAT32_EPSILON1 :float32: 0h3dcccccd; //0.1
+FLOAT32_EPSILON0 :float32: 0h3f800000; //1.0
 
 
 operator * :: (q: Quaternion, v:Vector3) -> Vector3 #symmetric

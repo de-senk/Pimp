@@ -565,7 +565,7 @@ find_and_load_meshes_and_animations :: inline () {
 #import "Basic";
 #import "String";
 #import "Window_Creation";
-// #import "SIMD_Math";
+
 using Input :: #import "Input";
 
 #if !#exists(DEBUG)

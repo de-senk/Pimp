@@ -41,8 +41,8 @@ simulate :: () {
 
     //broad and narrow phase, I dont like how I implemented this entire block
     {
-        array_reset_keeping_memory(*possible_collisions); //we reset here so we can still draw them when we stop time
-        array_reset_keeping_memory(*collision_pairs); //we reset here so we can stop time and draw these without problems
+        basic.array_reset_keeping_memory(*possible_collisions); //we reset here so we can still draw them when we stop time
+        basic.array_reset_keeping_memory(*collision_pairs); //we reset here so we can stop time and draw these without problems
         broad_phase(.SWEEP_AND_PRUNE); //AABB shenanigans TODO: Trees and Octopuses (BVH BHV is the good one)
         maybe_reserve(*possible_collisions, collision_pairs.count, 1.2); //broad phase may have increased that number. so we reserve memory.
         narrow_phase(); //here we run SAT and compare old contacts with new contacts

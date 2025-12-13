@@ -189,8 +189,8 @@ closest_point_segment_to_segment :: inline (
 	projected_center_B := dot(dirB, verticalDirection);
 
 
-	A_segment_degenerate_into_point := dirA_dirA <= EPSILON5;
-	B_segment_degenerate_into_point := dirB_dirB <= EPSILON5;
+	A_segment_degenerate_into_point := dirA_dirA <= FLOAT32_EPSILON5;
+	B_segment_degenerate_into_point := dirB_dirB <= FLOAT32_EPSILON5;
 	if A_segment_degenerate_into_point && B_segment_degenerate_into_point
 	{
 		sss = 0;

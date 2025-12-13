@@ -24,7 +24,7 @@ QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
             result.distance = distance; //most separating OR if negative: most closest to the penetration separation
             result.world_furthest_point = furthest_vertex_world; //:tagHerePseudoGJK
             result.world_normal = world_planeA.normal; //:tagHerePseudoGJK
-            basically_separating := result.distance > EPSILON4;
+            basically_separating := result.distance > FLOAT32_EPSILON4;
             if basically_separating {
                 result.distance  = FLOAT32_INFINITY; //this will exit SAT because we found a separating axis
                 draw_primitive.grid(closest_point_to_plane(.{5,5,5}, world_planeA.normal, world_planeA.distance), world_planeA.normal, color=.{1.1,1.1,1.1,1});
@@ -410,10 +410,10 @@ CreateFaceContact :: (faceQuery: FaceQuery, referenceHull: Convex_Hull, incident
     for *result.points {
         // len := distance_point_to_plane_signed(point=it.*, inc_plane_n, inc_plane_d);
         len := distance_point_to_plane_signed(point=it.*, world_ref_plane_n, world_ref_plane_d*1.0);
-        is_separating_basically := len > -EPSILON3;
-        // draw_primitive.doLabel(tprint("is_separating_basically %            < %            == %          ",len, EPSILON3, is_separating_basically), draw_primitive.WorldToScreen(.{.5,-2.2-it_index.(float),10.0}));
+        is_separating_basically := len > -FLOAT32_EPSILON3;
+        // draw_primitive.doLabel(tprint("is_separating_basically %            < %            == %          ",len, FLOAT32_EPSILON3, is_separating_basically), draw_primitive.WorldToScreen(.{.5,-2.2-it_index.(float),10.0}));
         if is_separating_basically {
-        //     draw_primitive.doLabel(tprint("is_separating_basically %            < %            == %          ",len, EPSILON3, is_separating_basically), draw_primitive.WorldToScreen(.{.5,1.2+it_index.(float),10.0}));
+        //     draw_primitive.doLabel(tprint("is_separating_basically %            < %            == %          ",len, FLOAT32_EPSILON3, is_separating_basically), draw_primitive.WorldToScreen(.{.5,1.2+it_index.(float),10.0}));
     //         draw_primitive.circle(it.*, 0.1, color=.{1,0,0,0});
 
             // draw_primitive.circle(it.*, 0.1, color=.{0,0,0,1});
@@ -468,7 +468,8 @@ reduce_contact_points_to_four_or_less :: (faceContact: *FaceContact) {
     SEARCH_DIR ::  #run normalize(Vector3.{1,1,1});
 
     manifold_normal := faceContact.query.face.face_plane_normal;
-    assert(length_squared(cross_product(SEARCH_DIR, manifold_normal)) > EPSILON3, "Search dir % and face % are pralalell! fix this",SEARCH_DIR, manifold_normal);
+    #run TODO("searchdir is not robust");
+    assert(length_squared(cross_product(SEARCH_DIR, manifold_normal)) > FLOAT32_EPSILON3, "Search dir % and face % are pralalell! fix this %",SEARCH_DIR, manifold_normal, FLOAT32_EPSILON3);
 
 
     best_points_count := 0;
@@ -968,12 +969,9 @@ if num_contacts draw_primitive.grid(contact.points[0]+world_normal_towards_A*0.2
 };
 
 
-
-
-
 ////////////
 // START OF AI-GENERATED CODE
-
+//its not 100% ai, but I dont like these procedures, to be replaced.
 
 collide_sphere_vs_hull :: (
     sphere_center: Vector3, sphere_radius: float,
@@ -2310,7 +2308,7 @@ distance_between_arcs :: (pointA: Vector3, arcA: Vector3, pointB: Vector3, arcB:
 	crossAB := cross_product(arcA, arcB);
 
 	area := length(crossAB);
-	are_edges_parallel := area <= EPSILON3 * sqrt(length_squared(arcA) * length_squared(arcB) ) ;
+	are_edges_parallel := area <= FLOAT32_EPSILON3 * sqrt(length_squared(arcA) * length_squared(arcB) ) ;
 	if are_edges_parallel return -FLOAT32_INFINITY;
 
 	normal := crossAB / area;

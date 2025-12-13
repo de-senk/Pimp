@@ -45,7 +45,7 @@ solve_position_for_collision_constraint_cb :: (using colli: *Collision_Constrain
 
 AddManifold :: ( A: *Body, B: *Body, contact_stack_lifetime: []Contact_Info) -> *Collision_Constraint {
     using context.solver;
-    #if DEBUG assert(contact_stack_lifetime.count != 0, "You tried to create a manifold with 0 contact points, is that ok?");
+    #if DEBUG basic.assert(contact_stack_lifetime.count != 0, "You tried to create a manifold with 0 contact points, is that ok?");
     locator:, manifold := bucket_array_add(*context.solver.collision_constraints,.{});
     manifold.bucket_locator = locator;
 
@@ -72,7 +72,7 @@ AddManifold :: ( A: *Body, B: *Body, contact_stack_lifetime: []Contact_Info) -> 
 UpdateManifold :: (using manifold: *Collision_Constraint, contact_stack_lifetime: []Contact_Info) {
 
 for contact_stack_lifetime {
-        #if DEBUG assert(is_normalized(it.world_normal_towards_A , tolerance=EPSILON5), "whaat  %", it.world_normal_towards_A );
+        #if DEBUG basic.assert(is_normalized(it.world_normal_towards_A , tolerance=FLOAT32_EPSILON5), "whaat  %", it.world_normal_towards_A );
         manifold.contactsBuffer[it_index].world_contact_point_on_A = it.world_contact_point_on_A;
         manifold.contactsBuffer[it_index].world_contact_point_on_B = it.world_contact_point_on_B;
         manifold.contactsBuffer[it_index].world_normal_towards_A = it.world_normal_towards_A;
@@ -83,7 +83,7 @@ for contact_stack_lifetime {
 
 broad_phase :: (broad_strategy: enum{SWEEP_AND_PRUNE;}) { // grep BroadPhase ::
     using context.solver;
-    array_reset_keeping_memory(*collision_pairs); //we reset here so we can stop time and draw these without problems
+    basic.array_reset_keeping_memory(*collision_pairs); //we reset here so we can stop time and draw these without problems
     //stragety 1
     SweepAndPrune1D(*collision_pairs);
 }
@@ -92,7 +92,7 @@ broad_phase :: (broad_strategy: enum{SWEEP_AND_PRUNE;}) { // grep BroadPhase ::
 SweepAndPrune1D :: (final_pairs: *[..]Collision_Pair ) {
     using context.solver;
     sorted_bodies: [..]Pseudo_Body;
-    sorted_bodies.allocator = temp;
+    sorted_bodies.allocator = basic.temp;
     worst_case_count := bodies.count*2 /* mul by 2 because pairs! */;
     maybe_reserve(*sorted_bodies, worst_case_count);
 
@@ -101,18 +101,18 @@ SweepAndPrune1D :: (final_pairs: *[..]Collision_Pair ) {
         axis_to_project_aabbs := #run normalize(Vector3.{1,1,1});
         for * bodies {
             aabb_copy := it.aabb;
-            #if DEBUG assert(is_aabb_valid(aabb_copy), "aabb is invalid %", aabb_copy);
+            #if DEBUG basic.assert(is_aabb_valid(aabb_copy), "aabb is invalid %", aabb_copy);
             maybe_expand_aabb(*aabb_copy, aabb_copy.min + it.velocity*dt);
             maybe_expand_aabb(*aabb_copy, aabb_copy.max + it.velocity*dt);
             maybe_expand_aabb(*aabb_copy, aabb_copy.min - COLLISION_MARGIN*axis_to_project_aabbs); //I think using the same collision margin for everything will get me in trouble in the future.
             maybe_expand_aabb(*aabb_copy, aabb_copy.max + COLLISION_MARGIN*axis_to_project_aabbs);
 
-            pA := array_add(*sorted_bodies);
+            pA := basic.array_add(*sorted_bodies);
             pA.bucket_locator = it.bucket_locator;
             pA.value = dot(aabb_copy.min, axis_to_project_aabbs);
             pA.ismin = true;
 
-            pB := array_add(*sorted_bodies);
+            pB := basic.array_add(*sorted_bodies);
             pB.bucket_locator = it.bucket_locator;
             pB.value = dot(aabb_copy.max, axis_to_project_aabbs);
             pB.ismin = false;
@@ -130,7 +130,7 @@ SweepAndPrune1D :: (final_pairs: *[..]Collision_Pair ) {
 
     //pair the mfs
     {
-        array_reset_keeping_memory(final_pairs);
+        basic.array_reset_keeping_memory(final_pairs);
         for a: sorted_bodies
         {
             if !a.ismin then continue;
@@ -144,7 +144,7 @@ SweepAndPrune1D :: (final_pairs: *[..]Collision_Pair ) {
                 if b.bucket_locator == a.bucket_locator then break;
                 if !b.ismin then continue;
                 pair.b = b.bucket_locator;
-                array_add(final_pairs, pair);
+                basic.array_add(final_pairs, pair);
             }
         }
     }
@@ -177,8 +177,8 @@ narrow_phase :: ()
         B :          = bucket_array_find_pointer(*bodies, it.b);
 
 
-        #if DEBUG assert(A != null);
-        #if DEBUG assert(B != null);
+        #if DEBUG basic.assert(A != null);
+        #if DEBUG basic.assert(B != null);
 
         should_swap_order_by_shape := A.shape_kind > B.shape_kind;
 
@@ -206,7 +206,7 @@ narrow_phase :: ()
                         // log("are_already_constrained");
                         are_already_constrained = true;
                         old_manifold = it;
-                        #if DEBUG assert(it.contacts_count != 0, "% how we have allocated a manifold with no contacts? you need to check all manifolds before this and remove the ones with no contacts or something", it.contacts_count);
+                        #if DEBUG basic.assert(it.contacts_count != 0, "% how we have allocated a manifold with no contacts? you need to check all manifolds before this and remove the ones with no contacts or something", it.contacts_count);
 
                     }
                 }
@@ -239,7 +239,7 @@ narrow_phase :: ()
                     used := bool.[false, false,false,false];
                     for new_idx: 0.. new_contacts_count - 1
                     {
-                        if new_contacts[new_idx].feature.value == 0 then log("this is BAD, you are not creating an local UID(feature.value and feature.kind) for contact points! %\n ",old_manifold.contactsBuffer[new_idx].feature );
+                        if new_contacts[new_idx].feature.value == 0 then basic.log("this is BAD, you are not creating an local UID(feature.value and feature.kind) for contact points! %\n ",old_manifold.contactsBuffer[new_idx].feature );
                         for old_jdx: 0.. old_manifold.contacts_count - 1
                         {
                             if used[old_jdx] == true then continue;
@@ -300,7 +300,7 @@ narrow_phase :: ()
                             contact := new_contacts[it];
                             if !is_normalized(contact.world_normal_towards_A) then continue; //TODO: figure out why the first contact in history is normal 0
                             cter += 1;
-                            #if DEBUG assert(is_normalized(contact.world_normal_towards_A , tolerance=EPSILON5), "weeaat  %", contact.world_normal_towards_A );
+                            #if DEBUG basic.assert(is_normalized(contact.world_normal_towards_A , tolerance=FLOAT32_EPSILON5), "weeaat  %", contact.world_normal_towards_A );
 
                             //for debugging purpusese you can use this: instead of addmanifold
                             // AddPenetration(contact.A, contact.B, contact.local_point_A, contact.local_point_B, contact.world_normal_towards_A);
@@ -309,10 +309,10 @@ narrow_phase :: ()
                     UpdateManifold(old_manifold, contact_stack_lifetime);
                 }
                 for it_index: 0..new_contacts_count -1
-    //             #if DEBUG assert(is_normalized(old_manifold.contactsBuffer[it_index].local_normal_A , tolerance=EPSILON5), "aaa  %", old_manifold.contactsBuffer[it_index].local_normal_A );
+    //             #if DEBUG assert(is_normalized(old_manifold.contactsBuffer[it_index].local_normal_A , tolerance=FLOAT32_EPSILON5), "aaa  %", old_manifold.contactsBuffer[it_index].local_normal_A );
                 for it_index: 0..new_contacts_count -1 {
-                #if DEBUG assert(is_normalized(new_contacts[it_index].world_normal_towards_A , tolerance=EPSILON5), "ccc  %", new_contacts[it_index].world_normal_towards_A );
-    //             #if DEBUG assert(is_normalized(old_manifold.contactsBuffer[it_index].local_normal_A , tolerance=EPSILON5), "ccc  %", old_manifold.contactsBuffer[it_index].local_normal_A );
+                #if DEBUG basic.assert(is_normalized(new_contacts[it_index].world_normal_towards_A , tolerance=FLOAT32_EPSILON5), "ccc  %", new_contacts[it_index].world_normal_towards_A );
+    //             #if DEBUG assert(is_normalized(old_manifold.contactsBuffer[it_index].local_normal_A , tolerance=FLOAT32_EPSILON5), "ccc  %", old_manifold.contactsBuffer[it_index].local_normal_A );
                 }
 
 
@@ -345,7 +345,7 @@ narrow_phase :: ()
                 if found_a_ballistic_contact
                 {
                     best_contact := new_contacts[best_ballistic_contact_index];
-                    array_add(*context.solver.possible_collisions, best_contact); //add to CCD list (ballisitc solver) //maybe use arena instead because this is reseted per frame//so we basically save a backup of the computed data to check if between 0 and dt we have a collision.
+                    basic.array_add(*context.solver.possible_collisions, best_contact); //add to CCD list (ballisitc solver) //maybe use arena instead because this is reseted per frame//so we basically save a backup of the computed data to check if between 0 and dt we have a collision.
                     // log("BALLISIT CONTACT ADDED");
                 }
                 else
@@ -366,7 +366,7 @@ narrow_phase :: ()
                     if cter != 0 {
 
                         ptr_manifold := AddManifold(A, B, contact_stack_lifetime_view);
-                        #if DEBUG assert(ptr_manifold.contacts_count != 0, "GOW?????????");
+                        #if DEBUG basic.assert(ptr_manifold.contacts_count != 0, "GOW?????????");
 
                         }
                 }
@@ -496,7 +496,7 @@ wrap_collide_hull_vs_hull:: (A: *Body, B: *Body) -> contacts_count:int, contacts
 compute_contacts :: (A: *Body, B: *Body) -> contacts_count:int, contacts_data: [4]Contact_Info
 {
     // debug_break();
-    assert(A.shape_kind <= B.shape_kind, "SHould ordr them before enering here");
+    basic.assert(A.shape_kind <= B.shape_kind, "SHould ordr them before enering here");
     result_contacts: [4]Contact_Info;
     contacts_count: int;
     if A.shape_kind |  B.shape_kind == {
@@ -509,15 +509,15 @@ compute_contacts :: (A: *Body, B: *Body) -> contacts_count:int, contacts_data: [
         // case .CAPSULE, .MESH; // contacts_count, result_contactswrap_collide_capsule_vs_mesh(A, B);
            case .HULL | .HULL; contacts_count, result_contacts       = wrap_collide_hull_vs_hull(A, B);
            // case .HULL | .MESH; contacts_count, result_contacts       = wrap_collide_hull_vs_mesh(A, B);
-           case; assert(false, "\n[ERROR]:shape vs shape not implemented! or... remember ordering the shapes in the broadphase!-> %", A.shape_kind |  B.shape_kind); }
+           case; basic.assert(false, "\n[ERROR]:shape vs shape not implemented! or... remember ordering the shapes in the broadphase!-> %", A.shape_kind |  B.shape_kind); }
 
     //more sanity checks because entropy code
       for 0..contacts_count -1 {
-          assert(is_normalized(result_contacts[it].world_normal_towards_A, tolerance=EPSILON6), "e world_normal_towards_A %", result_contacts[it].world_normal_towards_A);
+          basic.assert(is_normalized(result_contacts[it].world_normal_towards_A, tolerance=FLOAT32_EPSILON6), "e world_normal_towards_A %", result_contacts[it].world_normal_towards_A);
 
         if !is_normalized(result_contacts[it].world_normal_towards_A)
         // then continue; //TODO: figure out why the first contact in history is normal 0
-        then assert(false); // Debugger Time!
+        then basic.assert(false); // Debugger Time!
         //these two lines are key to avoid crash at resolve contacts
         //@Important @Check these two lines are key!
         // result_contacts[it].A = A; //:tagAddABtoEachContactPoint

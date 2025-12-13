@@ -19,7 +19,7 @@ physics_coordinates :: struct {
 //:tagIrrelevantStuffThatMaybeIShouldMOveOrDelete <- STARTS HERE
 //Why I implemented this?
 maybe_reserve :: inline (array: *[..] $T, desired_max_size: s64, overshoot_factor: float32 = 1.0) {
-    #if DEBUG assert(overshoot_factor>=1.0);
+    #if DEBUG basic.assert(overshoot_factor>=1.0);
     new_max_size := cast(s64)(desired_max_size.(float32) * overshoot_factor);
     // log("this should not pahhen % % %",new_max_size > array.allocated, new_max_size, array.allocated);
 
@@ -29,7 +29,7 @@ maybe_reserve :: inline (array: *[..] $T, desired_max_size: s64, overshoot_facto
         // log("---->maybe_reserve %  desired:% max:%",new_max_size > array.allocated, desired_max_size, new_max_size);
         // log("Total bodies=%, squared N*(N-1)/2=%",context.solver.bodies.count, context.solver.bodies.count*(context.solver.bodies.count -1 ) /2);
         // reserve := max(8, 2 * array.count);
-        array_reserve(array, new_max_size);
+        basic.array_reserve(array, new_max_size);
     }
 }
 
@@ -357,9 +357,9 @@ Soft_Body :: struct {
 #import "Sort";
 #import "Math";
 #import "Hash_Table";
-// #import,file "math.jai";
-#load "math.jai";
-// #import "SIMD_Math";
+#import,file "math.jai";
+// #load "math.jai";
+
 
 #import "Collision_Detection";
 #import "Drawing_Primitives";
@@ -367,6 +367,16 @@ Soft_Body :: struct {
 basic :: #import "Basic";
 
 #scope_module
+
+
+FLOAT32_EPSILON7 :float32: 0h33d6bf95; //0.0000001
+FLOAT32_EPSILON6 :float32: 0h358637bd; //0.000001
+FLOAT32_EPSILON5 :float32: 0h3727c5ac; //0.00001
+FLOAT32_EPSILON4 :float32: 0h38d1b717; //0.0001
+FLOAT32_EPSILON3 :float32: 0h3a83126f; //0.001
+FLOAT32_EPSILON2 :float32: 0h3c23d70a; //0.01
+FLOAT32_EPSILON1 :float32: 0h3dcccccd; //0.1
+FLOAT32_EPSILON0 :float32: 0h3f800000; //1.0
 
 #import "Bucket_Array";
 
