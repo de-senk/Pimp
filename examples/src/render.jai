@@ -373,17 +373,6 @@ push_line :: (start : Vector3, end : Vector3, color : Vector4) {
 }
 
 
-colors :: Vector4.[
-    .{1,0,0,1},
-    .{0,1,0,1},
-    .{0,1,1,1},
-    .{.75,.5,0,1},
-    .{0,.5,.5,1},
-    .{.5,0,.5,1},
-    .{.5,.75,.5,1},
-    .{1,1,1,1},
-    .{0.1,0.73,0.8,1},
-];
 
 draw_line :: inline (start : Vector3, end : Vector3, color : Vector4)
 {

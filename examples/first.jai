@@ -50,6 +50,7 @@ RELEASE_DATE :: #run -> string {
     modules_paths: [..]string;
 
     array_add(*modules_paths, "C:/_paths/my_modules/");
+    array_add(*modules_paths, "../modules/");
     if modules_paths {
         array_add(*modules_paths, ..options.import_path);  // Put these behind whatever the user specified.
         options.import_path = modules_paths;

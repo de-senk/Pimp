@@ -1,3 +1,4 @@
+//this is located at modules/Drawing_Primitives/module.jai
 #import "Math";
 draw_primitive: Draw_Primitive_Procs;
 Draw_Primitive_Procs :: struct {
@@ -182,4 +183,18 @@ Draw_Primitive_Procs :: struct {
 
 }
 
+
+
+
+colors :: Vector4.[
+    .{1,0,0,1},
+    .{0,1,0,1},
+    .{0,1,1,1},
+    .{.75,.5,0,1},
+    .{0,.5,.5,1},
+    .{.5,0,.5,1},
+    .{.5,.75,.5,1},
+    .{1,1,1,1},
+    .{0.1,0.73,0.8,1},
+];
 

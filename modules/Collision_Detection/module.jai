@@ -2,11 +2,18 @@
 
 SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query) -> bool
 {
+    center_A := hull_center(hullA);
 	query.faceQuery_AB = QueryFaceDirections(hullA, hullB);
-    if query.faceQuery_AB.distance > EPSILON4 return false;
+    if query.faceQuery_AB.distance > EPSILON4 {
+     draw_primitive.doLabel("faceQuery_AB", draw_primitive.WorldToScreen(center_A));
+     return false;
+     }
 
 	query.faceQuery_BA = QueryFaceDirections(hullB, hullA);
-    if query.faceQuery_BA.distance > EPSILON4 return false;
+    if query.faceQuery_BA.distance > EPSILON4 {
+     draw_primitive.doLabel("faceQuery_BA", draw_primitive.WorldToScreen(center_A));
+     return false;
+     }
 
     #if false {
         query.edgeQuery = QueryEdgeDirections_deSenk(hullA, hullB);
@@ -14,12 +21,14 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
         query.edgeQuery = QueryEdgeDirections_gauss(hullA, hullB);
     }
 
-    if query.edgeQuery.distance > EPSILON4  return false;
+    if query.edgeQuery.distance > EPSILON4  {
+     draw_primitive.doLabel("edgeQuery", draw_primitive.WorldToScreen(center_A));
+     return false;
+     }
 	return true;
 }
 
-// #import,file"../Drawing_Primitives/module.jai";
-// #import,dir "../Drawing_Primitives";
+#import "Drawing_Primitives";
 draw_debug_hull :: (position: Vector3, orientation: Quaternion, hull_shape: Convex_Hull) {
     vert_count: u32;
     vertices_tmp: [4]Vector3;

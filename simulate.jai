@@ -192,7 +192,7 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
              .{-0.5,  0.5,  0.5}, // 7: left-top-front]);
              ]);
         // hull1 = hull0;
-        hull0 = hull3;
+        // hull0 = hull3;
         hull0.worldSpace = hull3.worldSpace;
         // hull0.scale = hull3.scale;
         // hull0.scale = .{1, 1, 1};
@@ -201,8 +201,8 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     {
     //@Hack temporary hack, I could not figure out good procedure parameters, maybe I should modularize this procedure.
     //:tagCheckTemporaryHackMovedHere_Maybe_Cache_by_orientation_diff this block was inserted in that tag before, now we do it once per frame maybe, to figure out.
-        hull0.worldSpace = make_translation_matrix4(posA)*rotation_matrix (Matrix4, oriA) * make_scale_matrix4(.{4,2,8});
-        hull1.worldSpace  = make_translation_matrix4(test1pos)*rotation_matrix (Matrix4, test1ori) * make_scale_matrix4(.{4,2,8});
+        hull0.worldSpace = make_translation_matrix4(posA)*rotation_matrix (Matrix4, oriA) * make_scale_matrix4(.{1,1,1});
+        hull1.worldSpace  = make_translation_matrix4(test1pos)*rotation_matrix (Matrix4, test1ori) * make_scale_matrix4(.{1,1,1});
 
         //maybe cache per frame/orientation treshold. The bottleneck is still  QueryEdgeDirection and its calls
         hull0.inv_worldSpace_for_bivectors = calculate_inverse_or_use_transpose(hull0);
@@ -210,7 +210,7 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     }
 
 
-
+#if 0
 {
     SPH_RADIUS:= 0.2;
     SPH_HEIGH:= 2.2;
@@ -261,7 +261,7 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     world_contact_points_on_A:,
     world_contact_points_on_B:= collide_sphere_vs_hull(posA, SPH_RADIUS,hull1);
     if num_contacts == 1 {
-    P_START:= world_contact_points_on_B;
+        P_START := world_contact_points_on_B;
         P_END := P_START + world_normal_towards_A;
 
         draw_primitive.arrow(test1pos, world_normal_towards_A);
@@ -282,7 +282,7 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     }
 
      //HULL STESTS
-    #if 0
+    #if 1
     {
     num_contacts             :,
     penetration              :,
@@ -292,8 +292,10 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     world_contact_points_on_B:= collide_hull_vs_hull(hull0,hull1);
 
 
-    draw_debug_hull(posA, oriA, hull0);
-    draw_debug_hull(test1pos, test1ori, hull1);
+    // draw_debug_hull(posA, oriA, hull0);
+    draw_primitive.doLabel("A", draw_primitive.WorldToScreen(posA));
+    draw_primitive.doLabel("B", draw_primitive.WorldToScreen(test1pos));
+    // draw_debug_hull(test1pos, test1ori, hull1);
     for 0..num_contacts-1 {
         P_START:= world_contact_points_on_B[it];
         P_END := P_START + world_normal_towards_A;
@@ -306,7 +308,7 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
         torque := cross_product(arm, -world_normal_towards_A);
 
         draw_primitive.arrow(test1pos, torque*4.0, color=.{1,1,1,1});
-        draw_primitive.doLabel("torque!", draw_primitive.WorldToScreen(test1pos));
+        draw_primitive.doLabel("torque!", draw_primitive.WorldToScreen(test1pos+torque*4.0));
         // push_line(test1pos, world_contact_points_on_A[it], .{0,1,0,1});
 
         dq :Quaternion;

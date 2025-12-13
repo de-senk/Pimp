@@ -27,8 +27,13 @@ QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
             basically_separating := result.distance > EPSILON4;
             if basically_separating {
                 result.distance  = FLOAT32_INFINITY; //this will exit SAT because we found a separating axis
-                // draw_primitive.grid(closest_point_to_plane(.{5,5,5}, world_planeA.normal, world_planeA.distance), world_planeA.normal, color=.{1.1,1.1,1.1,1});
+                draw_primitive.grid(closest_point_to_plane(.{5,5,5}, world_planeA.normal, world_planeA.distance), world_planeA.normal, color=.{1.1,1.1,1.1,1});
                 // draw_primitive.grid(furthest_vertex_world, world_planeA.normal,area_length=2, color=.{1.1,1.1,1.1,1});
+                draw_primitive.X(hull_center(hullA));
+                draw_primitive.X(hull_center(hullB));
+                draw_primitive.X(furthest_vertex_world);
+                draw_primitive.doLabel("furthest_vertex", draw_primitive.WorldToScreen(furthest_vertex_world));
+
                 // draw_primitive.doLabel("SEPARATING AXIS FOUND!", draw_primitive.WorldToScreen(furthest_vertex_world));
                 return result;
             }
@@ -257,7 +262,7 @@ QueryEdgeDirections_gauss :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQue
 	{
         //we precompute gauss map out of the INNER for loop :tagIshouldREallyDoThis99percentsure
 		edgeA_origin:= hullA.worldSpace * ( edgeA.tail.vertex);
-    	edgeA_end := hullA.worldSpace * ( edgeA.twin.tail.vertex);
+    	edgeA_end := hullA.worldSpace   * ( edgeA.twin.tail.vertex);
 
 		 arcA := edgeA_end - edgeA_origin;
 		 faceA_vertex := transform_normal(edgeA.face.face_plane_normal, hullA.inv_worldSpace_for_bivectors);//faceA_vertex
@@ -283,7 +288,7 @@ QueryEdgeDirections_gauss :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQue
 			    bigger := this_separation >= result.distance;
                 if bigger
                 {
-		           result.edgeA = edgeB;
+		           result.edgeA = edgeA;
 		           result.edgeB = edgeB;
 		           result.distance = this_separation;
                     acenter  =edgeA_origin;
@@ -305,6 +310,8 @@ QueryEdgeDirections_gauss :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQue
                    // draw_primitive.grid(acenter, a2,density=2.1,area_length=1, color=.{1,0.6,0.6,1});
                    // draw_primitive.grid(bcenter, b1,density=2.1,area_length=1, color=.{0,1,0,1});
                    // draw_primitive.grid(bcenter, b2,density=2.1,area_length=1, color=.{0.6,1,0.6,1});
+                   draw_primitive.square(bcenter, color=.{0.6,1,0.6,1});
+                   draw_primitive.square(acenter, color=.{0.6,1,0.6,1});
 
 	return result;
 }
@@ -442,10 +449,10 @@ CreateEdgeContact :: (edgeQuery: EdgeQuery, hullA: Convex_Hull, hullB: Convex_Hu
 
 	L0, L1, s, t, distdist := closest_point_segment_to_segment(edgeA0, edgeA1, edgeB0, edgeB1);
 
-    // draw_primitive.circle(edgeA0,.1);
-    // draw_primitive.circle(edgeA1,.1);
-    // draw_primitive.X(edgeB0,.1);
-    // draw_primitive.X(edgeB1,.1);
+    draw_primitive.square(edgeA0,.1);
+    draw_primitive.circle(edgeA1,.1);
+    draw_primitive.X(edgeB0,.1);
+    draw_primitive.X(edgeB1,.1);
 	//compute center of closest points as contact point
 	result.midpoint = (L0 + L1) * 0.5;
 	//compute separating axis between two edges
@@ -1373,8 +1380,10 @@ quickhull_3D :: (/*read only*/cloud_of_points: []Vector3) -> Convex_Hull {
         link_two_faces_by_edge(e12, e21);
         link_two_faces_by_edge(e23, e32);
         link_two_faces_by_edge(e31, e13);
-        #if 1
-            { //This is just to veryfy that we are in centroid 0 0 0
+        #if 0
+            {
+            //[WARNING] TO FIX THIS YOU SHOULD ALSO MODIFY FACE PLANE NORMALS, SO I WOULD RATHER NOT DO THIS
+             //This is just to veryfy that we are in centroid 0 0 0
             pp:[4]Vector3;
             pp[0] = p0;
             pp[1] = p1;

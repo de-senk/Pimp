@@ -20,7 +20,7 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
 
     ball: *Body;
 
-    Draw(player0, delta_time);
+    // Draw(player0, delta_time);
     if was_key_pressed(#char "R") step_draw = 0;
     if was_key_pressed(#char "I") step_draw -= ifx step_draw>0 then 1 else 0;
     if was_key_pressed(#char "O") step_draw += 1;

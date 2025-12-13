@@ -204,7 +204,7 @@ World :: struct {
 Solver :: struct {
     using world: *World;
     dt          := 1.0 / 60.0;
-    gravity     := Vector3.{0,-10.0,0};
+    gravity     := Vector3.{0,0.0,0};
     iterations  := 10;
     number_of_steps_executed_so_far : u64; //<- used for immediate mode.
 } @dll_export
@@ -360,12 +360,10 @@ Soft_Body :: struct {
 // #import,file "math.jai";
 #load "math.jai";
 // #import "SIMD_Math";
-#load "modules/Collision_Detection/module.jai";
-// #import,file "modules/Collision_Detection/module.jai";
-#import,file "modules/Drawing_Primitives/module.jai";
-// #import,dir "modules/Collision_Detection";
-// #import,dir "modules/Drawing_Primitives";
-// #load "modules/Collision_Detection/module.jai";
+
+#import "Collision_Detection";
+#import "Drawing_Primitives";
+
 basic :: #import "Basic";
 
 #scope_module

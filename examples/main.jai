@@ -65,10 +65,10 @@ main :: () {
 	glEnable (GL_BLEND);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    draw_primitive.line = push_line;
-    draw_primitive.triangle = push_debug_triangle;
-    draw_primitive.doLabel = doLabel;
-    draw_primitive.WorldToScreen = WorldToScreen;
+        draw_primitive.line = push_line;
+        draw_primitive.triangle = push_debug_triangle;
+        draw_primitive.doLabel = doLabel;
+        draw_primitive.WorldToScreen = WorldToScreen;
     iii:bool;
 	while g_running
 	{
@@ -627,14 +627,9 @@ is_key_down :: inline (key : Key_Code) -> bool
 simp :: #import "Simp";
 getrect :: #import "GetRect";
 
-// using CD ::#import,file"../modules/Collision_Detection/module.jai";
-//by dir
-// #import,dir "../modules/Drawing_Primitives";
-// #import,dir "../../Pimp";
-//by file
-#import,file"../modules/Drawing_Primitives/module.jai";
-#import,file"../module.jai";
-// #load "../module.jai";
+
+#import "Drawing_Primitives";
+#import,dir "../../Pimp";
 
 #load "src/parse_utils.jai";
 #load "src/render.jai";
