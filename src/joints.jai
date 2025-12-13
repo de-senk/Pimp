@@ -10,9 +10,11 @@ Joint_Kinds :: enum {
     FIXED;
 };
 
+
+
 Two_Body_Constraint_Shared :: struct {
     A: *Body;
-    B: *Body; //I dont know how to make this a default Right here.
+    B: *Body; //I dont know how to make this a default STUB Right here.
     bucket_locator: Bucket_Locator;
 
     //for immediate mode
@@ -128,6 +130,7 @@ solve_position_for_distance_constraint_cb :: (using joint: *Joint_Constraint, dt
 }
 
 
+
 solve_position_for_one_way_distance_constraint_cb :: (using joint: *Joint_Constraint, dt: float) {
     error := world_attach_position_B - world_attach_position_A;
     distance := length(error);
@@ -207,9 +210,9 @@ solve_orientation_for_door_constraint_cb :: (using joint: *Joint_Constraint, dt:
         recovered_door_front_axis_A := normalize(rotate(joint.local_ref_A, (oriA)));
         recovered_door_front_axis_B := normalize(rotate(joint.local_ref_B, (oriB)));
         ss := A.position - physics_coordinates.forward+physics_coordinates.up;
-        push_vector(ss, recovered_door_front_axis_A, .{1,0,0,1}); doLabel("axis A", WorldToScreen(ss +recovered_door_front_axis_A));
-        push_vector(ss, recovered_door_front_axis_B, .{0,1,0,1}); doLabel("axis B", WorldToScreen(ss +recovered_door_front_axis_B));
-        push_vector(ss, world_hinge_axis, .{0,0,1,1}); doLabel("hinge", WorldToScreen(ss +world_hinge_axis));
+        draw_primitive.vector(ss, recovered_door_front_axis_A, .{1,0,0,1}); draw_primitive.doLabel("axis A", draw_primitive.WorldToScreen(ss +recovered_door_front_axis_A));
+        draw_primitive.vector(ss, recovered_door_front_axis_B, .{0,1,0,1}); draw_primitive.doLabel("axis B", draw_primitive.WorldToScreen(ss +recovered_door_front_axis_B));
+        draw_primitive.vector(ss, world_hinge_axis, .{0,0,1,1}); draw_primitive.doLabel("hinge", draw_primitive.WorldToScreen(ss +world_hinge_axis));
         // axis_normal := get_normal_from_normal(world_hinge_axis);
         axis_normal := normalize(world_hinge_axis);
         // axis_normal := normalize(cross_product(world_hinge_axis, recovered_door_front_axis_A));
@@ -219,14 +222,14 @@ solve_orientation_for_door_constraint_cb :: (using joint: *Joint_Constraint, dt:
         a0 := cross_product(recovered_door_front_axis_A, world_hinge_axis);
         a1 := cross_product(recovered_door_front_axis_B, world_hinge_axis);
 
-        push_vector(ss+physics_coordinates.left, a0, .{0.2,0,1,1}); doLabel("a0", WorldToScreen(ss +physics_coordinates.left+a0));
-        push_vector(ss+physics_coordinates.left, a1, .{0,0.2,1,1}); doLabel("a1", WorldToScreen(ss +physics_coordinates.left+a1));
+        draw_primitive.vector(ss+physics_coordinates.left, a0, .{0.2,0,1,1}); draw_primitive.doLabel("a0", draw_primitive.WorldToScreen(ss +physics_coordinates.left+a0));
+        draw_primitive.vector(ss+physics_coordinates.left, a1, .{0,0.2,1,1}); draw_primitive.doLabel("a1", draw_primitive.WorldToScreen(ss +physics_coordinates.left+a1));
 
         //extra protection, make sure that a0 and a1 are perpendicular to hinge IMPORTANT!!!!
         a0 = normalize(a0 - dot(a0, axis_normal) * axis_normal);
         a1 = normalize(a1 - dot(a1, axis_normal) * axis_normal);
         error := cross_product(a0, a1);
-        push_vector(ss+physics_coordinates.left, error, .{1,0.2,0.1,1}); doLabel("ERROR", WorldToScreen(ss +physics_coordinates.left+error));
+        draw_primitive.vector(ss+physics_coordinates.left, error, .{1,0.2,0.1,1}); draw_primitive.doLabel("ERROR", draw_primitive.WorldToScreen(ss +physics_coordinates.left+error));
 
         maybe_apply_angle_limit(joint, dt, axis_normal, a0, a1, joint.swingMin, joint.swingMax, 0.01);
     }

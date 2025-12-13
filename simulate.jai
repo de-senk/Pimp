@@ -39,6 +39,15 @@ simulate :: () {
     }
     number_of_steps_executed_so_far += 1;
 
+    //broad and narrow phase, I dont like how I implemented this entire block
+    {
+        array_reset_keeping_memory(*possible_collisions); //we reset here so we can still draw them when we stop time
+        array_reset_keeping_memory(*collision_pairs); //we reset here so we can stop time and draw these without problems
+        broad_phase(.SWEEP_AND_PRUNE); //AABB shenanigans TODO: Trees and Octopuses (BVH BHV is the good one)
+        maybe_reserve(*possible_collisions, collision_pairs.count, 1.2); //broad phase may have increased that number. so we reserve memory.
+        narrow_phase(); //here we run SAT and compare old contacts with new contacts
+
+    }
     //
     // ACTUAL ALGORITHM STARTS HERE
     //
@@ -113,7 +122,7 @@ simulate :: () {
 
             #run TODO("[ERROR]Damping here!");
             it.angular_velocity *= 0.55;
-            push_vector(it.position, it.angular_velocity, Vector4.{.5,.5,.1,1.0});
+            // draw_primitive.vector(it.position, it.angular_velocity, Vector4.{.5,.5,.1,1.0});
             if length_squared(it.angular_velocity) > 200 {
                 basic.log("MAX ANG VEL REACHED; CLAMPING");
                 // clamp_length(*it.angular_velocity, 5);
@@ -205,11 +214,12 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
 {
     SPH_RADIUS:= 0.2;
     SPH_HEIGH:= 2.2;
-        push_circle(posA,SPH_RADIUS);
-        push_circle(posA,SPH_RADIUS, normal=.{0,0,1});
+        draw_primitive.circle(posA,SPH_RADIUS);
+        draw_primitive.circle(posA,SPH_RADIUS, normal=.{0,0,1});
         capsule_end := posA+ SPH_HEIGH*rotate(Vector3.{0,1,0}, oriA);
-        push_circle(capsule_end,SPH_RADIUS);
-        push_circle(capsule_end,SPH_RADIUS, normal=.{0,0,1});
+        draw_primitive.circle(capsule_end,SPH_RADIUS);
+        draw_primitive.circle(capsule_end,SPH_RADIUS, normal=.{0,0,1});
+    draw_hull_properties(hull0);
     draw_hull_properties(hull1);
     num_contacts             :,
     penetration              :,
@@ -221,14 +231,14 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     P_START:= world_contact_points_on_B;
         P_END := P_START + world_normal_towards_A;
 
-        push_arrow(test1pos, world_normal_towards_A);
-        push_arrow(P_START, world_normal_towards_A, color=.{1,1,1,1});
-        doLabel("contact!", WorldToScreen(P_END));
+        draw_primitive.arrow(test1pos, world_normal_towards_A);
+        draw_primitive.arrow(P_START, world_normal_towards_A, color=.{1,1,1,1});
+        draw_primitive.doLabel("contact!", draw_primitive.WorldToScreen(P_END));
         arm := P_START-test1pos;
         torque := cross_product(arm, -world_normal_towards_A);
 
-        // push_arrow(test1pos, torque*4.0, color=.{1,1,1,1});
-        // doLabel("torque!", WorldToScreen(test1pos));
+        // draw_primitive.arrow(test1pos, torque*4.0, color=.{1,1,1,1});
+        // draw_primitive.doLabel("torque!", draw_primitive.WorldToScreen(test1pos));
         // push_line(test1pos, world_contact_points_on_A[it], .{0,1,0,1});
 
         dq :Quaternion;
@@ -241,8 +251,8 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
 #if 0
     {
     SPH_RADIUS:= 0.2;
-        push_circle(posA,SPH_RADIUS);
-        push_circle(posA,SPH_RADIUS, normal=game_coordinates.left);
+        draw_primitive.circle(posA,SPH_RADIUS);
+        draw_primitive.circle(posA,SPH_RADIUS, normal=game_coordinates.left);
     draw_hull_properties(hull1);
     num_contacts             :,
     penetration              :,
@@ -254,14 +264,14 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     P_START:= world_contact_points_on_B;
         P_END := P_START + world_normal_towards_A;
 
-        push_arrow(test1pos, world_normal_towards_A);
-        push_arrow(P_START, world_normal_towards_A, color=.{1,1,1,1});
-        doLabel("contact!", WorldToScreen(P_END));
+        draw_primitive.arrow(test1pos, world_normal_towards_A);
+        draw_primitive.arrow(P_START, world_normal_towards_A, color=.{1,1,1,1});
+        draw_primitive.doLabel("contact!", draw_primitive.WorldToScreen(P_END));
         arm := P_START-test1pos;
         torque := cross_product(arm, -world_normal_towards_A);
 
-        // push_arrow(test1pos, torque*4.0, color=.{1,1,1,1});
-        // doLabel("torque!", WorldToScreen(test1pos));
+        // draw_primitive.arrow(test1pos, torque*4.0, color=.{1,1,1,1});
+        // draw_primitive.doLabel("torque!", draw_primitive.WorldToScreen(test1pos));
         // push_line(test1pos, world_contact_points_on_A[it], .{0,1,0,1});
 
         dq :Quaternion;
@@ -282,21 +292,21 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     world_contact_points_on_B:= collide_hull_vs_hull(hull0,hull1);
 
 
-    // push_debug_hull(posA, oriA, hull0);
-    // push_debug_hull(test1pos, test1ori, hull1);
+    draw_debug_hull(posA, oriA, hull0);
+    draw_debug_hull(test1pos, test1ori, hull1);
     for 0..num_contacts-1 {
         P_START:= world_contact_points_on_B[it];
         P_END := P_START + world_normal_towards_A;
 
-        push_arrow(test1pos, world_normal_towards_A);
-        push_circle(P_START,.05);
-        push_arrow(P_START, world_normal_towards_A, color=.{1,1,1,1});
-        doLabel("contact!", WorldToScreen(P_END));
+        draw_primitive.arrow(test1pos, world_normal_towards_A);
+        draw_primitive.circle(P_START,.05);
+        draw_primitive.arrow(P_START, world_normal_towards_A, color=.{1,1,1,1});
+        draw_primitive.doLabel("contact!", draw_primitive.WorldToScreen(P_END));
         arm := P_START-test1pos;
         torque := cross_product(arm, -world_normal_towards_A);
 
-        push_arrow(test1pos, torque*4.0, color=.{1,1,1,1});
-        doLabel("torque!", WorldToScreen(test1pos));
+        draw_primitive.arrow(test1pos, torque*4.0, color=.{1,1,1,1});
+        draw_primitive.doLabel("torque!", draw_primitive.WorldToScreen(test1pos));
         // push_line(test1pos, world_contact_points_on_A[it], .{0,1,0,1});
 
         dq :Quaternion;

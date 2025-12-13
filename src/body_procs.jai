@@ -116,9 +116,9 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
     A.position += dx_for_A;
     A.orientation = normalize(dq_for_A + A.orientation);
 
-    push_line(A.position, attach_position_A,.{x=1, w=1});
-    push_line(attach_position_A, attach_position_A + correction_force,.{x=0.1, z=1});
-    push_line(attach_position_A, attach_position_B,.{x=0.1, w=1});
+    draw_primitive.line(A.position, attach_position_A,.{x=1, w=1});
+    draw_primitive.line(attach_position_A, attach_position_A + correction_force,.{x=0.1, z=1});
+    draw_primitive.line(attach_position_A, attach_position_B,.{x=0.1, w=1});
 
     dx_for_B := get_world_linear_position_correction(B, -correction_force, attach_position_B);
     dq_for_B := get_world_angular_position_correction(B, -correction_force, attach_position_B);
@@ -280,7 +280,7 @@ get_angular_delta :: (body: Body, correction_force: Vector3, point_of_applicatio
     delta_angular = rotate(delta_angular, conjugate(body.orientation));
     delta_angular = rotate(delta_angular, (body.orientation));
 
-    push_line(center_of_mass, center_of_mass+delta_angular*5000,.{x=0, y=.9951, w=1});
+    draw_primitive.line(center_of_mass, center_of_mass+delta_angular*5000,.{x=0, y=.9951, w=1});
 
     // scale := stabilize_scale;
     delta_orientation := 0.5*Quaternion.{delta_angular.x,delta_angular.y,delta_angular.z,0.0};
@@ -299,7 +299,7 @@ get_world_angular_position_correction :: (body: Body, correction_force: Vector3,
     // delta_angular := get_delta_angular_from_torque(w_ang, body.orientation, correction_torque);
     delta_angular := get_delta_angular_from_torque(body, correction_torque);
 
-    push_line(center_of_mass, center_of_mass+delta_angular*5000,.{x=0, y=.9951, w=1});
+    draw_primitive.line(center_of_mass, center_of_mass+delta_angular*5000,.{x=0, y=.9951, w=1});
 
     delta_orientation := get_stable_delta_orientation(delta_angular, body.orientation);
     return delta_orientation;

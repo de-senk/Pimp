@@ -41,7 +41,7 @@ get_mouse_pointer_position :: inline ( right_handed: bool) -> (x: int, y: int, s
 //
 // #if !#exists(get_screen_dimensions) forced enable! Input module already handles this for us
 get_screen_dimensions :: inline () ->  (atX: float,atY:float,w:float,h:float) {
-    return 0,0,xx g_current_window_width,xx g_current_window_height;
+    return 0,0,xx g_width,xx g_height;
 }
 
 log_UNIMPLEMENTED :: (loc:= #caller_location) {

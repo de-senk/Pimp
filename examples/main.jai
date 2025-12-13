@@ -40,9 +40,9 @@ main :: () {
 	executable_path := path_strip_filename(get_path_of_running_executable());
 	set_working_directory(executable_path);
 
-    g_current_window_width = 1280;
-    g_current_window_height = 720;
-	g_window = create_window(g_current_window_width, g_current_window_height, "Skeletal Animation");
+    g_width = 1280;
+    g_height = 720;
+	g_window = create_window(g_width, g_height, "Skeletal Animation");
 	simp.set_render_target(g_window);
 	#if OS == .ANDROID {
 	    // @Cleanup Make us fullscreen. This could be done in Android manfiest.
@@ -65,6 +65,10 @@ main :: () {
 	glEnable (GL_BLEND);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    draw_primitive.line = push_line;
+    draw_primitive.triangle = push_debug_triangle;
+    draw_primitive.doLabel = doLabel;
+    draw_primitive.WorldToScreen = WorldToScreen;
     iii:bool;
 	while g_running
 	{
@@ -75,10 +79,10 @@ main :: () {
 		for get_window_resizes ()
 		{
 			if it.window == g_window
-			&& ((g_current_window_width != it.width) || (g_current_window_height != it.height))
+			&& ((g_width != it.width) || (g_height != it.height))
 			{
-				g_current_window_width = it.width;
-				g_current_window_height = it.height;
+				g_width = it.width;
+				g_height = it.height;
 				reinit_fonts ();	// We want the fonts to scale with the window
 			}
 		}
@@ -119,28 +123,28 @@ main :: () {
           using game_coordinates;
           offset := -10.0*forward -10.0*up;
           doLabel("game coordinates", WorldToScreen(offset+2.0*up));
-		  push_line(offset, offset+forward, .{x=1, w=1}); doLabel("forward", WorldToScreen(offset+forward));
-		  push_line(offset, offset+up, .{y=1, w=1});      doLabel("up", WorldToScreen(offset+up));
-		  push_line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
+		  draw_primitive.line(offset, offset+forward, .{x=1, w=1}); doLabel("forward", WorldToScreen(offset+forward));
+		  draw_primitive.line(offset, offset+up, .{y=1, w=1});      doLabel("up", WorldToScreen(offset+up));
+		  draw_primitive.line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
         }
         {
 
 		  //draw opengl coordinates to the rightmost corner
           using game_coordinates;
-		  push_line(.{}, .{x=1}, .{x=1, w=1});doLabel("x", WorldToScreen(.{x=1}));
-		  push_line(.{}, .{y=1}, .{y=1, w=1});doLabel("y", WorldToScreen(.{y=1}));
-		  push_line(.{}, .{z=1}, .{z=1, w=1});doLabel("z", WorldToScreen(.{z=1}));
+		  draw_primitive.line(.{}, .{x=1}, .{x=1, w=1});doLabel("x", WorldToScreen(.{x=1}));
+		  draw_primitive.line(.{}, .{y=1}, .{y=1, w=1});doLabel("y", WorldToScreen(.{y=1}));
+		  draw_primitive.line(.{}, .{z=1}, .{z=1, w=1});doLabel("z", WorldToScreen(.{z=1}));
         }
         {
 		  //draw Physics coordinates to the rightmost corner to the rightmost of that coordinate
           using physics_coordinates;
           offset := -10.0*forward -10.0*up;
           doLabel("physics coordinates", WorldToScreen(offset+2.0*up));
-		  push_line(offset, offset+forward, .{x=1, w=1}); doLabel("forward", WorldToScreen(offset+forward));
-		  push_line(offset, offset+up, .{y=1, w=1});      doLabel("up", WorldToScreen(offset+up));
-		  push_line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
+		  draw_primitive.line(offset, offset+forward, .{x=1, w=1}); doLabel("forward", WorldToScreen(offset+forward));
+		  draw_primitive.line(offset, offset+up, .{y=1, w=1});      doLabel("up", WorldToScreen(offset+up));
+		  draw_primitive.line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
 		  // Draw grid
-		  push_grid(.{0,0,0}, .{0,1,0},);
+		  draw_primitive.grid(.{0,0,0}, .{0,1,0},);
           // drawDungeon();
         }
 
@@ -187,17 +191,17 @@ drawDungeon :: () {
             center := Vector3.{row.(float), 1.0, col.(float)};
             if cell == {
             case 0;
-            push_X(center);
+            draw_primitive.X(center);
             case 1;
-            push_square(center);
+            draw_primitive.square(center);
             case 2;
-            push_plus(center);
+            draw_primitive.plus(center);
             case 3;
-            push_circle(center);
+            draw_primitive.circle(center);
             case 4;
-            push_arrow(center);
+            draw_primitive.arrow(center);
             case 5;
-            push_wireframe_box(center);
+            draw_primitive.wireframe_box(center);
             case;
             }
         }
@@ -343,7 +347,7 @@ MAX_WEIGHTS :: 4;
 MAX_JOINTS :: 1000;
 
 g_window : Window_Type;
-g_current_window_width, g_current_window_height : s32;
+g_width, g_height : s32;
 g_camera : Camera;
 g_running : bool;
 g_control_camera : bool;
@@ -395,18 +399,18 @@ reinit_fonts :: init_fonts;
 init_fonts :: ()
 {
 	// I want a pixel size of 20 with a window height of 720 => 720 / 36 = 20
-	pixel_height := g_current_window_height / 36;
+	pixel_height := g_height / 36;
 	g_font = simp.get_font_at_size ("data/fonts", "OpenSans-Regular.ttf", pixel_height);
 	assert (g_font != null);
 
-    // pixel_height := g_current_window_height / 36;
+    // pixel_height := g_height / 36;
     // g_font2 = simp.get_font_at_size ("data/fonts", "OpenSans-Regular.ttf", pixel_height);
     // assert (g_font2 != null);
 
-	pixel_height = g_current_window_height / 40;
+	pixel_height = g_height / 40;
 	g_checkbox_font = simp.get_font_at_size ("data/fonts", "OpenSans-Regular.ttf", pixel_height);
 	assert (g_checkbox_font != null);
-	pixel_height = g_current_window_height / 45;
+	pixel_height = g_height / 45;
 	g_slider_font = simp.get_font_at_size ("data/fonts", "OpenSans-Italic.ttf", pixel_height);
 	assert (g_slider_font != null);
 	g_dropdown_font = g_slider_font;
@@ -623,8 +627,13 @@ is_key_down :: inline (key : Key_Code) -> bool
 simp :: #import "Simp";
 getrect :: #import "GetRect";
 
-using CD ::#import,file"../modules/Collision_Detection/module.jai";
-using physics ::#import,file"../module.jai";
+// using CD ::#import,file"../modules/Collision_Detection/module.jai";
+//by dir
+// #import,dir "../modules/Drawing_Primitives";
+// #import,dir "../../Pimp";
+//by file
+#import,file"../modules/Drawing_Primitives/module.jai";
+#import,file"../module.jai";
 // #load "../module.jai";
 
 #load "src/parse_utils.jai";

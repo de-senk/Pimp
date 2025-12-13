@@ -14,31 +14,6 @@ physics_coordinates :: struct {
 
 #add_context solver: *Solver;
 
-//mock drawing procedures
-#scope_module
-#if !#exists(WorldToScreen)
-WorldToScreen :: (position: Vector3) -> Vector3, is_inside_frustrum: bool {};
-
-#if !#exists(push_arrow)
-push_arrow ::  (start: Vector3, vector: Vector3, head_size: float=0.1, color: Vector4 = .{.5,.7,.5,1}) {};
-
-
-#if !#exists(doLabel)
-doLabel :: (text: string, pos: Vector3)  {};
-
-#if !#exists(push_line)
-push_line :: (start : Vector3, end : Vector3, color : Vector4) {};
-
-#if !#exists(push_vector)
-push_vector :: (start : Vector3, end : Vector3, color : Vector4) {};
-
-#if !#exists(push_circle)
-push_circle :: (center: Vector3, radius: float = 0.4, segments: int = 16, normal: Vector3=.{0,1,0}, color: Vector4 = .{.5,.7,.5,1}) {};
-
-
-#if !#exists(push_grid)
-push_grid :: (plane_origin: Vector3, plane_normal: Vector3, min_for: s64, max_for: s64 , density:float=1.0, color := Vector4.{0.4, 0.4, 0.4, 1}) {};
-#scope_export
 
 
 //:tagIrrelevantStuffThatMaybeIShouldMOveOrDelete <- STARTS HERE
@@ -51,8 +26,8 @@ maybe_reserve :: inline (array: *[..] $T, desired_max_size: s64, overshoot_facto
 
     if new_max_size == 0 then return;
     if new_max_size > array.allocated {
-        log("---->maybe_reserve %  desired:% max:%",new_max_size > array.allocated, desired_max_size, new_max_size);
-        log("Total bodies=%, squared N*(N-1)/2=%",context.solver.bodies.count, context.solver.bodies.count*(context.solver.bodies.count -1 ) /2);
+        // log("---->maybe_reserve %  desired:% max:%",new_max_size > array.allocated, desired_max_size, new_max_size);
+        // log("Total bodies=%, squared N*(N-1)/2=%",context.solver.bodies.count, context.solver.bodies.count*(context.solver.bodies.count -1 ) /2);
         // reserve := max(8, 2 * array.count);
         array_reserve(array, new_max_size);
     }
@@ -145,6 +120,7 @@ deactivate_logger :: () #expand {
 
 
 #scope_module
+#if !#exists(TODO)
 TODO :: (msg: string,loc:= #caller_location) {
  //this is for VSCODE |||filepath line:character|||:
   basic.log("\n[TODO->] %, at-> % %:% [<-TODO]", msg, loc.fully_pathed_filename, loc.line_number, loc.character_number);
@@ -195,6 +171,7 @@ World :: struct {
     //this might be pointless, but I just try to makea bucket arrays of the size of a page size of virtual memory, I did this years ago and I never measured it, so there is a very high probability that this is pointless:
     count_joint_Constraint_Fitted_To_PageSize :: 8*4096 / size_of(Joint_Constraint); // size*count=4096*8bit=bucket_size -> count=4096*8;
     count_RigidBody_Fitted_To_PageSize :: 8*4096 / size_of(Body); // size*count=4096*8bit=bucket_size -> count=4096*8;
+    count_Manifolds_Fitted_To_PageSize :: 8*4096 / size_of(Collision_Constraint); // size*count=4096*8bit=bucket_size -> count=4096*8;
 
     soft_bodies: [1]Soft_Body;
     stub_world_body: Body; //to avoid null check everywhere on the code and maybe soem easi paralellization without masks and branching.
@@ -204,13 +181,12 @@ World :: struct {
     joint_constraints:  Bucket_Array(type=Joint_Constraint, items_per_bucket=count_joint_Constraint_Fitted_To_PageSize);
     hashed_joint_constraints:  Table(u64, Bucket_Locator);
 
+    collision_constraints: Bucket_Array(type=Collision_Constraint, items_per_bucket=count_Manifolds_Fitted_To_PageSize);
+    collision_pairs: [..]Collision_Pair; //for broadphase, maybe bucket it
+    possible_collisions: [..]Contact_Info; // I only use this datatype because I want to quick_sort, and I dont have the stamina to implement quicksort for bucket arrays.
 
     //for CCD
     // number_of_collisions_this_frame: int;
-    // possible_collisions: [..]Contact_Info; // I only use this because I want to quick_sort, and I dont have the stamina to implement quicksort for bucket arrays.
-    // collision_pairs: [..]Collision_Pair; //for broadphase, maybe bucket it
-
-    // default_cube_shape: Convex_Hull; //I prefer the half edge datastructure.
 
 
     //
@@ -228,7 +204,7 @@ World :: struct {
 Solver :: struct {
     using world: *World;
     dt          := 1.0 / 60.0;
-    gravity     := Vector3.{0,0.0,0};
+    gravity     := Vector3.{0,-10.0,0};
     iterations  := 10;
     number_of_steps_executed_so_far : u64; //<- used for immediate mode.
 } @dll_export
@@ -251,6 +227,9 @@ Shape_Kind :: enum_flags u64 {
 
 //For XPBD, not all these fields are used.
 Body :: struct {
+
+    aabb: AABB;
+    hull_shape: Convex_Hull;
     bucket_locator: Bucket_Locator;
 
     shape_kind: Shape_Kind;
@@ -323,21 +302,21 @@ Contact_Info :: struct {
         // A: *Body;
         // B: *Body;
 
-        world_point_A: Vector3;
-        world_point_B: Vector3;
+        world_contact_point_on_A: Vector3;
+        world_contact_point_on_B: Vector3;
+        world_midpoint: Vector3;
 
         local_point_A: Vector3;
         local_point_B: Vector3;
 
-        world_normal_A: Vector3; //same for B but opposite
+        world_normal_towards_A: Vector3; //same for B but opposite
 
         // position: Vector3;
-        penetration_A: float; //same for B but opposite
+        penetration: float; //same for B but opposite
         time_of_impact: float; //same for B
 
         //hacks
         feature: Contact_Feature; //this is some hack to distinghish between frames if the previois contact point is or may be the same as the new computed one.
-        world_midpoint: Vector3;
 
 };
 
@@ -369,17 +348,23 @@ Soft_Body :: struct {
 
 #load "src/body_procs.jai";
 #load "src/joints.jai";
+#load "src/collisions.jai";
 #load "src/immediate_mode_magic.jai";
 
 #load "simulate.jai";
 // #load "src/spatial_hashing.jai";
 
+#import "Sort";
 #import "Math";
 #import "Hash_Table";
 // #import,file "math.jai";
 #load "math.jai";
 // #import "SIMD_Math";
-#import,dir "modules/Collision_Detection";
+#load "modules/Collision_Detection/module.jai";
+// #import,file "modules/Collision_Detection/module.jai";
+#import,file "modules/Drawing_Primitives/module.jai";
+// #import,dir "modules/Collision_Detection";
+// #import,dir "modules/Drawing_Primitives";
 // #load "modules/Collision_Detection/module.jai";
 basic :: #import "Basic";
 

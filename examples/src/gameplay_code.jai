@@ -22,7 +22,7 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
 
     Draw(player0, delta_time);
     if was_key_pressed(#char "R") step_draw = 0;
-    if was_key_pressed(#char "I") step_draw -= ifx step_draw>0 1 else 0;
+    if was_key_pressed(#char "I") step_draw -= ifx step_draw>0 then 1 else 0;
     if was_key_pressed(#char "O") step_draw += 1;
     if is_key_down(#char "Z") collider_switch_face = true;
     if is_key_down(#char "X") collider_switch_face = false;

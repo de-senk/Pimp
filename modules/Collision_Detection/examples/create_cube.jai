@@ -31,40 +31,6 @@ STUFF_REQUIRED_FOR_TEST_TO_WORK_NOT_IMPORTANT_TO_SAT :: #string JAI
     B:= *B_stack;
 JAI;
 
-SAME__NOT_IMPORTANT_TO_SAT_BUT__MAYBE_USEFUL_AS_REFERENCE :: #string JAI
- Contact_Feature :: struct {
-        value: u64;
-        kind: enum{
-            ALREADY_UNIQUE; //this is for spheres vs spheres
-            EDGE; //for convex hulls
-            FACE; //for convex hulls
-            DIRECTION_SIGN; //DIRECTION_SIGN is for capsules, I take capsule A dir an capsule B dir and if its dot product is positive I use value 1 and 7 if it is negative I use vale 7 and 1, why 7? no reason at all., maybe change enum name.
-            }
-    };
-
-    Contact_Info :: struct {
-        //these two fields are added just to support CCD, maybe it can be done in a better way later on.
-        // A: *RigidBody;
-        // B: *RigidBody;
-
-        world_point_A: Vector3;
-        world_point_B: Vector3;
-
-        local_point_A: Vector3;
-        local_point_B: Vector3;
-
-        world_normal_A: Vector3; //same for B but opposite
-
-        // position: Vector3;
-        penetration_A: float; //same for B but opposite
-        time_of_impact: float; //same for B
-
-        //hacks
-        feature: Contact_Feature; //this is some hack to distinghish between frames if the previois contact point is or may be the same as the new computed one.
-        world_midpoint: Vector3;
-
-    };
-JAI;
 
 main :: () {
     #insert STUFF_REQUIRED_FOR_TEST_TO_WORK_NOT_IMPORTANT_TO_SAT;
@@ -137,7 +103,7 @@ main :: () {
                     // result_contacts[0].local_point_A, result_contacts[0].local_point_B = result_contacts[0].local_point_B, result_contacts[0].local_point_A;
 
                     result_contacts[0].world_normal_A = world_normal_A;
-                    result_contacts[0].penetration_A = penetration;
+                    result_contacts[0].penetration = penetration;
                     num_contacts = 1;
 
                      //@Investigate isthere a better way to do an UID?
@@ -177,7 +143,7 @@ main :: () {
                             //crossed points of appllications
                             // result_contacts[0].local_point_A, result_contacts[0].local_point_B = result_contacts[0].local_point_B, result_contacts[0].local_point_A;
                             result_contacts[it_index].world_normal_A = world_normal_A;
-                            result_contacts[it_index].penetration_A = penetration;
+                            result_contacts[it_index].penetration = penetration;
 
                             num_contacts += 1;
                              //@Investigate isthere a better way to do an UID?
@@ -214,7 +180,7 @@ main :: () {
                             //crossed points of appllications
                             // result_contacts[0].local_point_A, result_contacts[0].local_point_B = result_contacts[0].local_point_B, result_contacts[0].local_point_A;
                             result_contacts[it_index].world_normal_A = world_normal_A;
-                            result_contacts[it_index].penetration_A = penetration;
+                            result_contacts[it_index].penetration = penetration;
 
                             num_contacts += 1;
                              //@Investigate isthere a better way to do an UID?

@@ -222,7 +222,10 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, user
     ball_position := get_translation(transform);
     hash := get_hash(loc, identifier);
     ball, did_just_created_a_new_one := find_or_create_ball(hash, ball_position, radius, mass);
-    // if did_just_created_a_new_one {//unused for now}
+    if did_just_created_a_new_one {
+    maybe_expand_aabb(*ball.aabb,.{1,1,1});
+    maybe_expand_aabb(*ball.aabb,.{-1,-1,-1});
+    }
     ball.position = ball_position;
     ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
     ball.user_data = transform;

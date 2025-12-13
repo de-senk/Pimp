@@ -8,7 +8,7 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
 	query.faceQuery_BA = QueryFaceDirections(hullB, hullA);
     if query.faceQuery_BA.distance > EPSILON4 return false;
 
-    if collider_switch_face {
+    #if false {
         query.edgeQuery = QueryEdgeDirections_deSenk(hullA, hullB);
     } else {
         query.edgeQuery = QueryEdgeDirections_gauss(hullA, hullB);
@@ -17,6 +17,46 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
     if query.edgeQuery.distance > EPSILON4  return false;
 	return true;
 }
+
+// #import,file"../Drawing_Primitives/module.jai";
+// #import,dir "../Drawing_Primitives";
+draw_debug_hull :: (position: Vector3, orientation: Quaternion, hull_shape: Convex_Hull) {
+    vert_count: u32;
+    vertices_tmp: [4]Vector3;
+
+    color_idx:=0;
+    for :all_faces current_face: hull_shape.mesh {
+        color_idx += 1;
+        for :traverse_edge_ring current_edge: current_face {
+	        localPoint := current_edge.tail.vertex;
+    		vertices_tmp[vert_count] = localPoint;
+    		vert_count += 1;
+        }
+
+        n := transform_normal(current_face.face_plane_normal, hull_shape.inv_worldSpace_for_bivectors);
+        color := colors[color_idx];
+        normalize(*color);
+
+        if vert_count == {
+            case 4;
+    		    v0 := transform_point(hull_shape.worldSpace, vertices_tmp[0]);
+                v1 := transform_point(hull_shape.worldSpace, vertices_tmp[1]);
+                v2 := transform_point(hull_shape.worldSpace, vertices_tmp[2]);
+                v3 := transform_point(hull_shape.worldSpace, vertices_tmp[3]);
+                draw_primitive.polygon(.[ v0, v1, v2, v3 ], color);
+            case 3;
+    		    v0 := transform_point(hull_shape.worldSpace, vertices_tmp[0]);
+                v1 := transform_point(hull_shape.worldSpace, vertices_tmp[1]);
+                v2 := transform_point(hull_shape.worldSpace, vertices_tmp[2]);
+                draw_primitive.triangle( v0, v1, v2, color);
+
+            case;
+                assert(false, "vert_count %", vert_count);
+            }
+	   vert_count = 0; //to use vertices_tmp array as a ring buffer
+	}
+}
+
 
 //
 // Imports and private module stuff
@@ -28,32 +68,6 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
 #import "Basic"; //for asserts
 
 
-//mock drawing procedures
-#scope_module
-#if !#exists(WorldToScreen)
-WorldToScreen :: (position: Vector3) -> Vector3, is_inside_frustrum: bool {};
-
-
-#if !#exists(doLabel)
-doLabel :: (text: string, pos: Vector3)  {};
-
-#if !#exists(push_line)
-push_line :: (start : Vector3, end : Vector3, color : Vector4) {};
-
-#if !#exists(push_arrow)
-push_arrow ::  (start: Vector3, vector: Vector3, head_size: float, color: Vector4) {};
-
-
-#if !#exists(push_circle)
-push_circle :: (center: Vector3, radius: float = 0.4, segments: int = 16, normal: Vector3 = .{0,1,0}, color: Vector4 = .{.5,.7,.5,1}) {};
-
-
-#if !#exists(push_vector)
-push_vector :: (start : Vector3, end : Vector3, color : Vector4) {};
-
-#if !#exists(push_grid)
-push_grid :: (plane_origin: Vector3, plane_normal: Vector3, min_for: s64, max_for: s64 , density:float=1.0, color := Vector4.{0.4, 0.4, 0.4, 1}) {};
-#scope_export
 #scope_module
 TODO :: (msg: string,loc:= #caller_location) {
  //this is for VSCODE |||filepath line:character|||:

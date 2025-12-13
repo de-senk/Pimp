@@ -34,6 +34,6 @@ set_mouse_pointer_position :: inline (x : int, y : int)
 
 //disabled because Input module already handles the window size! so we just set a global var and use it.
 DISABLED_get_screen_dimensions :: () -> (atX: float,atY:float,w:float,h:float) {
-    return 0,0,xx g_current_window_width,xx g_current_window_height;
+    return 0,0,xx g_width,xx g_height;
 
 }
