@@ -45,10 +45,10 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
 
     if is_key_down(#char "Q") rotate_direction += 1.0*game_coordinates.up;;
     if is_key_down(#char "E") rotate_direction -= 1.0*game_coordinates.up;;
-    if is_key_down(Key_Code.ARROW_UP) rotate_direction += game_coordinates.forward;
-    if is_key_down(Key_Code.ARROW_DOWN) rotate_direction += game_coordinates.back;
-    if is_key_down(Key_Code.ARROW_LEFT) rotate_direction += game_coordinates.left;
-    if is_key_down(Key_Code.ARROW_RIGHT) rotate_direction += game_coordinates.right;
+    if is_key_down(Key_Code.ARROW_UP) rotate_direction += game_coordinates.left;
+    if is_key_down(Key_Code.ARROW_DOWN) rotate_direction += game_coordinates.right;
+    if is_key_down(Key_Code.ARROW_LEFT) rotate_direction += game_coordinates.back;
+    if is_key_down(Key_Code.ARROW_RIGHT) rotate_direction += game_coordinates.forward;
 
 
     normalize(*move_direction);
@@ -60,9 +60,12 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if ball {
 
     // if !is_ctrl_down
-        ball.angular_velocity +=  2.2*rotate_direction;
+        rotate_direction.y *= -1.0; //because camera -z or something
+
+        ball.angular_velocity +=  2.2*rotate(-rotate_direction, g_camera.rotation);
     // else
-        ball.position +=  0.05*move_direction;
+        move_direction.y *= -1.0; //because camera -z or something
+        ball.position +=  0.05*rotate(-move_direction, g_camera.rotation);
         g_camera.FOCUS = ball.position;
     //
     //Complxity detected: Maybe the physics cod shoudl go into animation code for the cases that manipulates aniamtions?
