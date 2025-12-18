@@ -178,18 +178,17 @@ apply_world_momentum_correction :: (A: *Body, B: *Body, dt: float, compliance: f
 
     return force_magnitude;
 }
-
-apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, correction: Vector3, attach_position_A: Vector3, attach_position_B: Vector3) -> float
+apply_world_position_correction2 :: (A: *Body, B: *Body,lambda_cache: *float, dt: float, compliance: float32, C: float, normal: Vector3, attach_position_A: Vector3, attach_position_B: Vector3) -> float
 {
-    C, normal := get_C_and_normal(correction);
-    basic.assert(is_normalized(normal));
+    basic.assert(is_normalized(normal), "normal % ",normal);
     w := get_effective_mass(A, normal, attach_position_A);
     w += get_effective_mass(B, normal, attach_position_B);
+        draw_primitive.line(attach_position_B, attach_position_A);
 
-    lambda, force_magnitude := get_lambda(dt, w, C, compliance);
-
+    lambda, force_magnitude := get_lambda(dt, w, C, compliance, lambda_cache.*);
+    lambda_cache.* += lambda;
     correction_force := -lambda * normal;
-
+    // clamp_length(*correction_force, dt*5);
     dx_for_A := get_world_linear_position_correction(A,correction_force, attach_position_A);
     dq_for_A := get_world_angular_position_correction(A,correction_force, attach_position_A);
     A.position += dx_for_A;
@@ -202,6 +201,31 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
 
     return force_magnitude;
 }
+
+//this is bad, to delete
+// apply_world_position_correction_OLD :: (A: *Body, B: *Body, dt: float, compliance: float32, correction: Vector3, attach_position_A: Vector3, attach_position_B: Vector3) -> float
+// {
+//     C, normal := get_C_and_normal(correction);
+//     basic.assert(is_normalized(normal));
+//     w := get_effective_mass(A, normal, attach_position_A);
+//     w += get_effective_mass(B, normal, attach_position_B);
+
+//     lambda, force_magnitude := get_lambda(dt, w, C, compliance);
+
+//     correction_force := -lambda * normal;
+
+//     dx_for_A := get_world_linear_position_correction(A,correction_force, attach_position_A);
+//     dq_for_A := get_world_angular_position_correction(A,correction_force, attach_position_A);
+//     A.position += dx_for_A;
+//     A.orientation = normalize(dq_for_A + A.orientation);
+
+//     dx_for_B := get_world_linear_position_correction(B, -correction_force, attach_position_B);
+//     dq_for_B := get_world_angular_position_correction(B, -correction_force, attach_position_B);
+//     B.position += dx_for_B;
+//     B.orientation = normalize(dq_for_B + B.orientation);
+
+//     return force_magnitude;
+// }
 
 apply_world_velocity_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, correction: Vector3, attach_position_A: Vector3, attach_position_B: Vector3) -> float
 {

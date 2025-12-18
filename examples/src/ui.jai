@@ -165,6 +165,18 @@ update_ui :: (delta_time : float)
 		getrect.slider (r, *context.solver.iterations, 1, 10, 1, *slider_theme, "num iterations: ", "");
 	}
 	r.y -= pad;
+		{
+        // sample_count := 0;
+        // if animation_index > 0
+        // {
+        // 	anim := table_find_pointer (*g_loaded_animations, animation_names[animation_index]);
+        // 	sample_count = anim.sample_count;
+        // }
+        text := tprint ("num sub_steps: %", context.solver.sub_steps);
+		r.w = w * 0.1 + xx simp.prepare_text (g_slider_font, "num sub_steps:    ");
+		getrect.slider (r, *context.solver.sub_steps, 1, 10, 1, *slider_theme, "num sub_steps: ", "");
+	}
+	r.y -= pad;
 	// Interpolation mode
 	{
 		r.w = xx simp.prepare_text (g_font, "Interpolation Mode: ");

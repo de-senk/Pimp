@@ -44,42 +44,10 @@ get_effective_mass :: (using body: *Body, normalized_world_force: Vector3, world
 }
 
 
-apply_world_correction3_3_1 ::  (A: *Body, B: *Body, dt: float, compliance: float32, C: float, normal: Vector3, attach_position_A: Vector3, attach_position_B: Vector3) -> float
-{
-    // using draw_primitive; //yescheckin
-    // C, normal := get_C_and_normal(correction);
-    basic.assert(is_normalized(normal));
-    w := get_effective_mass(A, normal, attach_position_A); //(eq2)
-    w += get_effective_mass(B, normal, attach_position_B); //(eq3)
 
-    dlambda, force_magnitude := get_lambda(dt, w, C, compliance);
-    p := -dlambda * normal;
-
-    //(eq4) lamda caching NOT DONE BECAUSE I ONLY ITERATE ONCE.
-    A.position += p*A.inv_mass; //(eq6)
-    B.position -= p*B.inv_mass; //(eq7)
-
-    center_of_mass := A.position;
-    world_leverA := attach_position_A - center_of_mass;
-    world_leverB := attach_position_B - center_of_mass;
-
-    I_worldA, inv_I_worldA := A.I_world, A.inv_I_world;
-    I_worldB, inv_I_worldB := B.I_world, B.inv_I_world;
-
-     //(eq8)
-    delta_angularA := inv_I_worldA*cross_product(world_leverA, p);
-    dq_for_A := 0.5*Quaternion.{delta_angularA.x,delta_angularA.y,delta_angularA.z,0.0}*A.orientation;
-    A.orientation = normalize(dq_for_A + A.orientation);
-
-     //(eq9)
-    delta_angularB := inv_I_worldB*cross_product(world_leverB, p);
-    dq_for_B := 0.5*Quaternion.{delta_angularB.x,delta_angularB.y,delta_angularB.z,0.0}*B.orientation;
-    B.orientation = normalize(B.orientation - dq_for_B);
-
-    return force_magnitude;
-}
 
 SolvePositions:: (using colli: *Collision_Constraint, dt: float) {
+
     for 0..contacts_count-1 {
         contact := contactsBuffer[it];
         contact_on_A := l2w(A.position, A.orientation, contact.local_point_on_A);
@@ -89,11 +57,41 @@ SolvePositions:: (using colli: *Collision_Constraint, dt: float) {
         penetration := dot(contact_on_A - contact_on_B, normal);
         if (penetration > 0.0) then continue;
 
-        n := normal;
-        C := penetration;
-        pen := dot(contact_on_A - contact_on_B, n);
-        apply_world_correction3_3_1(A, B, dt, linear_compliance, C, -n, contact_on_A, contact_on_B);
+        normal = normal;
+        C := -penetration;
+        basic.assert(is_normalized(normal));
+        w1 := get_effective_mass(A, normal, contact_on_A); //(eq2)
+        w2 := get_effective_mass(B, normal, contact_on_B); //(eq3)
 
+       dt_squared := dt*dt;
+       alpha := linear_compliance / dt_squared;
+       dlambda := (- C - alpha*lambda_cache) / (w1 + w2 + alpha);
+       if (w1 + w2) == 0 then dlambda = 0.0;
+       lambda_cache += dlambda;
+
+        p := -dlambda * normal;
+        //(eq4) lamda caching NOT DONE BECAUSE I ONLY ITERATE ONCE.
+        A.position += p*A.inv_mass; //(eq6)
+        B.position -= p*B.inv_mass; //(eq7)
+
+        #if ENABLE_ANGULAR_RESOLUTION {
+            center_of_mass := A.position;
+            world_leverA := contact_on_A - center_of_mass;
+            world_leverB := contact_on_B - center_of_mass;
+
+            I_worldA, inv_I_worldA := A.I_world, A.inv_I_world;
+            I_worldB, inv_I_worldB := B.I_world, B.inv_I_world;
+
+             //(eq8)
+            delta_angularA := inv_I_worldA*cross_product(world_leverA, p);
+            dq_for_A := 0.5*Quaternion.{delta_angularA.x,delta_angularA.y,delta_angularA.z,0.0}*A.orientation;
+            A.orientation = normalize(dq_for_A + A.orientation);
+
+             //(eq9)
+            delta_angularB := inv_I_worldB*cross_product(world_leverB, p);
+            dq_for_B := 0.5*Quaternion.{delta_angularB.x,delta_angularB.y,delta_angularB.z,0.0}*B.orientation;
+            B.orientation = normalize(B.orientation - dq_for_B);
+        }
     }
 
 }
@@ -265,13 +263,8 @@ bool PositionBasedRigidBodyDynamics::init_RigidBodyContactConstraint(
 }
 
 CPP;
-#if 1 {
+#if 0 {
 SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
-    {
-
-
-
-    }
     //parameters
 	normal: Vector3 = colli.contactsBuffer[0].world_normal_towards_A;
     gravity_length := length(context.solver.gravity);
@@ -293,8 +286,8 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
     //I precompute these each frame
     I_worldA, inertiaInverseW0 := A.I_world, A.inv_I_world;
     I_worldB, inertiaInverseW1 := B.I_world, B.inv_I_world;
-    stiffness := 52.0;
-    frictionCoeff := 0.05;
+    stiffness := 0.0;
+    frictionCoeff := 0.5;
     sum_impulses := 0.0;
 
     //to write to
@@ -303,7 +296,7 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
 	corr_omega0: Vector3;
 	corr_omega1: Vector3;
     pMax := 100.0;
-    restitutionCoeff := 0.5;
+    restitutionCoeff := 1.0;
 	//l2w stands for local to world
     for 0..colli.contacts_count-1 {
         c := colli.contactsBuffer[it];
@@ -323,13 +316,16 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
         nKn_inv := 1.0 / (w1+w2);
 
        // goal velocity in normal direction after collision
-        goal_u_rel := (A.prev_velocity + cross(A.prev_angular_velocity, prev_leverA)) - (B.prev_velocity + cross(B.prev_angular_velocity, prev_leverB));
+        goal_u_rel := (prev_velocity_A + cross(prev_angular_velocity_A, prev_leverA)) - (prev_velocity_B + cross(prev_angular_velocity_B, prev_leverB));
 
+       // if (u_rel_n < 0.0)
+       // 	  constraintInfo(2, 4) = -restitutionCoeff * u_rel_n;
 
 	    // penetration depth
 	    d := dot(connector0 - connector1, normal);
 
-    	goal_u_rel_n := dot(normal, goal_u_rel);
+    	goal_u_rel_n := -restitutionCoeff*dot(normal, goal_u_rel);
+
 
 
     	r0 := connector0 - x0;
@@ -343,6 +339,7 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
         u_rel_n := dot(u_rel, normal);
 
         delta_u_reln := goal_u_rel_n - u_rel_n;
+
 
         correctionMagnitude := nKn_inv * delta_u_reln;
 
@@ -393,7 +390,9 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
 
 }
 } else {
+
 SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
+    is_negative :: (b: float32) -> bool {return b < 0;};
 	normal: Vector3 = colli.contactsBuffer[0].world_normal_towards_A;
     gravity_length := length(context.solver.gravity);
     h:= dt;
@@ -401,6 +400,9 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
     //I precompute these each frame
     I_worldA, inv_I_worldA := A.I_world, A.inv_I_world;
     I_worldB, inv_I_worldB := B.I_world, B.inv_I_world;
+    sum_linear_momentum_on_A: Vector3;
+    sum_angular_momentum_on_A: Vector3;
+    sum_angular_momentum_on_B: Vector3;
     //l2w stands for local to world
     for 0..colli.contacts_count-1 {
         c := colli.contactsBuffer[it];
@@ -421,9 +423,9 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
 
         rel_vel := (A.velocity + cross(A.angular_velocity, leverA)) - (B.velocity + cross(B.angular_velocity, leverB));
 		rel_vel_comp_n := dot(rel_vel, normal); //component along normal
-		PREV_rel_vel := (A.prev_velocity + cross(A.prev_angular_velocity, prev_leverA)) - (B.prev_velocity + cross(B.prev_angular_velocity, prev_leverB));
+		PREV_rel_vel := (prev_velocity_A + cross(prev_angular_velocity_A, leverA)) - (prev_velocity_B + cross(prev_angular_velocity_B, leverB));
 		PREV_rel_vel_comp_n := dot(normal, PREV_rel_vel);
-		reflected_PREV_rel_vel_comp_n := -PREV_rel_vel_comp_n;
+		reflected_PREV_rel_vel_comp_n := PREV_rel_vel_comp_n;
 
         // if already_separating then continue;
 		// tangent velocities not implemented yet.
@@ -432,18 +434,25 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
 
         //normal points towards A
        // if (penetration > 0.0) then continue; //should we do this?
-       already_separating := rel_vel_comp_n > 0.0;
+       already_separating := rel_vel_comp_n >= -0;
+       // if already_separating then rel_vel_comp_n = -0.000001;
        if already_separating then continue;
 
 		// normal velocities (restitution)
     	e := A.restitution * B.restitution; // 0.5 * 0.5
         if abs(rel_vel_comp_n) <= h*2.0*gravity_length
-            then e = 0.0;
+             then e = 0.0;
 
-        // e = 1.0; //FORCED TO BOUNCE
+        e = 0.5; //FORCED TO BOUNCE
 
         //(eq34)
-        dv :=  normal * (-rel_vel_comp_n + basic.min(e * reflected_PREV_rel_vel_comp_n, 0.0));
+        nullification := -rel_vel_comp_n;
+        restitution := -basic.min(e * PREV_rel_vel_comp_n, 0.0);
+        if PREV_rel_vel_comp_n <0 || PREV_rel_vel_comp_n > 0
+        // log_vars(restitution);
+        // log_vars(nullification);
+        basic.assert(is_negative(nullification) == is_negative(restitution), "nullification should have the same sign as restitution % %", nullification, restitution);
+        dv :=  normal * (restitution + nullification);
 
         w1 := get_effective_mass(A, normal, contact_on_A);
         w2 := get_effective_mass(B, normal, contact_on_B);
@@ -451,19 +460,30 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
 		//(eq33)
 		p := dv / (w1 + w2);
 
-
+        sum_linear_momentum_on_A += p;
+        sum_angular_momentum_on_A += cross(leverA, p);
+        sum_angular_momentum_on_B += cross(leverB, p); //positive because we use - later on
         A.velocity += p * A.inv_mass;
         B.velocity -= p * B.inv_mass;
         A.angular_velocity += inv_I_worldA * cross(leverA, p);; //leverA = r1
-        B.angular_velocity += inv_I_worldB * cross(leverB, -p);  //leverB = r2
+        B.angular_velocity -= inv_I_worldB * cross(leverB, p);  //leverB = r2
 
         //maybe here
+        // A.prev_velocity += A.inv_mass*p;
+        // A.prev_angular_velocity = inv_I_worldB*cross(leverA, p);
         // A.prev_velocity = A.velocity;
-        // B.prev_velocity = B.velocity;
         // A.prev_angular_velocity = A.angular_velocity;
+        // B.prev_velocity = B.velocity;
         // B.prev_angular_velocity = B.angular_velocity;
-
+        // prev_velocity_A = A.velocity;
+        // prev_velocity_B = B.velocity;
+        // prev_angular_velocity_A = A.angular_velocity;
+        // prev_angular_velocity_B = B.angular_velocity;
     }
+     // A.velocity +=  A.inv_mass * sum_linear_momentum_on_A;
+     // B.velocity -=  B.inv_mass * sum_linear_momentum_on_A;
+     // A.angular_velocity += inv_I_worldA * sum_angular_momentum_on_A;
+     // B.angular_velocity -= inv_I_worldB * sum_angular_momentum_on_B;
 
     basic.assert(is_valid(A.position), "your body exploded");
     basic.assert(is_valid(A.velocity), "your body tried to explode");
@@ -939,20 +959,15 @@ wrap_collide_hull_vs_hull:: (A: *Body, B: *Body) -> contacts_count:int, contacts
     return contacts_count, contacts_data;
 }
 
+
+
+
 compute_contacts :: (A: *Body, B: *Body) -> contacts_count:int, contacts_data: [4]Contact_Info
 {
     // debug_break();
     basic.assert(A.shape_kind <= B.shape_kind, "SHould ordr them before enering here");
     result_contacts: [4]Contact_Info;
     contacts_count: int;
-
-    K := .5*length_squared(A.velocity)/A.inv_mass;
-    K_ang := .5*dot(A.angular_velocity, A.I_world*A.angular_velocity);
-    U := dot(A.position+.{0,.3,0}, context.solver.gravity)/A.inv_mass;
-    draw_primitive.doLabel(basic.tprint("KRotati:   %               .",K_ang), draw_primitive.WorldToScreen(A.position+.{0,.1,0}));
-    draw_primitive.doLabel(basic.tprint("KLinear:   %               .",K), draw_primitive.WorldToScreen(A.position+.{0,.2,0}));
-    draw_primitive.doLabel(basic.tprint("Upotent:   %               .",U), draw_primitive.WorldToScreen(A.position+.{0,.3,0}));
-    draw_primitive.doLabel(basic.tprint("E TOTAL:   %               .",K_ang+ K-U), draw_primitive.WorldToScreen(A.position+.{0,.4,0}));
 
     if B.shape_kind == .HULL
         draw_hull_properties(B.hull_shape);

@@ -23,15 +23,24 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
 
    if ball && was_key_pressed(#char "R") {
         step_draw = 0;
-        pos := Vector3.{2.1, 1., 2.021491};
-        ori := Quaternion.{0.026111, -0.110944, -0.030695, 0.993009};
-        
+        pos := Vector3.{2.1, 1, 2.021491};
+        ori := Quaternion.{0, 0, 0, 1};
+
+        ball.prev_position = pos;
         ball.position = pos;
         ball.orientation = ori;
-        ball.prev_velocity = .{};
-        ball.velocity = .{};
+        ball.prev_orientation = ori;
+        ball.prev_velocity = .{0,0,0};
+        ball.velocity = .{0,0,0};
         ball.angular_velocity = .{};
         ball.prev_angular_velocity = .{};
+    }
+    if was_key_pressed(#char "T") {
+        do_single_step = true;
+    }
+
+      if was_key_pressed(#char "Y") {
+        step_physics = !step_physics;
     }
 
     move_direction: Vector3;
@@ -42,7 +51,7 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if is_key_down(#char "S") move_direction += game_coordinates.back;
     if is_key_down(#char "A") move_direction += game_coordinates.left;
     if is_key_down(#char "D") move_direction += game_coordinates.right;
-    if is_key_down(Key_Code.SPACEBAR) move_direction += 4.0*game_coordinates.up;;
+    if is_key_down(Key_Code.SPACEBAR) move_direction += 422.0*game_coordinates.up;;
     if is_key_down(#char "C") move_direction -= 4.0*game_coordinates.up;;
 
     if is_key_down(#char "Q") rotate_direction += 1.0*game_coordinates.up;;
@@ -60,7 +69,7 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     anim_speed =  0.3*length(move_direction) ;//20.0*new_len/max_velocity;
 
     if ball {
-
+        draw_energies(ball);
     // if !is_ctrl_down
         rotate_direction.y *= -1.0; //because camera -z or something
 
@@ -73,15 +82,15 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     //Complxity detected: Maybe the physics cod shoudl go into animation code for the cases that manipulates aniamtions?
     //
         // log("BALL POS %", ball.position);
-        // if is_key_down(#char "H") doHookDontUpdate(ball,world_attach_point=ball.position+up*4.1+forward*2.0, 2.0);;
-        if is_key_down(#char "J") doHook(ball,world_attach_point=up*4.1+forward*2.0, 1.9);;
+        if is_key_down(#char "H") doHookDontUpdate(ball,world_attach_point=ball.position+up*4.1+forward*2.0, 2.0);;
+        if is_key_down(#char "J") doHook(ball,world_attach_point=up*4.1+forward*0.5, 1.0);;
         // if is_key_down(#char "E") doWeld(ball,world_attach_point=up*1.1+forward,weld_relative_axis=game_coordinates.right, rest_angle_radians=3.151593/2.0, target_length=.0);;
         // if is_key_down(#char "Q") doWeld(ball,world_attach_point=up*1.1+forward,weld_relative_axis=game_coordinates.up, rest_angle_radians=3.151593/2.0, target_length=.0);;
     // if is_key_down(#char "Q") doDoor(ball,world_hinge_attach_position=up*1.1+forward, world_hinge_axis=game_coordinates.up, game_coordinates.left);;
     // if is_key_down(#char "E") doDoor(ball, world_hinge_attach_position = up*1.1+forward, world_hinge_axis = game_coordinates.up+ game_coordinates.right, game_coordinates.right);
-    if is_key_down(#char "T") doDoor(ball, world_hinge_attach_position = up*1.1+forward, world_hinge_axis = game_coordinates.right, game_coordinates.forward);
-    if is_key_down(#char "C") doDoor(ball, world_hinge_attach_position = up*1.1+forward, world_hinge_axis = game_coordinates.up, game_coordinates.right);
-    if is_key_down(#char "V") doDoor(ball,    world_hinge_attach_position = up*1.1+forward,world_hinge_axis = game_coordinates.down,game_coordinates.back);
+    // if is_key_down(#char "T") doDoor(ball, world_hinge_attach_position = up*1.1+forward, world_hinge_axis = game_coordinates.right, game_coordinates.forward);
+    // if is_key_down(#char "C") doDoor(ball, world_hinge_attach_position = up*1.1+forward, world_hinge_axis = game_coordinates.up, game_coordinates.right);
+    // if is_key_down(#char "V") doDoor(ball,    world_hinge_attach_position = up*1.1+forward,world_hinge_axis = game_coordinates.down,game_coordinates.back);
     } else {
         // g_camera.FOCUS = ball.position;
         world_model = translate(world_model, delta_time*move_direction);;

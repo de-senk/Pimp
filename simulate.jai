@@ -1,10 +1,6 @@
 
-#program_export
 simulate :: () {
     CheckInit();
-    old_stack_trace := basic.pack_stack_trace(); // 1 of 2 : maybe needs bug fix? already mailed to jon.
-    Remap_Context();
-    context.stack_trace = *old_stack_trace[1]; //2 of 2: maybe needs bug fix? already mailed to jon.
     using context.solver;
     //
     //cleanup immediate mode cache
@@ -54,18 +50,22 @@ simulate :: () {
 
 
     //XPBD for rigidbodies
-    sub_steps := iterations;
     backup_dt := dt;
     dt = dt / sub_steps.(float);
 
     CollisionDetection();
+    for *bodies compute_world_inertia_and_inv_inertia(it);
+    for *collision_constraints {
+        it.lambda_cache = 0;
+    }
+    for *joint_constraints {
+        it.lambda_cache = 0;
+        // it.impulse_cache = 0;
+    }
     for 1..sub_steps {
-
         for *bodies {
-            compute_world_inertia_and_inv_inertia(it);
             integrate_positions_xpbd(it, dt);
         }
-
         for *joint: joint_constraints {
             //solve(it, dt); FLATTENED OUT:
              //these are callbacks of procedures stored inside each joint, I think this strategy is better than a switch statement.
@@ -75,16 +75,16 @@ simulate :: () {
              recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
              joint.solve_orientation(joint, dt);
         }
-
+        for 1..iterations {
         for *collision_constraints {
             SolvePositions(it, dt);
+        }
         }
         for *bodies {
             it.prev_velocity = it.velocity;
             it.prev_angular_velocity = it.angular_velocity;
             integrate_velocities_xpbd(it, dt);
         }
-
         // CollisionDetection();// this is very slow.
          for *collision_constraints {
             //backup velocities inside manifold constraints
@@ -92,22 +92,22 @@ simulate :: () {
             it.prev_velocity_B = it.B.velocity;
             it.prev_angular_velocity_A = it.A.angular_velocity;
             it.prev_angular_velocity_B = it.B.angular_velocity;
-            it.lambda_cache = 0;
-            it.impulse_cache = 0;
+            // it.lambda_cache = 0;
+            // it.impulse_cache = 0;
         }
 
         for *collision_constraints {
             SolveVelocities(it, dt);
         }
 
-        for *joint: joint_constraints {
-             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
-            joint.apply_linear_damping(joint, dt);
-             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
-            joint.apply_angular_damping(joint, dt);
-        }
+        // for *joint: joint_constraints {
+        //      recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+        //     joint.apply_linear_damping(joint, dt);
+        //      recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+        //     joint.apply_angular_damping(joint, dt);
+        // }
 
-        DO_FAKE_FLOOR :: true;
+        DO_FAKE_FLOOR :: false;
 
         #if DO_FAKE_FLOOR
         for *bodies {
@@ -132,7 +132,16 @@ simulate :: () {
 
 }
 
-
+draw_energies :: (A: *Body) {
+    offset :Vector3= {0,0.0,0};
+    K := .5*length_squared(A.velocity)/A.inv_mass;
+    K_ang := .5*dot(A.angular_velocity, A.I_world*A.angular_velocity);
+    U := -dot(context.solver.gravity,A.position+offset);
+    draw_primitive.doLabel(basic.tprint("KRotati:   %               .",K_ang), draw_primitive.WorldToScreen(A.position+.{0,.1,0}));
+    draw_primitive.doLabel(basic.tprint("KLinear:   %               .",K), draw_primitive.WorldToScreen(A.position+.{0,.2,0}));
+    draw_primitive.doLabel(basic.tprint("Upotent:   %               .",U), draw_primitive.WorldToScreen(A.position+.{0,.3,0}));
+    draw_primitive.doLabel(basic.tprint("E TOTAL:   %               .",K_ang+ K + U), draw_primitive.WorldToScreen(A.position+.{0,.4,0}));
+}
 
 integrate_positions_xpbd :: (body: *Body, dt: float) {
             I_world, inv_I_world := body.I_world, body.inv_I_world;
@@ -147,19 +156,20 @@ integrate_positions_xpbd :: (body: *Body, dt: float) {
             //
             //page5 of paper
             //
-            //linear, 3 steps
+            //LINEAR, 3 steps
             // step 1
             body.prev_position = body.position;
             // step 2
             external_forces := Vector3.{0,0,0}; //Maybe other kinds of pullings
+            // acceleration := -dot(body.position,Vector3.{0,1,0})*Vector3.{0,1,0};//external_forces*body.inv_mass + context.solver.gravity;
             acceleration := external_forces*body.inv_mass + context.solver.gravity;
             body.velocity += h * acceleration;
             // step 3
             body.position += h * body.velocity;
 
+            //ANGULAR, 3 steps
 
-
-            //angular, 3 steps
+            #if ENABLE_ANGULAR_RESOLUTION {
             // step 1
             body.prev_orientation = body.orientation;
             // step 2
@@ -174,7 +184,7 @@ integrate_positions_xpbd :: (body: *Body, dt: float) {
             dq = dq*body.orientation;
             body.orientation += h * 0.5 * dq;
             normalize(*body.orientation); //because the above is an approximation since dq is not infty small.
-
+        }
 
 }
 
@@ -235,6 +245,7 @@ compute_world_inertia_and_inv_inertia :: (body: *Body) {
 // 		angularVelocity *= 2.0_r * invH;
 // 	}
 // }
+ENABLE_ANGULAR_RESOLUTION::true;
 integrate_velocities_xpbd :: (body: *Body, dt: float) {
 
     mask := (body.inv_mass != 0.0).(float);
@@ -243,9 +254,11 @@ integrate_velocities_xpbd :: (body: *Body, dt: float) {
 
     body.velocity = inv_h * (body.position - body.prev_position) ;
     //angualar
+    #if ENABLE_ANGULAR_RESOLUTION {
     dq := body.orientation * conjugate(body.prev_orientation);
     body.angular_velocity = inv_h * 2.0* dq.xyz ;
     if dq.w < 0 then body.angular_velocity *= -1.0;
+    }
 }
 
 collider_switch_face:bool;

@@ -125,7 +125,8 @@ Solver :: struct {
     using world: *World;
     dt          := 1.0 / 60.0;
     gravity     := Vector3.{0,-10.0,0};
-    iterations  := 1;
+    iterations  := 5;
+    sub_steps  := 5;
     number_of_steps_executed_so_far : u64; //<- used for immediate mode.
 }
 
@@ -181,7 +182,7 @@ Body :: struct {
 
     // factor_energy_loss_on_collision: float=1.0;
     friction:             float32 = 0.5;
-    restitution:             float32 = 1.0;
+    restitution:             float32 = 0.9;
     elasticity:           float32 = .0; //half means half every collision, you might want .9
 
 

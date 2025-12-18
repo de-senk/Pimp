@@ -33,7 +33,7 @@ Linear_Compliance :: struct {
 }
 
 
-doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, linear_compliance := Linear_Compliance.STEEL_ROD, identifier:s64=0, loc := #caller_location) {
+doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, linear_compliance := Linear_Compliance.MEDIUM_SPRING, identifier:s64=0, loc := #caller_location) {
     CheckInit();
     if target_length < 0 then target_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
@@ -78,7 +78,7 @@ doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, 
 
 
 //same as doHook but 1 line of code less, maybe I should do a masterHook and make a lot of procedures using #bake_arguments, BUT. that is code complexity...
-doHookDontUpdate :: (body: *Body, world_attach_point: Vector3,  target_length: float = -1, linear_compliance := Linear_Compliance.WEAK_SPRING, identifier: s64 = 0, loc := #caller_location) {
+doHookDontUpdate :: (body: *Body, world_attach_point: Vector3,  target_length: float = -1, linear_compliance := Linear_Compliance.STEEL_ROD, identifier: s64 = 0, loc := #caller_location) {
     CheckInit();
     if target_length < 0 then target_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
@@ -89,7 +89,7 @@ doHookDontUpdate :: (body: *Body, world_attach_point: Vector3,  target_length: f
     if did_just_created_a_new_one
     {
         hook.solve_position = solve_position_for_distance_constraint_cb;
-        hook.solve_position = solve_position_for_one_way_distance_constraint_cb;
+        // hook.solve_position = solve_position_for_one_way_distance_constraint_cb;
         hook.target_length = target_length;
         hook.local_attach_position_A = .{};
         hook.local_attach_position_B = world_attach_point;
@@ -393,7 +393,6 @@ BLUE :: Vector4.{0,0,1,1};
 // Layer_1: Retained mode exposed procedures: Im not fully supporting retained mode yet! I prefer to support Layer_0 first. BUT, layer_0 uses layer_1.
 //
 
-
 create_box :: (model: Matrix4, mass: float32) -> *Body {
     body := create_body();
     box_shape := maybe_create_defult_box(model);
@@ -406,14 +405,45 @@ create_box :: (model: Matrix4, mass: float32) -> *Body {
 
     if mass > 0 {
         body.inv_mass = 1.0/mass;
-        inertia_factor := (1.0/mass) * 5.0/2.0;
-        body.inv_local_moment_of_inertia = .{1.0, 1.0, 1.0} * inertia_factor;
-        body.local_moment_of_inertia =     .{1.0, 1.0, 1.0} * (1.0/inertia_factor);
 
-        body.inv_local_moment_of_inertia *= 5.0/2.0; //DENSE SPHERE, its not 2/5 because is inverse of ...
+        a := scale.x;  // half-width in x
+        b := scale.y;  // half-width in y
+        c := scale.z;  // half-width in z
+
+        // for a box: I = (1/12) * m * (dimension1² + dimension2²)
+        I_xx := (mass / 12.0) * (b*b + c*c);
+        I_yy := (mass / 12.0) * (a*a + c*c);
+        I_zz := (mass / 12.0) * (a*a + b*b);
+
+        body.local_moment_of_inertia = Vector3.{I_xx, I_yy, I_zz};
+        body.inv_local_moment_of_inertia = Vector3.{
+            ifx I_xx > 0 then 1.0/I_xx else 0,
+            ifx I_yy > 0 then 1.0/I_yy else 0,
+            ifx I_zz > 0 then 1.0/I_zz else 0
+        };
     }
     return body;
 }
+// OLD delete mayble
+// create_box :: (model: Matrix4, mass: float32) -> *Body {
+//     body := create_body();
+//     box_shape := maybe_create_defult_box(model);
+//     body.shape_kind = .HULL;
+//     body.hull_shape = box_shape;
+//     pos, ori, scale := get_decomposed_transform(model);
+//     body.prev_position = pos;
+//     body.position = pos;
+//     body.orientation = ori;
+
+//     if mass > 0 {
+//         body.inv_mass = 1.0/mass;
+//         inertia_factor := (1.0/mass) * 12.0/1.0;
+//         body.inv_local_moment_of_inertia = .{1.0, 1.0, 1.0} * inertia_factor;
+//         body.local_moment_of_inertia =     .{1.0, 1.0, 1.0} * (1.0/inertia_factor);
+
+//     }
+//     return body;
+// }
 
 create_ball :: (position: Vector3, radius: float32, mass: float32) -> *Body {
     body := create_body();

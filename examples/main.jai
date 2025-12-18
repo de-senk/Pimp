@@ -24,6 +24,8 @@ offset_of :: ($T: Type, $member: string) -> int {
     return -1;
 }
 
+do_single_step: bool;
+step_physics: bool;
 main :: () {
 	// This is here because on Windows, segfaults and stuff are silent.
 	// If the program ends without printing this message, then something bad happened.
@@ -101,7 +103,13 @@ main :: () {
         //
         // Physics STEP simulate, TODO: force it it to 60hz
         //
-        simulate();
+        should_Step_this_frame: bool;
+        if do_single_step {
+            do_single_step = false;
+            should_Step_this_frame = true;
+        }
+        if step_physics should_Step_this_frame = true;
+        if should_Step_this_frame then  simulate();
 
     	//:tagMovedHereBecausePhysics
 	   // We transpose the result because OpenGL stores matrices in column-major
@@ -252,7 +260,7 @@ update_frame :: (delta_time : float)
     if g_game_state.should_start_scene {
         g_game_state.should_start_scene = false;
         using game_coordinates;
-        create_player0();
+        create_player0(.{1,1,1}, scale={4,1,2});
         // create_static_box_collider(test1pos, test1ori, scale=.{1,1,1});
         create_static_box_collider(test1pos+2.0*right,  scale=.{4,1,1});
         create_static_box_collider(.{0,-1,0},scale=.{10,1,10});
@@ -337,12 +345,13 @@ create_static_box_collider :: (pos: Vector3, ori := Quaternion.{0,0,0,1}, scale 
 }
 
 
-create_player0 :: () {
+create_player0 :: (pos: Vector3, ori := Quaternion.{0,0,0,1}, scale := Vector3.{1,1,1}) {
     player0 := create_entity();
     player0.is_player0 = true;
     player0.rendering_flags = .Has_Skin_Mesh;
     player0.asset_guid = copy_string("Player0");
     player0.current_anim_guid = copy_string("Run_Forward");
+    player0.world_model = compose_transform(pos, ori, scale);
 }
 
 

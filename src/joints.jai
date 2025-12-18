@@ -61,7 +61,7 @@ Joint_Constraint :: struct {
     distanceMax := FLOAT32_INFINITY;
     linearDampingCoeff := 1.0;
 
-
+    lambda_cache := 0.0;
 
     // orientation
     swingMin := -FLOAT32_INFINITY;
@@ -128,7 +128,11 @@ solve_position_for_distance_constraint_cb :: (using joint: *Joint_Constraint, dt
     normalize(*error);
     error *= target_length - distance;
     error *= -1.0;
-    apply_world_position_correction(A, B, dt, linear_compliance, error, world_attach_position_A, world_attach_position_B);
+
+
+    C := -(target_length - distance);
+    normal := normalize(error, fallback=.{0,1,0});
+    apply_world_position_correction2(A, B,*joint.lambda_cache , dt,linear_compliance, C, normal, world_attach_position_A, world_attach_position_B);
 }
 
 
@@ -141,7 +145,12 @@ solve_position_for_one_way_distance_constraint_cb :: (using joint: *Joint_Constr
     normalize(*error);
     error *= target_length - distance;
     error *= -1.0;
-    apply_world_position_correction(A, B, dt, linear_compliance, error, world_attach_position_A, world_attach_position_B);
+
+    C := -(target_length - distance);
+    normal := normalize(error, fallback=.{0,1,0});
+    apply_world_position_correction2(A, B,*joint.lambda_cache , dt,linear_compliance, C, normal, world_attach_position_A, world_attach_position_B);
+
+    // apply_world_position_correction(A, B, dt, linear_compliance, error, world_attach_position_A, world_attach_position_B);
 }
 
 solve_position_for_fixed_constraint_cb :: (using joint: *Joint_Constraint, dt: float) {
@@ -153,7 +162,10 @@ solve_position_for_fixed_constraint_cb :: (using joint: *Joint_Constraint, dt: f
     // error *= target_length - distance;
     error *= 0.0 - distance; //0.0 because I cannot figure out how to do it correctl with a stiff rod
     error *= -1.0;
-    apply_world_position_correction(A, B, dt, linear_compliance, error, world_attach_position_A, world_attach_position_B);
+
+    C := -(target_length - distance);
+    normal := normalize(error, fallback=.{0,1,0});
+    apply_world_position_correction2(A, B,*joint.lambda_cache , dt,linear_compliance, C, normal, world_attach_position_A, world_attach_position_B);
 
 
     //commented out is what I tried to do to make a stiff rod.
