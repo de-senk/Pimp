@@ -78,11 +78,13 @@ Joint_Constraint :: struct {
 
 }
 
+
 recalculate_world_attach_pos_and_ori :: inline (using joint: *Joint_Constraint)
 {
     world_attach_position_A = l2w(A.position, A.orientation, local_attach_position_A);
-    world_attach_orientation_A = normalize(A.orientation * joint.local_attach_orientation_A);
     world_attach_position_B = l2w(B.position, B.orientation, local_attach_position_B);
+
+    world_attach_orientation_A = normalize(A.orientation * joint.local_attach_orientation_A);
     world_attach_orientation_B = normalize(B.orientation * joint.local_attach_orientation_B);
 }
 
@@ -180,6 +182,13 @@ solve_orientation_for_fixed_constraint_cb :: (using joint: *Joint_Constraint, dt
 //
 solve_orientation_for_door_constraint_cb :: (using joint: *Joint_Constraint, dt: float)
 {
+
+//BROKEN FOR NOW
+//BROKEN FOR NOW
+//BROKEN FOR NOW
+//BROKEN FOR NOW
+//BROKEN FOR NOW
+//BROKEN FOR NOW
     hardCompliance := 0.0;
     recalculate_world_attach_pos_and_ori(joint); //I think this is not necessary, but we will see, I need to build test with multiple cosntratints attached together and measure.
 
@@ -189,7 +198,7 @@ solve_orientation_for_door_constraint_cb :: (using joint: *Joint_Constraint, dt:
     world_hinge_axis_A := rotate(joint.local_ref_A, A.orientation);
     world_hinge_axis_B := rotate(joint.local_ref_B, B.orientation);
     angular_error := cross_product(world_hinge_axis_A, world_hinge_axis_B);  //these axis should be aligned! Otherwise too bad, so error is this.
-    apply_angular_correction(A, B, dt, hardCompliance, angular_error);
+    // apply_angular_correction(A, B, dt, hardCompliance, angular_error);
 
     //
     // Angle limits for free axis
@@ -236,15 +245,21 @@ solve_orientation_for_door_constraint_cb :: (using joint: *Joint_Constraint, dt:
 }
 
 
+get_prev_velocity_at_position :: (body: *Body, position: Vector3) -> Vector3 {
+    velocity_at_point: Vector3;
+    center_of_mass := body.position;
+    lever := position - center_of_mass;
+    velocity_at_point = cross_product(lever, body.prev_angular_velocity);
+    velocity_at_point = body.prev_velocity - velocity_at_point;
+    return velocity_at_point;
+}
+
 get_velocity_at_position :: (body: *Body, position: Vector3) -> Vector3 {
     velocity_at_point: Vector3;
-    if body.inv_mass != 0.0
-    {
-        center_of_mass := body.position;
-        lever := position - center_of_mass;
-        velocity_at_point = cross_product(lever, body.angular_velocity);
-        velocity_at_point = body.velocity - velocity_at_point;
-    }
+    center_of_mass := body.position;
+    lever := position - center_of_mass;
+    velocity_at_point = cross_product(lever, body.angular_velocity);
+    velocity_at_point = body.velocity - velocity_at_point;
     return velocity_at_point;
 }
 
@@ -311,6 +326,10 @@ getAngle :: (using joint: *Joint_Constraint, n: Vector3, a: Vector3, b: Vector3)
     return phi;
 }
 
+
+/*
+
+*/
 maybe_apply_angle_limit :: (using joint: *Joint_Constraint, dt:float, n: Vector3, axis_A: Vector3, axis_B: Vector3, minAngle: float, maxAngle: float, compliance: float)
 {
     current_angle := getAngle(joint, n, axis_A, axis_B);

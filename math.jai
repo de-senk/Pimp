@@ -231,7 +231,7 @@ get_decomposed_transform :: (m: Matrix4) -> pos: Vector3, ori: Quaternion, scale
     return pos, ori, scale;
 }
 
-compose_transform :: (position: Vector3, orientation: Vector3, scale: Vector3) -> Matrix4 {
+get_composed_transform :: (position: Vector3, orientation: Quaternion, scale: Vector3 = .{1,1,1}) -> Matrix4 {
     return make_translation_matrix4(position)*rotation_matrix (Matrix4, orientation) * make_scale_matrix4(scale);;
 }
 

@@ -12,150 +12,116 @@ simulate :: () {
     for *bodies
     {
        should_delete := it.latest_frame_of_existence != number_of_steps_executed_so_far;
-       if should_delete {
+       is_retained_mode := it.latest_frame_of_existence == 0;
+       if should_delete && !is_retained_mode {
         table_remove(*hashed_bodies, it.hash);
         remove it;
        }
     }
 
-    drawed:bool;
-    for *firstbody: bodies
-    {
-        if firstbody
-        { TestCubes(posA=firstbody.position,oriA=firstbody.orientation);
-        drawed=true;
-        }
-        break;
-    }
-    if !drawed TestCubes();
-
     for *joint_constraints
     {
        should_delete := it.latest_frame_of_existence != number_of_steps_executed_so_far;
-       if should_delete {
+       is_retained_mode := it.latest_frame_of_existence == 0;
+       if should_delete && !is_retained_mode {
         table_remove(*hashed_joint_constraints, it.hash);
         remove it;
        }
     }
     number_of_steps_executed_so_far += 1;
 
-    //broad and narrow phase, I dont like how I implemented this entire block
-    {
-        basic.array_reset_keeping_memory(*possible_collisions); //we reset here so we can still draw them when we stop time
-        basic.array_reset_keeping_memory(*collision_pairs); //we reset here so we can stop time and draw these without problems
-        broad_phase(.SWEEP_AND_PRUNE); //AABB shenanigans TODO: Trees and Octopuses (BVH BHV is the good one)
-        maybe_reserve(*possible_collisions, collision_pairs.count, 1.2); //broad phase may have increased that number. so we reserve memory.
-        narrow_phase(); //here we run SAT and compare old contacts with new contacts
 
-    }
+                ///////////////////////
+                //this block is for debugging purpuses
+                drawed:bool;
+                for *firstbody: bodies
+                {
+                    if firstbody
+                    { TestCubes(posA=firstbody.position,oriA=firstbody.orientation);
+                    drawed=true;
+                    }
+                    break;
+                }
+                if !drawed TestCubes();
+                ///////////////////////
+
+
+
     //
     // ACTUAL ALGORITHM STARTS HERE
     //
     if context.solver.dt < 1.0/1024.0 then return;
+
+
+    //XPBD for rigidbodies
     sub_steps := iterations;
-
-    //this is useful for switching solver strategys without changing much code:
     backup_dt := dt;
-    dt = dt/sub_steps;
-    defer dt = backup_dt;
+    dt = dt / sub_steps.(float);
 
-    for 1..sub_steps
-    {
-        for *bodies
-        {
-            //I think I dont even needa mask because stub_world_body.velocity should always be zero because prev_position is always he same as current position for that body.
-            mask := (it.inv_mass != 0.0).(float);
-            dt_m := dt*mask;
+    CollisionDetection();
+    for 1..sub_steps {
 
-            //
-            // Integration      Semi-Implicit Euler  (3 lines of code)
-            //
-            //linear
-            it.velocity += gravity*dt_m;
-            it.prev_position = it.position;
-            it.position += it.velocity*dt_m;
-
-            //angular usable fields are:  .orientation|.prev_orientation|.angular_velocity|.prev_angular_velocity
-            it.prev_orientation = it.orientation;
-            dq :=  Quaternion.{it.angular_velocity.x, it.angular_velocity.y, it.angular_velocity.z, 0.0};
-            dq = dq*it.orientation;
-            it.orientation += 0.5 * dq * dt_m;
-            normalize(*it.orientation); //because the above is an approximation since dq is not infty small.
-
-
-            //Fake floor, temporary.
-            if it.position.y<0.0 {
-                it.position = it.prev_position;
-            }
-            basic.assert(is_valid(it.position), "your body exploded");
-            basic.assert(is_valid(it.velocity), "your body tried to explode");
+        for *bodies {
+            compute_world_inertia_and_inv_inertia(it);
+            integrate_positions_xpbd(it, dt);
         }
 
-        //NOTE IMPORTANT: :tagIm99percentSureThatThisIsWrongBUTitworks TODO: Study iterative convergence.
         for *joint: joint_constraints {
             //solve(it, dt); FLATTENED OUT:
              //these are callbacks of procedures stored inside each joint, I think this strategy is better than a switch statement.
              joint.pre_solve(joint, dt);
              recalculate_world_attach_pos_and_ori(joint);
              joint.solve_position(joint, dt);
-             // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
              joint.solve_orientation(joint, dt);
         }
 
-        //
-        // VELOCITIES           update linear and angular velocities
-        //
-        if dt == 0.0 then continue; //we early return because yes
-
-        for *bodies
-        {
-            mask := (it.inv_mass != 0.0).(float);
-            inv_dt_m := (1.0/dt)*mask;
-            //linear
-            it.velocity = (it.position - it.prev_position) * inv_dt_m;
-            //angualar
-            dq := it.orientation * conjugate(it.prev_orientation);
-            it.angular_velocity = 2.0* dq.xyz * inv_dt_m;
-            if dq.w < 0 then it.angular_velocity *= -1.0;
-
-
-
-            #run TODO("[ERROR]Damping here!");
-            it.angular_velocity *= 0.55;
-            // draw_primitive.vector(it.position, it.angular_velocity, Vector4.{.5,.5,.1,1.0});
-            if length_squared(it.angular_velocity) > 200 {
-                basic.log("MAX ANG VEL REACHED; CLAMPING");
-                // clamp_length(*it.angular_velocity, 5);
-             }
-
+        for *collision_constraints {
+            SolvePositions(it, dt);
+        }
+        for *bodies {
+            it.prev_velocity = it.velocity;
+            it.prev_angular_velocity = it.angular_velocity;
+            integrate_velocities_xpbd(it, dt);
         }
 
-        //
-        // Dampings          Apply velocity dampings, NOTE: I highly doubt that this is the correct way of doing this. BUT this callback strategy allows me to fix it in the future, I hope.
-        //
+        // CollisionDetection();// this is very slow.
+         for *collision_constraints {
+            //backup velocities inside manifold constraints
+            it.prev_velocity_A = it.A.velocity;
+            it.prev_velocity_B = it.B.velocity;
+            it.prev_angular_velocity_A = it.A.angular_velocity;
+            it.prev_angular_velocity_B = it.B.angular_velocity;
+            it.lambda_cache = 0;
+            it.impulse_cache = 0;
+        }
+
+        for *collision_constraints {
+            SolveVelocities(it, dt);
+        }
+
         for *joint: joint_constraints {
-             // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
             joint.apply_linear_damping(joint, dt);
-             // recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
             joint.apply_angular_damping(joint, dt);
         }
 
-        //
-        // FLOOR            Faked out floor, not perfect! TODO: Collision constraints!
-        //
-        for *bodies
-        {
+        DO_FAKE_FLOOR :: true;
+
+        #if DO_FAKE_FLOOR
+        for *bodies {
+            factor_energy_loss_on_collision := 1.0;
             next_pos := it.position + it.velocity*backup_dt;
-            if dot(gravity, next_pos) > 0 && dot(gravity, it.velocity) > 0
-            {
-                grav_dir := normalize(gravity); project_upwards := - dot(it.velocity, grav_dir)*grav_dir;
+            if dot(gravity, next_pos) > 0 && dot(gravity, it.velocity) > 0 {
+                grav_dir := normalize(gravity);
+                project_upwards := - dot(it.prev_velocity, grav_dir)*grav_dir;
                 it.velocity += project_upwards; //to zero it out
-                it.velocity += it.factor_energy_loss_on_collision*project_upwards;  //to bounce
-
+                it.velocity += factor_energy_loss_on_collision*project_upwards;  //to bounce
             }
-
         }
-    } //for SUBSTEPS
+    }
+    dt = backup_dt;
 
     //actually apply stuff
     for *bodies
@@ -164,8 +130,123 @@ simulate :: () {
        it.end_frame_callback(it);
     }
 
-} @dll_export
+}
 
+
+
+integrate_positions_xpbd :: (body: *Body, dt: float) {
+            I_world, inv_I_world := body.I_world, body.inv_I_world;
+
+            mask := (body.inv_mass != 0.0).(float); //maybe unnecesary
+            h := dt*mask;
+            defer {
+                basic.assert(is_valid(body.position), "your body exploded");
+                basic.assert(is_valid(body.velocity), "your body tried to explode");
+            }
+
+            //
+            //page5 of paper
+            //
+            //linear, 3 steps
+            // step 1
+            body.prev_position = body.position;
+            // step 2
+            external_forces := Vector3.{0,0,0}; //Maybe other kinds of pullings
+            acceleration := external_forces*body.inv_mass + context.solver.gravity;
+            body.velocity += h * acceleration;
+            // step 3
+            body.position += h * body.velocity;
+
+
+
+            //angular, 3 steps
+            // step 1
+            body.prev_orientation = body.orientation;
+            // step 2
+            external_torques := Vector3.{0,0,0}; //Maybe hurricanes
+            torques := (external_torques - cross_product(body.angular_velocity, I_world*body.angular_velocity));
+            angular_acceleration := inv_I_world*torques;
+		    body.angular_velocity += h * angular_acceleration;
+            // step 3
+            dq : Quaternion;
+            dq.xyz = body.angular_velocity;
+            dq.w = 0; //dual quaternion
+            dq = dq*body.orientation;
+            body.orientation += h * 0.5 * dq;
+            normalize(*body.orientation); //because the above is an approximation since dq is not infty small.
+
+
+}
+
+
+#if assume_I_use_symmetric_objects {
+compute_world_inertia_and_inv_inertia :: (body: *Body) {
+    //  I_world = R * I_local * R^T
+    // for diagonal tensors : I_world_ii = sum_j(R_ij^2 * I_local_jj)
+
+    R3D := rotation_matrix(Matrix3, body.orientation);
+
+    // Compute world-space diagonal inertia
+    I_world: Vector3;
+    I_world.x = body.local_moment_of_inertia.x * (R3D._11 * R3D._11) +
+                body.local_moment_of_inertia.y * (R3D._12 * R3D._12) +
+                body.local_moment_of_inertia.z * (R3D._13 * R3D._13);
+
+    I_world.y = body.local_moment_of_inertia.x * (R3D._21 * R3D._21) +
+                body.local_moment_of_inertia.y * (R3D._22 * R3D._22) +
+                body.local_moment_of_inertia.z * (R3D._23 * R3D._23);
+
+    I_world.z = body.local_moment_of_inertia.x * (R3D._31 * R3D._31) +
+                body.local_moment_of_inertia.y * (R3D._32 * R3D._32) +
+                body.local_moment_of_inertia.z * (R3D._33 * R3D._33);
+
+    // Inverse is simple for diagonal tensors
+    inv_I_world := Vector3.{1.0/I_world.x, 1.0/I_world.y, 1.0/I_world.z};
+
+    //TODO: branchless
+    if body.inv_mass == 0 {
+        inv_I_world = .{0,0,0};
+    }
+
+    body.I_world = I_world;
+    body.inv_I_world = inv_I_world;
+
+}
+} else {
+ //TODO: Matrix3
+}
+
+// void RigidBody::ProjectVelocities(Real invH)
+// {
+// 	// Recompute velocities based on dx and dq -- rough approximation
+// 	Vec3 const dx = position - prevPosition;
+// 	prevLinearVelocity = linearVelocity;
+// 	linearVelocity = dx * invH;
+
+// 	Quat const dq = orientation * glm::inverse(prevOrientation);
+// 	prevAngularVelocity = angularVelocity;
+// 	angularVelocity = Vec3(dq.x, dq.y, dq.z);
+// 	if (dq.w < 0.0_r)
+// 	{
+// 		angularVelocity *= -2.0_r * invH;
+// 	}
+// 	else
+// 	{
+// 		angularVelocity *= 2.0_r * invH;
+// 	}
+// }
+integrate_velocities_xpbd :: (body: *Body, dt: float) {
+
+    mask := (body.inv_mass != 0.0).(float);
+    inv_h := (1.0/dt)*mask;
+    //linear
+
+    body.velocity = inv_h * (body.position - body.prev_position) ;
+    //angualar
+    dq := body.orientation * conjugate(body.prev_orientation);
+    body.angular_velocity = inv_h * 2.0* dq.xyz ;
+    if dq.w < 0 then body.angular_velocity *= -1.0;
+}
 
 collider_switch_face:bool;
 cubes_initialized: bool;
@@ -175,6 +256,8 @@ test1pos: Vector3 = Vector3.{.5,0.7, 2.2};
 // test1ori := #run make_quaternion_from_axis_and_angle(.{1,-2.2,0}, 3.141593/4);
 test1ori := Quaternion.{-0.291444, -0.490207, -0.050201, 0.819901};
 TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion.{0,0,0,1},oriB:=Quaternion.{0,0,0,1}) {
+#if 0{
+
     if !cubes_initialized {
         cubes_initialized = true;
         hull3 := create_cube_hull(position=.{0, 0, 0}, scale=.{1, 1, 1});
@@ -321,10 +404,23 @@ TestCubes :: (posA := Vector3.{1,1,1}, posB := Vector3.{1,.5,1},oriA:=Quaternion
     draw_hull_properties(hull0);
     draw_hull_properties(hull1);
     }
-
+    }
 }
 
 
+create_defult_box_initialized: bool;
+create_defult_box_box: Half_Edge_Mesh;
+maybe_create_defult_box :: (model: Matrix4 = Matrix4_Identity) -> Convex_Hull {
+    hull: Convex_Hull;
+    if !create_defult_box_initialized {
+        create_defult_box_initialized = true;
+        create_defult_box_box = create_cube_half_edge_mesh(.{1,1,1});
+    }
+    hull.mesh = create_defult_box_box;
+    hull.worldSpace = model;
+
+    return hull;
+}
 
 create_cube_hull :: (position: Vector3 = .{0,0,0}, scale: Vector3 = .{1,1,1}, rotation: Quaternion = .{}) -> Convex_Hull {
     hull: Convex_Hull;

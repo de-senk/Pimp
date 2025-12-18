@@ -2,6 +2,8 @@
 #import "Math";
 draw_primitive: Draw_Primitive_Procs;
 Draw_Primitive_Procs :: struct {
+    start_recording := () {};
+    end_recording := () {};
     //default colors
     RED:Vector4: .{1,1,0,1}; GREEN:Vector4: .{0,1,0,1}; BLUE:Vector4: .{0,0,1,1}; YELLOW:Vector4: .{1,1,0,1}; WHITE:Vector4: .{1,1,1,1};
     //procedure pointers to be replaced

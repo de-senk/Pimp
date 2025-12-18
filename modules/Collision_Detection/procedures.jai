@@ -27,12 +27,12 @@ QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
             basically_separating := result.distance > FLOAT32_EPSILON4;
             if basically_separating {
                 result.distance  = FLOAT32_INFINITY; //this will exit SAT because we found a separating axis
-                draw_primitive.grid(closest_point_to_plane(.{5,5,5}, world_planeA.normal, world_planeA.distance), world_planeA.normal, color=.{1.1,1.1,1.1,1});
+                // draw_primitive.grid(closest_point_to_plane(.{5,5,5}, world_planeA.normal, world_planeA.distance), world_planeA.normal, color=.{1.1,1.1,1.1,1});
                 // draw_primitive.grid(furthest_vertex_world, world_planeA.normal,area_length=2, color=.{1.1,1.1,1.1,1});
-                draw_primitive.X(hull_center(hullA));
-                draw_primitive.X(hull_center(hullB));
-                draw_primitive.X(furthest_vertex_world);
-                draw_primitive.doLabel("furthest_vertex", draw_primitive.WorldToScreen(furthest_vertex_world));
+                // draw_primitive.X(hull_center(hullA));
+                // draw_primitive.X(hull_center(hullB));
+                // draw_primitive.X(furthest_vertex_world);
+                // draw_primitive.doLabel("furthest_vertex", draw_primitive.WorldToScreen(furthest_vertex_world));
 
                 // draw_primitive.doLabel("SEPARATING AXIS FOUND!", draw_primitive.WorldToScreen(furthest_vertex_world));
                 return result;
@@ -286,7 +286,7 @@ QueryEdgeDirections_gauss :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQue
             {
 			    this_separation :=  distance_between_arcs(edgeA_origin, arcA, edgeB_origin, arcB, hullA_center);
 			    bigger := this_separation >= result.distance;
-                if bigger
+                if bigger && this_separation<0.0
                 {
 		           result.edgeA = edgeA;
 		           result.edgeB = edgeB;
@@ -310,8 +310,7 @@ QueryEdgeDirections_gauss :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQue
                    // draw_primitive.grid(acenter, a2,density=2.1,area_length=1, color=.{1,0.6,0.6,1});
                    // draw_primitive.grid(bcenter, b1,density=2.1,area_length=1, color=.{0,1,0,1});
                    // draw_primitive.grid(bcenter, b2,density=2.1,area_length=1, color=.{0.6,1,0.6,1});
-                   draw_primitive.square(bcenter, color=.{0.6,1,0.6,1});
-                   draw_primitive.square(acenter, color=.{0.6,1,0.6,1});
+
 
 	return result;
 }
@@ -449,10 +448,10 @@ CreateEdgeContact :: (edgeQuery: EdgeQuery, hullA: Convex_Hull, hullB: Convex_Hu
 
 	L0, L1, s, t, distdist := closest_point_segment_to_segment(edgeA0, edgeA1, edgeB0, edgeB1);
 
-    draw_primitive.square(edgeA0,.1);
-    draw_primitive.circle(edgeA1,.1);
-    draw_primitive.X(edgeB0,.1);
-    draw_primitive.X(edgeB1,.1);
+    // draw_primitive.square(edgeA0,.1);
+    // draw_primitive.circle(edgeA1,.1);
+    // draw_primitive.X(edgeB0,.1);
+    // draw_primitive.X(edgeB1,.1);
 	//compute center of closest points as contact point
 	result.midpoint = (L0 + L1) * 0.5;
 	//compute separating axis between two edges
@@ -927,7 +926,7 @@ collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
                         world_contact_points_on_A[it_index] = point_in_B + penetration * world_normal_towards_A;
                         world_contact_points_on_B[it_index] = point_in_B;
                     }
-if num_contacts draw_primitive.grid(contact.points[0]+world_normal_towards_A*0.2, world_normal_towards_A,density=3,area_length=1, color=.{.6,1.1,.6,1});
+// if num_contacts draw_primitive.grid(contact.points[0]+world_normal_towards_A*0.2, world_normal_towards_A,density=3,area_length=1, color=.{.6,1.1,.6,1});
 
 
                 }
@@ -952,7 +951,7 @@ if num_contacts draw_primitive.grid(contact.points[0]+world_normal_towards_A*0.2
                         world_contact_points_on_A[it_index] = point_in_A;
                         world_contact_points_on_B[it_index] = point_in_A - penetration*world_normal_towards_A;
                     }
-if num_contacts draw_primitive.grid(contact.points[0]+world_normal_towards_A*0.2, world_normal_towards_A,density=3,area_length=1, color=.{1.1,1.1,1.1,1});
+// if num_contacts draw_primitive.grid(contact.points[0]+world_normal_towards_A*0.2, world_normal_towards_A,density=3,area_length=1, color=.{1.1,1.1,1.1,1});
 
                 }
             draw_primitive.doLabel(tprint("is_near_faceB %",penetration), draw_primitive.WorldToScreen(.{.1,1.2,2.0}));
@@ -1043,10 +1042,8 @@ collide_sphere_vs_hull :: (
 
         world_normal_towards_A = best_normal;
 
-        // draw_primitive.grid(on_hull, world_normal_towards_A, color=.{1,1,0,1});
-        // draw_primitive.grid(on_hull, best_normal2, color=.{1,1,0,1});
-        points_towards_A := dot(world_normal_towards_A, sphere_center - hull_center) > 0.0;
-        if !points_towards_A then world_normal_towards_A = -world_normal_towards_A;
+        points_towards_A := dot(world_normal_towards_A, sphere_center - hull_center) < 0.0;
+        if points_towards_A then world_normal_towards_A = -world_normal_towards_A;
 
         assert(length_squared(world_normal_towards_A) > 0.001, "invalid normal %", world_normal_towards_A);
 
@@ -1054,6 +1051,7 @@ collide_sphere_vs_hull :: (
         world_contact_point_on_A = sphere_center - sphere_radius * world_normal_towards_A;
         world_contact_point_on_B = best_point_on_hull;
         world_midpoint = best_point_on_hull + (d / 2.0) * world_normal_towards_A;
+        assert(d<0);
     }
 
     return num_contacts, penetration, world_normal_towards_A, world_midpoint, world_contact_point_on_A, world_contact_point_on_B;
@@ -1297,7 +1295,7 @@ quickhull_3D :: (/*read only*/cloud_of_points: []Vector3) -> Convex_Hull {
 
 
         for mesh.vertexBuffer {
-        log("idx % v %", it_index, it);
+        // log("idx % v %", it_index, it);
         }
     }
 

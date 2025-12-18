@@ -14,7 +14,6 @@ get_hash :: (loc: Source_Code_Location, identifier: s64) -> u64 {
     return result;
 }
 
-
 combine_hashes :: (a: u64, b: u64) -> u64 #no_aoc {
     return a * KNUTH_GOLDEN_RATIO_64 + b;
 }
@@ -22,7 +21,6 @@ combine_hashes :: (a: u64, b: u64) -> u64 #no_aoc {
 //
 // Layer_0: Highest Exposed level of abstraction procedures goes here, 0 stands for that, is the layer I expect the users to use the most, its the first element they should use when prototyping or releasing game.
 //
-
 Linear_Compliance :: struct {
     GOMU_GOMU :: 0.5;
     //maybe dont use values above 0.1? they are really weak springs
@@ -35,7 +33,7 @@ Linear_Compliance :: struct {
 }
 
 
-doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, linear_compliance := Linear_Compliance.WEAK_SPRING, identifier:s64=0, loc := #caller_location) {
+doHook :: (body: *Body, world_attach_point: Vector3, target_length: float = -1, linear_compliance := Linear_Compliance.STEEL_ROD, identifier:s64=0, loc := #caller_location) {
     CheckInit();
     if target_length < 0 then target_length = distance(body.position, world_attach_point);
     hash := get_hash(loc, identifier);
@@ -150,7 +148,7 @@ doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis:
             door.local_attach_position_B = world_hinge_attach_position;
         }
 
-        door.solve_orientation = solve_orientation_for_door_constraint_cb;
+        // door.solve_orientation = solve_orientation_for_door_constraint_cb;
         // door.apply_angular_damping = hinge_angular_damping_cb;
         door.swingMin = min_angle_radians;
         door.swingMax = max_angle_radians;
@@ -217,19 +215,11 @@ doDoor :: (body: *Body,  world_hinge_attach_position: Vector3, world_hinge_axis:
 //     return ball;
 // }
 
-doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, user_callback:#type (body: *Body) = null, identifier:s64=0,  loc := #caller_location) -> *Body {
-    CheckInit();
-    ball_position := get_translation(transform);
-    hash := get_hash(loc, identifier);
-    ball, did_just_created_a_new_one := find_or_create_ball(hash, ball_position, radius, mass);
-    if did_just_created_a_new_one {
-    maybe_expand_aabb(*ball.aabb,.{1,1,1});
-    maybe_expand_aabb(*ball.aabb,.{-1,-1,-1});
-    }
-    ball.position = ball_position;
-    ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
-    ball.user_data = transform;
-    reflect_results_callback :: (body: *Body) {
+do_nothing_cb :: (body: *Body) {
+    //do nothing
+}
+
+reflect_results_to_transform_cb :: (body: *Body) {
         transform := cast(*Matrix4)body.user_data;
         previous_t, previous_q, previous_s := get_decomposed_transform(transform);
 
@@ -245,8 +235,42 @@ doBall :: (transform: *Matrix4, radius: float32 = 0.1, mass: float32 = .01, user
 
     }
 
-    ball.end_frame_callback = ifx user_callback else reflect_results_callback;
+doBall :: (transform: *Matrix4, radius: float32 = .21, mass: float32 = 1, user_callback:#type (body: *Body) = do_nothing_cb, identifier:s64,  loc := #caller_location) -> *Body {
+    CheckInit();
+    ball_position := get_translation(transform);
+    hash := get_hash(loc, identifier);
+    ball, did_just_created_a_new_one := find_or_create_ball(hash, ball_position, radius, mass);
+    if did_just_created_a_new_one {
+    maybe_expand_aabb(*ball.aabb,.{1,1,1}*radius);
+    maybe_expand_aabb(*ball.aabb,.{-1,-1,-1}*radius);
+    ball.position = ball_position;
+    }
+    ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
+    ball.user_data = transform;
+
+
+    ball.end_frame_callback = user_callback ;
     return ball;
+}
+
+
+doBox :: (transform: *Matrix4, mass: float32 = 0, user_callback:#type (body: *Body)= do_nothing_cb , identifier:s64,  loc := #caller_location) -> *Body {
+    CheckInit();
+    hash := get_hash(loc, identifier);
+    box, did_just_created_a_new_one := find_or_create_box(hash, transform, mass);
+    if did_just_created_a_new_one {
+        scale := get_scale(transform);
+        box.scale = scale;
+        maybe_expand_aabb(*box.aabb,scale);
+        maybe_expand_aabb(*box.aabb,-scale);
+    }
+
+    // box.position = box_position; already getting setted inside create box
+    box.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
+    box.user_data = transform;
+
+    box.end_frame_callback = user_callback ;
+    return box;
 }
 
 
@@ -370,6 +394,27 @@ BLUE :: Vector4.{0,0,1,1};
 //
 
 
+create_box :: (model: Matrix4, mass: float32) -> *Body {
+    body := create_body();
+    box_shape := maybe_create_defult_box(model);
+    body.shape_kind = .HULL;
+    body.hull_shape = box_shape;
+    pos, ori, scale := get_decomposed_transform(model);
+    body.prev_position = pos;
+    body.position = pos;
+    body.orientation = ori;
+
+    if mass > 0 {
+        body.inv_mass = 1.0/mass;
+        inertia_factor := (1.0/mass) * 5.0/2.0;
+        body.inv_local_moment_of_inertia = .{1.0, 1.0, 1.0} * inertia_factor;
+        body.local_moment_of_inertia =     .{1.0, 1.0, 1.0} * (1.0/inertia_factor);
+
+        body.inv_local_moment_of_inertia *= 5.0/2.0; //DENSE SPHERE, its not 2/5 because is inverse of ...
+    }
+    return body;
+}
+
 create_ball :: (position: Vector3, radius: float32, mass: float32) -> *Body {
     body := create_body();
     body.shape_kind = .SPHERE;
@@ -380,6 +425,13 @@ create_ball :: (position: Vector3, radius: float32, mass: float32) -> *Body {
         body.inv_mass = 1/mass;
         body.inv_local_moment_of_inertia = .{1/mass, 1/mass, 1/mass};
         body.inv_local_moment_of_inertia *= 5.0/2.0; //DENSE SPHERE, its not 2/5 because is inverse of ...
+
+
+        body.inv_mass = 1.0/mass;
+        inertia_factor := (1.0/mass) * 5.0/2.0;
+        body.inv_local_moment_of_inertia = .{1.0, 1.0, 1.0} * inertia_factor;
+        body.local_moment_of_inertia =     .{1.0, 1.0, 1.0} * (1.0/inertia_factor);
+
     }
     return body;
 }
@@ -424,6 +476,28 @@ find_or_create_joint_constraint :: (hash: u64, A: *Body, B: *Body = null ) -> *J
         table_set(*hashed_joint_constraints, hash, joint_ptr.bucket_locator);
      }
     return joint_ptr, did_just_created_a_new_one;
+}
+
+find_or_create_box :: (hash: u64, box_model: Matrix4, mass: float32) -> *Body, did_just_created_a_new_one: bool {
+    using context.solver.world;
+    locator_ptr := table_find_pointer(*hashed_bodies, hash);
+
+    box: *Body;
+    if locator_ptr {
+        // basic.log("Cache detected!");
+        box = bucket_array_find_pointer(*bodies,locator_ptr.*);
+    }
+
+    did_just_created_a_new_one: bool;
+    if !box {
+        did_just_created_a_new_one = true;
+        basic.log("creating new box");
+        box = create_box(box_model, mass);
+        box.hash = hash;
+        table_set(*hashed_bodies, hash, box.bucket_locator);
+     }
+
+    return box, did_just_created_a_new_one;
 }
 
 find_or_create_ball :: (hash: u64, ball_position: Vector3, radius: float, mass: float32) -> *Body, did_just_created_a_new_one: bool {

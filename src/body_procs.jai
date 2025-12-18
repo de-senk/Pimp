@@ -77,33 +77,112 @@ get_lambda :: inline (dt: float, w: float,C: float, compliance: float, old_lambd
 //
 // Effective masses is the mass you would believe you are dealing with when you try to move a particle at a distance (arm) in the maybe always normlaized direction (direction), Im not 100% that it is always normalized, but lets assume it for now.
 //
-get_effective_mass_angular_only :: (using body: Body, world_lever: Vector3) -> w: float
+get_effective_mass_angular_only :: (using body: Body, world_lever: Vector3) -> w_ang: float
 {
-    local_lever := rotate(world_lever, conjugate(body.orientation));
-    w := local_lever.x * local_lever.x * body.inv_local_moment_of_inertia.x +
-         local_lever.y * local_lever.y * body.inv_local_moment_of_inertia.y +
-         local_lever.z * local_lever.z * body.inv_local_moment_of_inertia.z;
-    return w;
+    w_ang := dot(world_lever, body.inv_I_world*world_lever);
+    return w_ang;
 }
+//OLD, to delete
+// get_effective_mass_angular_only_old :: (using body: Body, world_lever: Vector3) -> w: float
+// {
+//     local_lever := rotate(world_lever, conjugate(body.orientation));
+//     w := local_lever.x * local_lever.x * body.inv_local_moment_of_inertia.x +
+//          local_lever.y * local_lever.y * body.inv_local_moment_of_inertia.y +
+//          local_lever.z * local_lever.z * body.inv_local_moment_of_inertia.z;
+//     return w;
+// }
 
-get_effective_mass :: (using body: *Body, normalized_world_force: Vector3, world_attach_position: Vector3) -> w: float
+/*
+ri_cm := Ri_scalar *  ri_n
+d  := normalized(xi - (Ri_scalar *  ri_n + xr)
+ARM := cross(ri_cm,d)
+wi = nC*body.inv_mass + ARM_T * inv_I * ARM
+*/
+
+
+
+apply_world_momentum_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, C: float, normal: Vector3, attach_position_A: Vector3, attach_position_B: Vector3) -> float
 {
-    w_linear := body.inv_mass;
+    // C, normal := get_C_and_normal(correction);
+    basic.assert(is_normalized(normal));
+    w := get_effective_mass(A, normal, attach_position_A);
+    w += get_effective_mass(B, normal, attach_position_B);
 
-    //angular effective mass
-    center_of_mass := body.position;
-    world_lever := world_attach_position - center_of_mass;
-    world_angular_force_direction := cross_product(world_lever, normalized_world_force);
-    w_angular := get_effective_mass_angular_only(body, world_angular_force_direction);
+    lambda, force_magnitude := get_lambda(dt, w, C, compliance);
+    p := -lambda * normal;
 
-    //total effective mass
-    return w_linear + w_angular;
+    A.position += p*A.inv_mass;
+
+
+    center_of_mass := A.position;
+    world_lever := attach_position_A - center_of_mass;
+
+    I_worldA, inv_I_worldA := A.I_world, A.inv_I_world;
+    I_worldB, inv_I_worldB := B.I_world, B.inv_I_world;
+
+
+    delta_angular := inv_I_worldA*cross_product(world_lever, p);
+    // delta_angular := get_delta_angular_from_torque(body, correction_torque);
+
+
+    dq_for_A := 0.5*Quaternion.{delta_angular.x,delta_angular.y,delta_angular.z,0.0}*A.orientation;
+    A.orientation = normalize(dq_for_A + A.orientation);
+
+    // dVel := get_velocity_at_position(A, attach_position_A);
+    // dVel -= get_velocity_at_position(B, attach_position_B);
+    // n := normalize(attach_position_B - attach_position_A);
+    // projected_velocity := dot(-dVel, n) * n;
+    // normal = n;
+    // n=normal;
+
+
+    // arrow(attach_position_B, normal,head_size=0.2);
+    // // arrow(attach_position_B, n,head_size=0.3);
+    // correction_force := -lambda * normal;
+
+
+
+    // dx_for_A := get_world_linear_position_correction(A,correction_force, attach_position_A);
+    // dq_for_A := get_world_angular_position_correction(A,correction_force, attach_position_A);
+    // dv_A := dx_for_A/dt;
+
+    // draw_primitive.line(A.position, attach_position_A,.{x=1, w=1});
+    // draw_primitive.line(attach_position_A, attach_position_A + correction_force,.{x=0.1, z=1});
+    // draw_primitive.line(attach_position_A, attach_position_B,.{x=0.1, w=1});
+
+    // dx_for_B := get_world_linear_position_correction(B, -correction_force, attach_position_B);
+    // dq_for_B := get_world_angular_position_correction(B, -correction_force, attach_position_B);
+    // dv_B := dx_for_B/dt;
+
+
+// rvela := dv_A-dv_B;
+// pr := dot(-rvela, n) * n;
+// dr := length(pr);
+// da := length(projected_velocity);
+// // dr = 1.0;
+// // da = 1.0;
+// factor := basic.min(1.0, dr/da);
+// factor = basic.min(1.0, dr/da);
+
+// A.position += dx_for_A;
+    // A.orientation = normalize(dq_for_A + A.orientation);
+
+    // A.velocity += dr*normal*dt;
+
+    // A.angular_velocity += 2.5* dq_for_A.xyz *dt;
+    // if dq_for_A.w < 0 then A.angular_velocity *= -1.0;
+
+    // A.orientation = normalize(dq_for_A + A.orientation);
+    // B.position += dx_for_B*factor;
+// B.orientation = normalize(dq_for_B + B.orientation);
+
+    return force_magnitude;
 }
 
 apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: float32, correction: Vector3, attach_position_A: Vector3, attach_position_B: Vector3) -> float
 {
     C, normal := get_C_and_normal(correction);
-
+    basic.assert(is_normalized(normal));
     w := get_effective_mass(A, normal, attach_position_A);
     w += get_effective_mass(B, normal, attach_position_B);
 
@@ -115,10 +194,6 @@ apply_world_position_correction :: (A: *Body, B: *Body, dt: float, compliance: f
     dq_for_A := get_world_angular_position_correction(A,correction_force, attach_position_A);
     A.position += dx_for_A;
     A.orientation = normalize(dq_for_A + A.orientation);
-
-    draw_primitive.line(A.position, attach_position_A,.{x=1, w=1});
-    draw_primitive.line(attach_position_A, attach_position_A + correction_force,.{x=0.1, z=1});
-    draw_primitive.line(attach_position_A, attach_position_B,.{x=0.1, w=1});
 
     dx_for_B := get_world_linear_position_correction(B, -correction_force, attach_position_B);
     dq_for_B := get_world_angular_position_correction(B, -correction_force, attach_position_B);
@@ -299,7 +374,7 @@ get_world_angular_position_correction :: (body: Body, correction_force: Vector3,
     // delta_angular := get_delta_angular_from_torque(w_ang, body.orientation, correction_torque);
     delta_angular := get_delta_angular_from_torque(body, correction_torque);
 
-    draw_primitive.line(center_of_mass, center_of_mass+delta_angular*5000,.{x=0, y=.9951, w=1});
+    // draw_primitive.line(center_of_mass, center_of_mass+delta_angular*5000,.{x=0, y=.9951, w=1});
 
     delta_orientation := get_stable_delta_orientation(delta_angular, body.orientation);
     return delta_orientation;

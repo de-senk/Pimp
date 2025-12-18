@@ -362,6 +362,7 @@ LINE_RENDER_COMMAND :: struct {
 }
 
 push_line :: (start : Vector3, end : Vector3, color : Vector4) {
+
     cmd: Draw_Command;
     cmd.kind = .LINE;
     cmd.should_render = true;
@@ -411,8 +412,39 @@ MAX_DEBUG_TRIANGLES :: 100_000;
 debug_triangle_list: [..]DebugDrawVertex;
 debug_triangle_list_wire: [..]DebugDrawVertex;
 state_machine_wireframe:=false;
+
+
+recorded_drawing_commands_start_count : int;
+recorded_drawing_commands: [..]Draw_Command;
+recodrder_is_recording: bool;
+debug_renderer_start_recording_commands :: () {
+    if recodrder_is_recording return;
+    array_reset_keeping_memory(*recorded_drawing_commands);
+    recorded_drawing_commands.count = 0;
+
+    recorded_drawing_commands_start_count = drawing_commands.count;
+    recodrder_is_recording=true;
+}
+
+debug_renderer_STOP_recording_commands :: () {
+    recodrder_is_recording=false;
+    for recorded_drawing_commands_start_count..drawing_commands.count-1 {
+        cmd := drawing_commands[it];
+        if cmd.kind == .LINE
+            array_add(*recorded_drawing_commands, cmd);
+    }
+
+}
+
+debug_renderer_feed_recorded_commands :: () {
+    for cmd: recorded_drawing_commands {
+            array_add(*drawing_commands, cmd);
+    }
+}
+
 push_debug_triangle ::  (v1: Vector3, v2: Vector3, v3: Vector3, color_vec: Vector4)
 {
+
     //check space and add triangle
     triangle_buf := *debug_triangle_list;
     if state_machine_wireframe then triangle_buf = *debug_triangle_list_wire;

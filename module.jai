@@ -124,8 +124,8 @@ World :: struct {
 Solver :: struct {
     using world: *World;
     dt          := 1.0 / 60.0;
-    gravity     := Vector3.{0,0.0,0};
-    iterations  := 10;
+    gravity     := Vector3.{0,-10.0,0};
+    iterations  := 1;
     number_of_steps_executed_so_far : u64; //<- used for immediate mode.
 }
 
@@ -151,8 +151,11 @@ Body :: struct {
     radius: float;
     capsule_height: float;
 
+    scale: Vector3 = .{1,1,1};
+
     position: Vector3;
     prev_position: Vector3;
+    prev_prev_position: Vector3;
 
     velocity: Vector3;
     prev_velocity: Vector3;
@@ -170,12 +173,16 @@ Body :: struct {
     inv_mass: float;
 
 
-    // local_moment_of_inertia:   Vector3;
-    inv_local_moment_of_inertia:   Vector3;
+    local_moment_of_inertia:   Vector3;
+    I_world:   Vector3;
 
-    factor_energy_loss_on_collision: float=0.68;
+    inv_local_moment_of_inertia:   Vector3;
+    inv_I_world:   Vector3;
+
+    // factor_energy_loss_on_collision: float=1.0;
     friction:             float32 = 0.5;
-    elasticity:           float32 = 1.0; //half means half every collision, you might want .9
+    restitution:             float32 = 1.0;
+    elasticity:           float32 = .0; //half means half every collision, you might want .9
 
 
     //these fields might change based on orientation and shape kind, we try to cache them if possible.
@@ -216,14 +223,17 @@ Contact_Info :: struct {
         // A: *Body;
         // B: *Body;
 
-        world_contact_point_on_A: Vector3;
-        world_contact_point_on_B: Vector3;
-        world_midpoint: Vector3;
-
-        local_point_A: Vector3;
-        local_point_B: Vector3;
 
         world_normal_towards_A: Vector3; //same for B but opposite
+
+        // world_contact_point_on_A: Vector3; //no because we need to recalculate it every update! we need local!
+        // world_contact_point_on_B: Vector3; //no because we need to recalculate it every update! we need local!
+        local_point_on_A: Vector3;
+        local_point_on_B: Vector3;
+
+        world_midpoint: Vector3; //unused yet, maybe we also need to use local!
+
+
 
         // position: Vector3;
         penetration: float; //same for B but opposite
@@ -457,6 +467,7 @@ FLOAT32_EPSILON0 :float32: 0h3f800000; //1.0
 
 //:tagDecisionsReasonings
 //I like to put my decisions and the reasoning behind them, just to avoid information loss.
+assume_I_use_symmetric_objects :: true;
 assume_README_PLEASE_Immediate_Mode_Misconceptions :: "Immediate mode IS usable in the release of games!! Immediate mode can be as fast OR even faster than retained mode physics. Same rule applies to Immediate mode GUI's, if an Immediate mode gui recreates everything from scratch when you do doButton or doLabel, then the author of the library is doing something wrong. The trick is to do a lot of caching and caching invalidation and naming stuff, yes, it is hard to do, but that is the way. I hope I provide enough examples to show the power of immediate mode API's. Immedate mode API's reduces user error probability drastically and allows for very fast iterations.";
 assume_What_is_this_library_for :: "Iterating gameplay|prototyping games|fearless usage and modification of the code if you need more features or anything you want (MIT + Credit Not Required but appreciated)|1 line of code to do something useful and see results on the screen|have high level primitives that allows you to use them as building blocks to do more complex things|bootstraping your physics engine";
 assume_What_is_NOT_for :: "stress testings, Even tho, I will try to make this library very fast, this is not a library to stack 400000 watermelons in a room and expect great performance results. This library is for reasonable games with interesting gameplay elements.";

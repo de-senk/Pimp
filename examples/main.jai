@@ -67,6 +67,8 @@ main :: () {
 
         draw_primitive.line = push_line;
         draw_primitive.triangle = push_debug_triangle;
+        draw_primitive.start_recording = debug_renderer_start_recording_commands;
+        draw_primitive.end_recording = debug_renderer_STOP_recording_commands;
         draw_primitive.doLabel = doLabel;
         draw_primitive.WorldToScreen = WorldToScreen;
     iii:bool;
@@ -121,8 +123,8 @@ main :: () {
 		{
 		  //draw opengl coordinates to the rightmost corner to the rightmost of that coordinate
           using game_coordinates;
-          offset := -10.0*forward -10.0*up;
-          doLabel("game coordinates", WorldToScreen(offset+2.0*up));
+          offset := -4.0*left +0.10*up;
+          doLabel("GAME COORDINATES", WorldToScreen(offset+1.20*up));
 		  draw_primitive.line(offset, offset+forward, .{x=1, w=1}); doLabel("forward", WorldToScreen(offset+forward));
 		  draw_primitive.line(offset, offset+up, .{y=1, w=1});      doLabel("up", WorldToScreen(offset+up));
 		  draw_primitive.line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
@@ -138,8 +140,8 @@ main :: () {
         {
 		  //draw Physics coordinates to the rightmost corner to the rightmost of that coordinate
           using physics_coordinates;
-          offset := -10.0*forward -10.0*up;
-          doLabel("physics coordinates", WorldToScreen(offset+2.0*up));
+          offset := -4.0*game_coordinates.left +0.10*game_coordinates.up-3.0*game_coordinates.forward;
+          doLabel("PHYSICS COORDINATES", WorldToScreen(offset+1.20*game_coordinates.up));
 		  draw_primitive.line(offset, offset+forward, .{x=1, w=1}); doLabel("forward", WorldToScreen(offset+forward));
 		  draw_primitive.line(offset, offset+up, .{y=1, w=1});      doLabel("up", WorldToScreen(offset+up));
 		  draw_primitive.line(offset, offset+left, .{z=1, w=1});    doLabel("left", WorldToScreen(offset+left));
@@ -151,6 +153,7 @@ main :: () {
         //
         //  Here is where we are actually drawing
         //
+        debug_renderer_feed_recorded_commands();
         quick_sort(drawing_commands, (a, b) => compare_render_commands(a.kind, b.kind));
 		for drawing_commands {
 		  actual_draw(it);
@@ -232,6 +235,10 @@ handle_inputs_shared_between_modes:: () {
 }
 
 
+// test1pos: Vector3 = Vector3.{.5,0.7, 2.2};
+// test1ori := #run make_quaternion_from_axis_and_angle(.{1,-2.2,0}, 3.141593/4);
+// test1ori := Quaternion.{-0.291444, -0.490207, -0.050201, 0.819901};
+
 update_frame :: (delta_time : float)
 {
 
@@ -244,13 +251,23 @@ update_frame :: (delta_time : float)
 	}
     if g_game_state.should_start_scene {
         g_game_state.should_start_scene = false;
+        using game_coordinates;
         create_player0();
+        // create_static_box_collider(test1pos, test1ori, scale=.{1,1,1});
+        create_static_box_collider(test1pos+2.0*right,  scale=.{4,1,1});
+        create_static_box_collider(.{0,-1,0},scale=.{10,1,10});
+        create_static_box_collider(.{0,10,0},scale=.{10,.1,10});
+        create_static_box_collider(.{5,0,0},scale=.{.1,10,10});
+        create_static_box_collider(.{-5,0,0},scale=.{.1,10,10});
+        create_static_box_collider(.{0,0,5},scale=.{10,10,0.1});
+        create_static_box_collider(.{0,0,-5},scale=.{10,10,0.1});
     }
 	update_flying_camera (*g_camera, delta_time);
 
     for *all_entities {
         // using it; //I don't need to use it anymore.
         if it.is_player0 then do_player0_gamecode(it, delta_time);
+        if it.is_static_collider then do_static_box_collider_gamecode(it, delta_time);
 
 
 
@@ -267,14 +284,17 @@ all_entities: [..]Entity;
 stub_skin_mesh:: Skinned_Mesh.{};
 
 Entity :: struct {
-    position: Vector3;
-    orientation: Vector3;
     world_model: Matrix4 = Matrix4_Identity;
     kind: enum {Player0;Wall;Door;};
     rendering_flags: Rendering_Flags;
     is_player0: bool;
-    is_a_box: bool;
+
+    is_static_collider: bool;
+
+    is_a_box_collider: bool;;
+
     is_a_wall: bool;
+
     is_a_door: bool;
     is_a_floor_or_ceiling: bool;
 
@@ -309,6 +329,14 @@ create_entity :: () -> *Entity {
        return entity;
 }
 
+create_static_box_collider :: (pos: Vector3, ori := Quaternion.{0,0,0,1}, scale := Vector3.{1,1,1}) {
+    box := create_entity();
+    box.is_a_box_collider = true;
+    box.is_static_collider = true;
+    box.world_model = compose_transform(pos, ori, scale);
+}
+
+
 create_player0 :: () {
     player0 := create_entity();
     player0.is_player0 = true;
@@ -340,7 +368,9 @@ decompose_transform :: inline (mat : Matrix4) -> translation : Vector3, rotation
 	return translation, rotation, scale;
 }
 
-
+compose_transform :: (position: Vector3, orientation: Quaternion, scale: Vector3 = .{1,1,1}) -> Matrix4 {
+    return make_translation_matrix4(position)*rotation_matrix (Matrix4, orientation) * make_scale_matrix4(scale);;
+}
 
 
 MAX_WEIGHTS :: 4;

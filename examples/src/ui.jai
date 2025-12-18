@@ -152,6 +152,19 @@ update_ui :: (delta_time : float)
 		getrect.slider (r, *animation_time, 0.0, xx sample_count, 1.0, *slider_theme, "Animation Time: ", "");
 	}
 	r.y -= pad;
+	// Animation time slider
+	{
+        // sample_count := 0;
+        // if animation_index > 0
+        // {
+        // 	anim := table_find_pointer (*g_loaded_animations, animation_names[animation_index]);
+        // 	sample_count = anim.sample_count;
+        // }
+        text := tprint ("num iterations: %", context.solver.iterations);
+		r.w = w * 0.1 + xx simp.prepare_text (g_slider_font, "num iterations:    ");
+		getrect.slider (r, *context.solver.iterations, 1, 10, 1, *slider_theme, "num iterations: ", "");
+	}
+	r.y -= pad;
 	// Interpolation mode
 	{
 		r.w = xx simp.prepare_text (g_font, "Interpolation Mode: ");
