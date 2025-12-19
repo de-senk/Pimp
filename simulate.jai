@@ -52,62 +52,26 @@ simulate :: () {
     //XPBD for rigidbodies
     backup_dt := dt;
     dt = dt / sub_steps.(float);
-
     CollisionDetection();
     for *bodies compute_world_inertia_and_inv_inertia(it);
-    for *collision_constraints {
-        it.lambda_cache = 0;
-    }
-    for *joint_constraints {
-        it.lambda_cache = 0;
-        // it.impulse_cache = 0;
-    }
+    for *collision_constraints it.lambda_cache = 0;
+    for *joint_constraints it.lambda_cache = 0;
     for 1..sub_steps {
-        for *bodies {
-            integrate_positions_xpbd(it, dt);
-        }
-        for *joint: joint_constraints {
-            //solve(it, dt); FLATTENED OUT:
-             //these are callbacks of procedures stored inside each joint, I think this strategy is better than a switch statement.
-             joint.pre_solve(joint, dt);
-             recalculate_world_attach_pos_and_ori(joint);
-             joint.solve_position(joint, dt);
-             recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
-             joint.solve_orientation(joint, dt);
-        }
+        for *bodies integrate_positions_xpbd(it, dt);
         for 1..iterations {
-        for *collision_constraints {
-            SolvePositions(it, dt);
+            for *joint_constraints SolveJointPositions(it, dt);
+            for *collision_constraints SolvePositions(it, dt);
         }
-        }
-        for *bodies {
-            it.prev_velocity = it.velocity;
-            it.prev_angular_velocity = it.angular_velocity;
-            integrate_velocities_xpbd(it, dt);
-        }
+        for *bodies integrate_velocities_xpbd(it, dt);
         // CollisionDetection();// this is very slow.
-         for *collision_constraints {
-            //backup velocities inside manifold constraints
-            it.prev_velocity_A = it.A.velocity;
-            it.prev_velocity_B = it.B.velocity;
-            it.prev_angular_velocity_A = it.A.angular_velocity;
-            it.prev_angular_velocity_B = it.B.angular_velocity;
-            // it.lambda_cache = 0;
-            // it.impulse_cache = 0;
-        }
+        for *collision_constraints backup_velocities_inside_manifold_constraints(it);
+        for *collision_constraints SolveVelocities(it, dt);
+        for *joint: joint_constraints ApplyDamping(joint, dt);
+    }
+    dt = backup_dt;
 
-        for *collision_constraints {
-            SolveVelocities(it, dt);
-        }
 
-        // for *joint: joint_constraints {
-        //      recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
-        //     joint.apply_linear_damping(joint, dt);
-        //      recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
-        //     joint.apply_angular_damping(joint, dt);
-        // }
-
-        DO_FAKE_FLOOR :: false;
+      DO_FAKE_FLOOR :: false;
 
         #if DO_FAKE_FLOOR
         for *bodies {
@@ -120,9 +84,6 @@ simulate :: () {
                 it.velocity += factor_energy_loss_on_collision*project_upwards;  //to bounce
             }
         }
-    }
-    dt = backup_dt;
-
     //actually apply stuff
     for *bodies
     {
@@ -187,7 +148,15 @@ integrate_positions_xpbd :: (body: *Body, dt: float) {
         }
 
 }
+backup_velocities_inside_manifold_constraints :: (using colli: *Collision_Constraint) {
 
+            prev_velocity_A = A.velocity;
+            prev_velocity_B = B.velocity;
+            prev_angular_velocity_A = A.angular_velocity;
+            prev_angular_velocity_B = B.angular_velocity;
+            // lambda_cache = 0;
+            // impulse_cache = 0;
+}
 
 #if assume_I_use_symmetric_objects {
 compute_world_inertia_and_inv_inertia :: (body: *Body) {

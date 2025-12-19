@@ -25,7 +25,7 @@ offset_of :: ($T: Type, $member: string) -> int {
 }
 
 do_single_step: bool;
-step_physics: bool;
+step_physics: bool = true;;
 main :: () {
 	// This is here because on Windows, segfaults and stuff are silent.
 	// If the program ends without printing this message, then something bad happened.

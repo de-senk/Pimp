@@ -2,7 +2,7 @@ step_draw: int;
 do_static_box_collider_gamecode :: (using box: *Entity, delta_time : float) {
     doBox(*world_model, identifier=box.(s64));
 }
-
+_should_ball := true;
 do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     using game_coordinates;
     if context.solver == null then return;
@@ -13,12 +13,15 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     // Draw(player0, delta_time);
     if was_key_pressed(#char "I") step_draw -= ifx step_draw>0 then 1 else 0;
     if was_key_pressed(#char "O") step_draw += 1;
+    if was_key_pressed(#char "P") _should_ball = !_should_ball;
     if is_key_down(#char "Z") collider_switch_face = true;
     if is_key_down(#char "X") collider_switch_face = false;
     if is_key_down(#char "Y") log("orio %", test1ori);
     if !is_key_down(#char "G") {
+        if _should_ball
+        ball = doBall(*world_model, mass=1, user_callback = reflect_results_to_transform_cb, identifier=player0.(s64));;
+        else
         ball = doBox(*world_model, mass=1, user_callback = reflect_results_to_transform_cb, identifier=player0.(s64));;
-        // ball = doBall(*world_model, mass=1, user_callback = reflect_results_to_transform_cb, identifier=player0.(s64));;
     }
 
    if ball && was_key_pressed(#char "R") {

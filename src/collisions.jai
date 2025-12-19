@@ -391,8 +391,112 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
 }
 } else {
 
+
 SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
-    is_negative :: (b: float32) -> bool {return b < 0;};
+    is_negative :: (b: float32) -> bool {return b < 0.0;};
+	normal: Vector3 = colli.contactsBuffer[0].world_normal_towards_A;
+    gravity_length := length(context.solver.gravity);
+    h:= dt;
+    //I precompute these each frame
+    I_worldA, inv_I_worldA := A.I_world, A.inv_I_world;
+    I_worldB, inv_I_worldB := B.I_world, B.inv_I_world;
+    //l2w stands for local to world
+    for 0..colli.contacts_count-1 {
+        c := colli.contactsBuffer[it];
+        contact_on_A := l2w(A.position, A.orientation, c.local_point_on_A);
+        contact_on_B := l2w(B.position, B.orientation, c.local_point_on_B);
+        penetration := dot(contact_on_A - contact_on_B, normal);
+        leverA := contact_on_A - A.position;
+        leverB := contact_on_B - B.position;
+
+        rel_vel := (A.velocity + cross(A.angular_velocity, leverA)) - (B.velocity + cross(B.angular_velocity, leverB));
+		rel_vel_comp_n := dot(rel_vel, normal); //component along normal
+		PREV_rel_vel := (prev_velocity_A + cross(prev_angular_velocity_A, leverA)) - (prev_velocity_B + cross(prev_angular_velocity_B, leverB));
+		PREV_rel_vel_comp_n := dot(normal, PREV_rel_vel);
+		reflected_PREV_rel_vel_comp_n := PREV_rel_vel_comp_n;
+
+		// tangent velocities not implemented yet.
+    	u := basic.max(A.friction, B.friction); //0.5
+       //normal points towards A
+       // if (penetration > 0.0) then continue; //should we do this?
+       already_separating := rel_vel_comp_n >= -0;
+       if already_separating then continue;
+
+		// normal velocities (restitution)
+    	e := A.restitution * B.restitution; // 0.5 * 0.5
+        if abs(rel_vel_comp_n) <= h*2.0*gravity_length
+             then e = 0.0;
+
+         //no e = 1.0;//checkin FORCED TO BOUNCE
+
+        //(eq34)
+        nullification := -rel_vel_comp_n;
+        restitution := basic.max(-e * PREV_rel_vel_comp_n, 0.0);
+        if PREV_rel_vel_comp_n <0 || PREV_rel_vel_comp_n > 0
+        basic.assert(is_negative(nullification) == is_negative(restitution), "nullification should have the same sign as restitution nulli,resti % %", nullification, restitution);
+        dv :=  normal * (restitution + nullification);
+        w1 := get_effective_mass(A, normal, contact_on_A);
+        w2 := get_effective_mass(B, normal, contact_on_B);
+		//(eq33)
+		p := dv / (w1 + w2);
+        A.velocity += p * A.inv_mass;
+        B.velocity -= p * B.inv_mass;
+        A.angular_velocity += inv_I_worldA * cross(leverA, p);; //leverA = r1
+        B.angular_velocity -= inv_I_worldB * cross(leverB, p);  //leverB = r2
+    }
+
+}
+
+
+asdasd :: #string CPP
+void SolveVelocities(Collision_Constraint* colli, float dt) {
+    auto is_negative = [](float b) -> bool { return b < 0.0f; };
+    Vector3 normal = colli->contactsBuffer[0].world_normal_towards_A;
+    float gravity_length = length(context.solver.gravity);
+    float h = dt;
+    // Precomputed each frame
+    Matrix3 I_worldA = colli->A->I_world;          Matrix3 I_worldB = colli->B->I_world;
+    Matrix3 inv_I_worldA = colli->A->inv_I_world;  Matrix3 inv_I_worldB = colli->B->inv_I_world;
+
+    // l2w stands for local to world
+    for (int i = 0; i < colli->contacts_count; i++) {
+        Contact c = colli->contactsBuffer[i];
+        Vector3 contact_on_A = l2w(colli->A->position, colli->A->orientation, c.local_point_on_A);
+        Vector3 contact_on_B = l2w(colli->B->position, colli->B->orientation, c.local_point_on_B);
+        float penetration = dot(contact_on_A - contact_on_B, normal); // normal points towards A
+        Vector3 leverA = contact_on_A - colli->A->position;
+        Vector3 leverB = contact_on_B - colli->B->position;
+        Vector3 rel_vel = (colli->A->velocity + cross(colli->A->angular_velocity, leverA))
+                        - (colli->B->velocity + cross(colli->B->angular_velocity, leverB));
+        float rel_vel_comp_n = dot(rel_vel, normal); // component along normal
+        Vector3 PREV_rel_vel = (colli->prev_velocity_A + cross(colli->prev_angular_velocity_A, leverA)) //prev_ were stored beforehand
+                             - (colli->prev_velocity_B + cross(colli->prev_angular_velocity_B, leverB));//prev_ were stored beforehand
+        float PREV_rel_vel_comp_n = dot(normal, PREV_rel_vel);
+        float u = max(colli->A->friction, colli->B->friction); // 0.5 //NOTE(tr): tangent velocities not implemented yet
+        bool already_separating = rel_vel_comp_n >= 0.0f;
+        if (already_separating) continue;
+        // normal velocities (restitution)
+        float e = colli->A->restitution * colli->B->restitution;
+        if (abs(rel_vel_comp_n) <= h * 2.0f * gravity_length)
+            e = 0.0f;
+        e = 1.0f; // FORCED TO BOUNCE ! !!!!!!!!!!!!!!!
+
+        // (eq34)
+        float nullification = -rel_vel_comp_n;
+        float restitution = max(-e * PREV_rel_vel_comp_n, 0.0f);
+        if (PREV_rel_vel_comp_n < 0 || PREV_rel_vel_comp_n > 0)  assert(is_negative(nullification) == is_negative(restitution));
+        Vector3 dv = normal * (restitution + nullification);
+        float w1 = get_effective_mass(colli->A, normal, contact_on_A);  float w2 = get_effective_mass(colli->B, normal, contact_on_B);
+        // (eq33)
+        Vector3 p = dv / (w1 + w2);
+        colli->A->velocity += p * colli->A->inv_mass;                   colli->B->velocity -= p * colli->B->inv_mass;
+        colli->A->angular_velocity += inv_I_worldA * cross(leverA, p);  colli->B->angular_velocity -= inv_I_worldB * cross(leverB, p);
+    }
+}
+CPP;
+
+SolveVelocitiesOLD :: (using colli: *Collision_Constraint, dt: float) {
+    is_negative :: (b: float32) -> bool {return b < 0.0;};
 	normal: Vector3 = colli.contactsBuffer[0].world_normal_towards_A;
     gravity_length := length(context.solver.gravity);
     h:= dt;
@@ -443,15 +547,15 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
         if abs(rel_vel_comp_n) <= h*2.0*gravity_length
              then e = 0.0;
 
-        e = 0.5; //FORCED TO BOUNCE
+        e = 1.0; //FORCED TO BOUNCE
 
         //(eq34)
         nullification := -rel_vel_comp_n;
-        restitution := -basic.min(e * PREV_rel_vel_comp_n, 0.0);
+        restitution := basic.max(-e * PREV_rel_vel_comp_n, 0.0);
         if PREV_rel_vel_comp_n <0 || PREV_rel_vel_comp_n > 0
-        // log_vars(restitution);
-        // log_vars(nullification);
-        basic.assert(is_negative(nullification) == is_negative(restitution), "nullification should have the same sign as restitution % %", nullification, restitution);
+        log_vars(restitution);
+        log_vars(nullification);
+        basic.assert(is_negative(nullification) == is_negative(restitution), "nullification should have the same sign as restitution nulli,resti % %", nullification, restitution);
         dv :=  normal * (restitution + nullification);
 
         w1 := get_effective_mass(A, normal, contact_on_A);
@@ -489,6 +593,23 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
     basic.assert(is_valid(A.velocity), "your body tried to explode");
 
 }
+}
+
+SolveJointPositions :: (joint: *Joint_Constraint, dt: float) {
+    //solve(it, dt); FLATTENED OUT:
+    //these are callbacks of procedures stored inside each joint, I think this strategy is better than a switch statement.
+    joint.pre_solve(joint, dt);
+    recalculate_world_attach_pos_and_ori(joint);
+    joint.solve_position(joint, dt);
+    recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+    joint.solve_orientation(joint, dt);
+}
+
+ApplyDamping :: (joint: *Joint_Constraint, dt: float) {
+     recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+    joint.apply_linear_damping(joint, dt);
+     recalculate_world_attach_pos_and_ori(joint); //maybe I need one of these here?
+    joint.apply_angular_damping(joint, dt);
 }
 
 AddManifold :: ( A: *Body, B: *Body, contact_stack_lifetime: []Contact_Info) -> *Collision_Constraint {
