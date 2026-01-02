@@ -72,8 +72,15 @@ main :: () {
         draw_primitive.start_recording = debug_renderer_start_recording_commands;
         draw_primitive.end_recording = debug_renderer_STOP_recording_commands;
         draw_primitive.doLabel = doLabel;
+        draw_primitive.doText = do3DLabel;
         draw_primitive.WorldToScreen = WorldToScreen;
     iii:bool;
+
+    // collider := pc.collider_sphere_create(0.5);
+    // entities: **pc.Entity  = pc.entity_get_all();
+    // pc.pbd_simulate(delta_time, entities, 1, 1, pc._true);
+    physics_memory_size := 5*MegaByte;
+    physics_memory := alloc(physics_memory_size);
 	while g_running
 	{
         iii = !iii;
@@ -93,6 +100,12 @@ main :: () {
 
 		for events_this_frame handle_window_event (it);
 
+        couunters:[4]float;
+        for 1..1 {
+
+            // pc.Simulate(cast(*void)physics_memory, physics_memory_size,*couunters);
+        }
+        // log("cntes %" ,couunters);
 
         {
 		  update_frame (delta_time);
@@ -260,15 +273,20 @@ update_frame :: (delta_time : float)
     if g_game_state.should_start_scene {
         g_game_state.should_start_scene = false;
         using game_coordinates;
-        create_player0(.{1,1,1}, scale={4,1,2});
+        create_player0(.{1,1,1}, scale={.5,1,2});
         // create_static_box_collider(test1pos, test1ori, scale=.{1,1,1});
         create_static_box_collider(test1pos+2.0*right,  scale=.{4,1,1});
-        create_static_box_collider(.{0,-1,0},scale=.{10,1,10});
-        create_static_box_collider(.{0,10,0},scale=.{10,.1,10});
+        create_static_box_collider(.{0,5,0},scale=.{10,1,10});
         create_static_box_collider(.{5,0,0},scale=.{.1,10,10});
         create_static_box_collider(.{-5,0,0},scale=.{.1,10,10});
         create_static_box_collider(.{0,0,5},scale=.{10,10,0.1});
         create_static_box_collider(.{0,0,-5},scale=.{10,10,0.1});
+        #if 1
+        create_static_box_collider(.{0,-1,0},scale=.{10,.5,10});
+        else {
+        create_static_box_collider(.{0,-1,0},ori=rotate8aroundx_m,scale=.{10,.5,10});
+        create_static_box_collider(.{0,-1,0},ori=rotate8aroundx,scale=.{10,.5,10});
+        }
     }
 	update_flying_camera (*g_camera, delta_time);
 
@@ -669,6 +687,7 @@ getrect :: #import "GetRect";
 
 #import "Drawing_Primitives";
 #import,dir "../../Pimp";
+pc :: #import "PimpC";
 
 #load "src/parse_utils.jai";
 #load "src/render.jai";

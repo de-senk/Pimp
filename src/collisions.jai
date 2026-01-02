@@ -67,14 +67,24 @@ SolvePositions:: (using colli: *Collision_Constraint, dt: float) {
        alpha := linear_compliance / dt_squared;
        dlambda := (- C - alpha*lambda_cache) / (w1 + w2 + alpha);
        if (w1 + w2) == 0 then dlambda = 0.0;
+        //(eq4) lamda caching
        lambda_cache += dlambda;
 
         p := -dlambda * normal;
-        //(eq4) lamda caching NOT DONE BECAUSE I ONLY ITERATE ONCE.
+
         A.position += p*A.inv_mass; //(eq6)
         B.position -= p*B.inv_mass; //(eq7)
 
         #if ENABLE_ANGULAR_RESOLUTION {
+            #if 1
+            {//maybe recalculate the contacts points and effective masses and get another lambda
+                contact_on_A = l2w(A.position, A.orientation, contact.local_point_on_A);
+                contact_on_B = l2w(B.position, B.orientation, contact.local_point_on_B);
+                penetration = dot(contact_on_A - contact_on_B, normal);
+                C = -penetration;
+                w1 = get_effective_mass(A, normal, contact_on_A); //(eq2)
+                w2 = get_effective_mass(B, normal, contact_on_B); //(eq3)
+            }
             center_of_mass := A.position;
             world_leverA := contact_on_A - center_of_mass;
             world_leverB := contact_on_B - center_of_mass;
@@ -355,7 +365,7 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
     	p := correctionMagnitude * normal;
     	sum_impulses += correctionMagnitude;
 
-        draw_primitive.arrow(connector0, p);
+        // draw_primitive.arrow(connector0, p);
         // dynamic friction
     	pn := dot(p, normal);
 
@@ -391,8 +401,9 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
 }
 } else {
 
-
+#if 0 //shareable
 SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
+    using draw_primitive;
     is_negative :: (b: float32) -> bool {return b < 0.0;};
 	normal: Vector3 = colli.contactsBuffer[0].world_normal_towards_A;
     gravity_length := length(context.solver.gravity);
@@ -419,15 +430,19 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
     	u := basic.max(A.friction, B.friction); //0.5
        //normal points towards A
        // if (penetration > 0.0) then continue; //should we do this?
-       already_separating := rel_vel_comp_n >= -0;
-       if already_separating then continue;
+       already_separating := rel_vel_comp_n >= -0; //rel_vel_comp_n
+       if already_separating {
+       continue;
+
+
+       }
 
 		// normal velocities (restitution)
     	e := A.restitution * B.restitution; // 0.5 * 0.5
-        if abs(rel_vel_comp_n) <= h*2.0*gravity_length
+        if abs(rel_vel_comp_n) <= h*2.0*gravity_length //rel_vel_comp_n
              then e = 0.0;
 
-         //no e = 1.0;//checkin FORCED TO BOUNCE
+        // e = 1.0;//yescheckin FORCED TO BOUNCE
 
         //(eq34)
         nullification := -rel_vel_comp_n;
@@ -439,7 +454,11 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
         w2 := get_effective_mass(B, normal, contact_on_B);
 		//(eq33)
 		p := dv / (w1 + w2);
+        // arrow(contact_on_A, A.velocity);
+        // arrow(contact_on_A+A.velocity, p*A.inv_mass);
         A.velocity += p * A.inv_mass;
+        // arrow(contact_on_A, A.velocity, color=RED);
+
         B.velocity -= p * B.inv_mass;
         A.angular_velocity += inv_I_worldA * cross(leverA, p);; //leverA = r1
         B.angular_velocity -= inv_I_worldB * cross(leverB, p);  //leverB = r2
@@ -447,7 +466,13 @@ SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
 
 }
 
+draw_sphere_properties :: (A: *Body, color: Vector4 = .{.5,.5,.5,1}){
 
+            draw_primitive.circle(A.position, A.radius, normal=rotate(Vector3.{0,1,0}, A.orientation), color=color);
+            draw_primitive.circle(A.position, A.radius, normal=rotate(Vector3.{1,0,0}, A.orientation), color=color);
+            draw_primitive.circle(A.position, A.radius, normal=rotate(Vector3.{0,0,1}, A.orientation), color=color);
+
+}
 asdasd :: #string CPP
 void SolveVelocities(Collision_Constraint* colli, float dt) {
     auto is_negative = [](float b) -> bool { return b < 0.0f; };
@@ -495,7 +520,8 @@ void SolveVelocities(Collision_Constraint* colli, float dt) {
 }
 CPP;
 
-SolveVelocitiesOLD :: (using colli: *Collision_Constraint, dt: float) {
+SolveVelocities :: (using colli: *Collision_Constraint, dt: float) {
+    using draw_primitive;
     is_negative :: (b: float32) -> bool {return b < 0.0;};
 	normal: Vector3 = colli.contactsBuffer[0].world_normal_towards_A;
     gravity_length := length(context.solver.gravity);
@@ -540,21 +566,28 @@ SolveVelocitiesOLD :: (using colli: *Collision_Constraint, dt: float) {
        // if (penetration > 0.0) then continue; //should we do this?
        already_separating := rel_vel_comp_n >= -0;
        // if already_separating then rel_vel_comp_n = -0.000001;
-       if already_separating then continue;
+       if already_separating {
+//        arrow(contact_on_A, A.velocity, color=BLUE);
+// arrow(contact_on_A, normal, color=GREEN);
+// arrow(contact_on_A, PREV_rel_vel, color=WHITE);
+// circle(contact_on_A, radius=0.1);
+draw_sphere_properties(A);
+        continue;
+        }
 
 		// normal velocities (restitution)
     	e := A.restitution * B.restitution; // 0.5 * 0.5
         if abs(rel_vel_comp_n) <= h*2.0*gravity_length
              then e = 0.0;
 
-        e = 1.0; //FORCED TO BOUNCE
+        // e = 1.0; //FORCED TO BOUNCE yescheckin
 
         //(eq34)
         nullification := -rel_vel_comp_n;
         restitution := basic.max(-e * PREV_rel_vel_comp_n, 0.0);
         if PREV_rel_vel_comp_n <0 || PREV_rel_vel_comp_n > 0
-        log_vars(restitution);
-        log_vars(nullification);
+        // log_vars(restitution);
+        // log_vars(nullification);
         basic.assert(is_negative(nullification) == is_negative(restitution), "nullification should have the same sign as restitution nulli,resti % %", nullification, restitution);
         dv :=  normal * (restitution + nullification);
 
@@ -572,6 +605,9 @@ SolveVelocitiesOLD :: (using colli: *Collision_Constraint, dt: float) {
         A.angular_velocity += inv_I_worldA * cross(leverA, p);; //leverA = r1
         B.angular_velocity -= inv_I_worldB * cross(leverB, p);  //leverB = r2
 
+// arrow(contact_on_A, A.velocity);
+// arrow(contact_on_A+A.velocity, p*A.inv_mass);
+// arrow(contact_on_A, A.velocity, color=RED);
         //maybe here
         // A.prev_velocity += A.inv_mass*p;
         // A.prev_angular_velocity = inv_I_worldB*cross(leverA, p);
@@ -584,10 +620,11 @@ SolveVelocitiesOLD :: (using colli: *Collision_Constraint, dt: float) {
         // prev_angular_velocity_A = A.angular_velocity;
         // prev_angular_velocity_B = B.angular_velocity;
     }
-     // A.velocity +=  A.inv_mass * sum_linear_momentum_on_A;
-     // B.velocity -=  B.inv_mass * sum_linear_momentum_on_A;
-     // A.angular_velocity += inv_I_worldA * sum_angular_momentum_on_A;
-     // B.angular_velocity -= inv_I_worldB * sum_angular_momentum_on_B;
+     // fff :float= 1.0;
+     // A.velocity += fff * A.inv_mass * sum_linear_momentum_on_A;
+     // B.velocity -= fff * B.inv_mass * sum_linear_momentum_on_A;
+     // A.angular_velocity += fff*inv_I_worldA * sum_angular_momentum_on_A;
+     // B.angular_velocity -= fff*inv_I_worldB * sum_angular_momentum_on_B;
 
     basic.assert(is_valid(A.position), "your body exploded");
     basic.assert(is_valid(A.velocity), "your body tried to explode");
@@ -1109,7 +1146,12 @@ compute_contacts :: (A: *Body, B: *Body) -> contacts_count:int, contacts_data: [
            case; basic.assert(false, "\n[ERROR]:shape vs shape not implemented! or... remember ordering the shapes in the broadphase!-> %", A.shape_kind |  B.shape_kind); }
 
     //more sanity checks because entropy code
+
       for 0..contacts_count -1 {
+
+        // if !global_temp_delete draw_primitive.start_recording();
+        // global_temp_delete=true;
+
           basic.assert(is_normalized(result_contacts[it].world_normal_towards_A, tolerance=FLOAT32_EPSILON6), "e world_normal_towards_A %", result_contacts[it].world_normal_towards_A);
 
         draw_primitive.square(l2w(A.position, A.orientation, result_contacts[it].local_point_on_A),size=0.1, color=.{1,0.1,0.1,1});
@@ -1129,7 +1171,7 @@ compute_contacts :: (A: *Body, B: *Body) -> contacts_count:int, contacts_data: [
     return contacts_count, result_contacts;
 }
 
-
+global_temp_delete: bool;
 
 
 //idea, project onto sphere like gauss maps and use angles to.... maybe too slow, angles... sin cos... and I need the axis separation... proejcting onto sphere is information loss.

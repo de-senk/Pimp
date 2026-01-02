@@ -231,9 +231,25 @@ reflect_results_to_transform_cb :: (body: *Body) {
         MODEL := Matrix4_Identity;
         MODEL = translate(MODEL, previous_t + delta_pos);
         MODEL = rotate(MODEL, normalize(next_q_minus_previous*previous_q));
+        MODEL = make_scale_matrix4(previous_s) * MODEL;
         transform.* = MODEL;
 
     }
+
+doBall :: (initial_world_position: Vector3, radius: float32 = .21, mass: float32 = 1, user_callback:#type (body: *Body) = do_nothing_cb, identifier:s64,  loc := #caller_location) -> *Body {
+    CheckInit();
+    hash := get_hash(loc, identifier);
+    ball, did_just_created_a_new_one := find_or_create_ball(hash, initial_world_position, radius, mass);
+    if did_just_created_a_new_one {
+      maybe_expand_aabb(*ball.aabb,.{1,1,1}*radius);
+      maybe_expand_aabb(*ball.aabb,.{-1,-1,-1}*radius);
+      ball.position = initial_world_position;
+    }
+    ball.latest_frame_of_existence = context.solver.number_of_steps_executed_so_far;
+
+    ball.end_frame_callback = user_callback ;
+    return ball;
+}
 
 doBall :: (transform: *Matrix4, radius: float32 = .21, mass: float32 = 1, user_callback:#type (body: *Body) = do_nothing_cb, identifier:s64,  loc := #caller_location) -> *Body {
     CheckInit();
@@ -450,6 +466,7 @@ create_ball :: (position: Vector3, radius: float32, mass: float32) -> *Body {
     body.shape_kind = .SPHERE;
     body.prev_position = position;
     body.position = position;
+    log_vars(position);
     body.radius = radius;
     if mass > 0 {
         body.inv_mass = 1/mass;

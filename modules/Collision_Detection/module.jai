@@ -5,13 +5,13 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
     center_A := hull_center(hullA);
 	query.faceQuery_AB = QueryFaceDirections(hullA, hullB);
     if query.faceQuery_AB.distance > FLOAT32_EPSILON4 {
-     draw_primitive.doLabel("faceQuery_AB", draw_primitive.WorldToScreen(center_A));
+    //  draw_primitive.doLabel("faceQuery_AB", draw_primitive.WorldToScreen(center_A));
      return false;
      }
 
 	query.faceQuery_BA = QueryFaceDirections(hullB, hullA);
     if query.faceQuery_BA.distance > FLOAT32_EPSILON4 {
-     draw_primitive.doLabel("faceQuery_BA", draw_primitive.WorldToScreen(center_A));
+    //  draw_primitive.doLabel("faceQuery_BA", draw_primitive.WorldToScreen(center_A));
      return false;
      }
 
@@ -22,7 +22,7 @@ SAT_dirk_gregorius :: (hullA: Convex_Hull, hullB: Convex_Hull, query: *SAT_Query
     }
 
     if query.edgeQuery.distance > FLOAT32_EPSILON4  {
-     draw_primitive.doLabel("edgeQuery", draw_primitive.WorldToScreen(center_A));
+    //  draw_primitive.doLabel("edgeQuery", draw_primitive.WorldToScreen(center_A));
      return false;
      }
 	return true;
@@ -52,12 +52,12 @@ draw_debug_hull :: (position: Vector3, orientation: Quaternion, hull_shape: Conv
                 v1 := transform_point(hull_shape.worldSpace, vertices_tmp[1]);
                 v2 := transform_point(hull_shape.worldSpace, vertices_tmp[2]);
                 v3 := transform_point(hull_shape.worldSpace, vertices_tmp[3]);
-                draw_primitive.polygon(.[ v0, v1, v2, v3 ], color);
+                // draw_primitive.polygon(.[ v0, v1, v2, v3 ], color);
             case 3;
     		    v0 := transform_point(hull_shape.worldSpace, vertices_tmp[0]);
                 v1 := transform_point(hull_shape.worldSpace, vertices_tmp[1]);
                 v2 := transform_point(hull_shape.worldSpace, vertices_tmp[2]);
-                draw_primitive.triangle( v0, v1, v2, color);
+                // draw_primitive.triangle( v0, v1, v2, color);
 
             case;
                 assert(false, "vert_count %", vert_count);

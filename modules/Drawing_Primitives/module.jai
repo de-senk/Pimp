@@ -14,6 +14,7 @@ Draw_Primitive_Procs :: struct {
 
     WorldToScreen := (position: Vector3) -> Vector3, is_inside_frustrum: bool {return .{}, false;};
     doLabel := (text: string, pos: Vector3)  {};
+    doText := (text: string, pos: Vector3)  {};
     //helpers
     get_normal_from_normal :: (n: Vector3) -> Vector3 {
         t1 : Vector3 = ---;
@@ -53,7 +54,7 @@ Draw_Primitive_Procs :: struct {
         draw_primitive.line(center - vertical * half_size, center + vertical * half_size, color);
     }
 
-    circle :: (center: Vector3, radius: float = 0.4, segments: int = 16, normal: Vector3 = .{0,1,0}, color: Vector4 = .{.5,.7,.5,1}) {
+    circle :: (center: Vector3, radius: float = 0.4, segments: int = 4, normal: Vector3 = .{0,1,0}, color: Vector4 = .{.5,.7,.5,1}) {
         horizontal := get_normal_from_normal(normal);
         vertical := cross_product(normal, horizontal);
 

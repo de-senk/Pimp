@@ -51,11 +51,19 @@ simulate :: () {
 
     //XPBD for rigidbodies
     backup_dt := dt;
-    dt = dt / sub_steps.(float);
-    CollisionDetection();
+    dt = backup_dt / sub_steps.(float);
+
+    if global_temp_delete {
+    // draw_primitive.start_recording();
+    }
+    defer if global_temp_delete{
+     draw_primitive.end_recording();
+     global_temp_delete=false;
+     }
     for *bodies compute_world_inertia_and_inv_inertia(it);
     for *collision_constraints it.lambda_cache = 0;
     for *joint_constraints it.lambda_cache = 0;
+
     for 1..sub_steps {
         for *bodies integrate_positions_xpbd(it, dt);
         for 1..iterations {
@@ -63,11 +71,11 @@ simulate :: () {
             for *collision_constraints SolvePositions(it, dt);
         }
         for *bodies integrate_velocities_xpbd(it, dt);
-        // CollisionDetection();// this is very slow.
-        for *collision_constraints backup_velocities_inside_manifold_constraints(it);
-        for *collision_constraints SolveVelocities(it, dt);
-        for *joint: joint_constraints ApplyDamping(joint, dt);
     }
+    for *collision_constraints backup_velocities_inside_manifold_constraints(it);
+    CollisionDetection();// this is very slow.
+    for *collision_constraints SolveVelocities(it, dt);
+    for *joint: joint_constraints ApplyDamping(joint, dt);
     dt = backup_dt;
 
 

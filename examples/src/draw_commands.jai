@@ -40,16 +40,16 @@ compare_render_commands :: (a: type_of(Draw_Command.kind), b: type_of(Draw_Comma
 actual_draw :: (using cmd: Draw_Command) {
     if !should_render return;
     if kind == {
-        case .SKELETON; draw_pose(skeleton.pose, skeleton.world_model, skeleton.color);
-        case .TRIANGLE_MESH; draw_mesh(mesh.skinned_mesh, mesh.world_model, mesh.skinning_matrices);
+        case .SKELETON; actual_draw_pose(skeleton.pose, skeleton.world_model, skeleton.color);
+        case .TRIANGLE_MESH; actual_draw_mesh(mesh.skinned_mesh, mesh.world_model, mesh.skinning_matrices);
         // case .DEBUG_SPHERE; draw_sphere(mesh.pose, mesh.world_model);
-        case .UI; draw_ui_element(ui);
-        case .LINE; draw_line(line.start, line.end, line.color);
+        case .UI; actual_draw_ui_element(ui);
+        case .LINE; actual_draw_line(line.start, line.end, line.color);
     }
 }
 
 
-draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matrices : []Matrix4)
+actual_draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matrices : []Matrix4)
 {
 
 	glDepthMask (GL_TRUE); //:tagMaybeCache
@@ -78,15 +78,15 @@ draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matric
 }
 
 
-draw_ui_element :: (using uircmd : UI_RENDER_COMMAND) {
-    glDisable (GL_DEPTH_TEST); //:tagMaybeCache
-	glDepthMask (GL_FALSE);
-	simp.set_shader_for_color ();
+actual_draw_ui_element :: (using uircmd : UI_RENDER_COMMAND) {
+  glDisable (GL_DEPTH_TEST); //:tagMaybeCache
+  glDepthMask (GL_FALSE);
+  simp.set_shader_for_color ();
 
-    getrect.label (r, text, *theme);
+  getrect.label (r, text, *theme);
 }
 
-draw_pose :: (using pose : Skeleton_Pose, transform : Matrix4, color : Vector4)
+actual_draw_pose :: (using pose : Skeleton_Pose, transform : Matrix4, color : Vector4)
 {
 
     // Disable depth mask and testing so we can see
@@ -114,7 +114,7 @@ draw_pose :: (using pose : Skeleton_Pose, transform : Matrix4, color : Vector4)
 			world_space_transform._24,
 			world_space_transform._34
 		);
-		draw_line (start, end, color);
+		actual_draw_line (start, end, color);
 	}
 }
 

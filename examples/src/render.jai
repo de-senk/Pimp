@@ -375,13 +375,13 @@ push_line :: (start : Vector3, end : Vector3, color : Vector4) {
 
 
 
-draw_line :: inline (start : Vector3, end : Vector3, color : Vector4)
+actual_draw_line :: inline (start : Vector3, end : Vector3, color : Vector4)
 {
-	draw_line (start, end, color, color);
+	actual_draw_line (start, end, color, color);
 }
 
 // This is maybe the slowest way possible to draw a line!
-draw_line :: (start : Vector3, end : Vector3, start_color : Vector4, end_color : Vector4)
+actual_draw_line :: (start : Vector3, end : Vector3, start_color : Vector4, end_color : Vector4)
 {
 	data : [2]Vertex_Pos_Color = ---;
 	data[0].position = start;
@@ -430,7 +430,7 @@ debug_renderer_STOP_recording_commands :: () {
     recodrder_is_recording=false;
     for recorded_drawing_commands_start_count..drawing_commands.count-1 {
         cmd := drawing_commands[it];
-        if cmd.kind == .LINE
+        if cmd.kind == .LINE || cmd.kind == .UI
             array_add(*recorded_drawing_commands, cmd);
     }
 

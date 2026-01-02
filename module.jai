@@ -60,6 +60,9 @@ simplex_add :: (simplex: *Simplest_Geometric_Shape, point: Vector3) {
 }
 
 
+    rotate8aroundx := #run make_quaternion_from_axis_and_angle(.{1,0,0}, 3.141593/6);
+    rotate8aroundx_m := #run make_quaternion_from_axis_and_angle(.{1,0,0}, -3.141593/6);
+
 rotate90aroundx := #run make_quaternion_from_axis_and_angle(.{1,0,0}, 3.141593/2);
 rotate90aroundy := #run make_quaternion_from_axis_and_angle(.{0,1,0}, 3.141593/2);
 rotate90aroundz := #run make_quaternion_from_axis_and_angle(.{0,0,1}, 3.141593/2);

@@ -18,15 +18,20 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
     if is_key_down(#char "X") collider_switch_face = false;
     if is_key_down(#char "Y") log("orio %", test1ori);
     if !is_key_down(#char "G") {
-        if _should_ball
+        if _should_ball {
         ball = doBall(*world_model, mass=1, user_callback = reflect_results_to_transform_cb, identifier=player0.(s64));;
-        else
+        for 1..1 {
+        doBall(Vector3.{0,it.(float),0},  mass=1, identifier=player0.(s64) + it);
+        }
+        }
+        else {
         ball = doBox(*world_model, mass=1, user_callback = reflect_results_to_transform_cb, identifier=player0.(s64));;
+        }
     }
 
    if ball && was_key_pressed(#char "R") {
         step_draw = 0;
-        pos := Vector3.{2.1, 1, 2.021491};
+        pos := Vector3.{0, 1, 0};
         ori := Quaternion.{0, 0, 0, 1};
 
         ball.prev_position = pos;
@@ -79,7 +84,7 @@ do_player0_gamecode :: (using player0: *Entity, delta_time : float) {
         ball.angular_velocity +=  2.2*rotate(-rotate_direction, g_camera.rotation);
     // else
         move_direction.y *= -1.0; //because camera -z or something
-        ball.velocity +=  0.05*rotate(-move_direction, g_camera.rotation);
+        ball.velocity +=  0.95*rotate(-move_direction, g_camera.rotation);
         g_camera.FOCUS = ball.position;
     //
     //Complxity detected: Maybe the physics cod shoudl go into animation code for the cases that manipulates aniamtions?

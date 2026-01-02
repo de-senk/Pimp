@@ -22,6 +22,10 @@ UI_RENDER_COMMAND :: struct {
     theme: getrect.Label_Theme;
 }
 
+do3DLabel :: inline (text: string, pos: Vector3) {
+    doLabel(text, WorldToScreen(pos));
+}
+
 doLabel :: inline (text: string, pos: Vector3) {
     doLabel(text, pos.x, pos.y, pos.z);
 }

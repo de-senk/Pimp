@@ -1,5 +1,4 @@
 QueryFaceDirections :: (hullA: Convex_Hull, hullB: Convex_Hull) -> FaceQuery {
-//NOTE: I think we dont need to query for faces because this procedure already give us the most probable faces.
     result: FaceQuery;
     result.face = null;
     result.distance = -FLOAT32_INFINITY;
@@ -119,7 +118,7 @@ hull_center :: inline (hull: Convex_Hull) -> Vector3 { return Vector3.{hull.worl
 QueryEdgeDirections_deSenk :: (hullA: Convex_Hull, hullB: Convex_Hull) -> EdgeQuery
 {
     #run TODO("Maybe change the system, so its always faceA+edge points OR faceB +edge points");
-    DRAW :: false;
+    DRAW :: true;
 
     hullA_center := Vector3.{hullA.worldSpace._14, hullA.worldSpace._24, hullA.worldSpace._34};
     #if DRAW {
@@ -189,6 +188,7 @@ draw_current_edge_normal :: (e_origin: Vector3, e: *Hull_Half_Edge, inv_world: M
             draw_primitive.arrow(e_origin, n,color=.{abs(n).x,abs(n).y,abs(n).z, 1.0});
     	}
 }
+
 
 draw_hull_properties :: (hull: Convex_Hull){
     // return;
@@ -765,7 +765,7 @@ collide_sphere_vs_sphere :: (sphere_center_A: Vector3, sphere_radius_A: float, s
 
     //unpack sphere 2 data
     r2 := sphere_radius_B;
-    C2 := sphere_center_A;
+    C2 := sphere_center_B;
 
     penetration                  = distance(C2, C1) - r1 - r2;
     if penetration < 0 {
@@ -967,11 +967,6 @@ collide_hull_vs_hull :: (hull_A: Convex_Hull, hull_B: Convex_Hull) ->
 
 };
 
-
-////////////
-// START OF AI-GENERATED CODE
-//its not 100% ai, but I dont like these procedures, to be replaced.
-
 collide_sphere_vs_hull :: (
     sphere_center: Vector3, sphere_radius: float,
     hull: Convex_Hull
@@ -1004,18 +999,14 @@ collide_sphere_vs_hull :: (
         v1 := hull.worldSpace *e.next.tail.vertex;
         v2 := hull.worldSpace *e.next.next.tail.vertex;
 
-        // Face plane already in local space
+        // Face plane in local space
         face_normal, face_distance := transform_plane(e.face.face_plane_normal, e.face.face_plane_distance, hull.worldSpace, hull.inv_worldSpace_for_bivectors);
         assert(length_squared(face_normal) > 0.001, "invalid normal %", face_normal);
-        // Distance from sphere center to face plane
-
 
         // points_towards_A := dot(face_normal, sphere_center - hull_center) < 0.0;
         // if !points_towards_A then face_normal = -face_normal;
         dist_to_plane := distance_point_to_plane_signed(sphere_center, face_normal, face_distance);
         if dist_to_plane > sphere_radius continue;
-        // Early out if sphere is too far from this face
-        // if dist_to_plane > sphere_radius continue;
         closest_point_on_triangle := closest_point_to_triangle(sphere_center, v0, v1, v2);
         from_triangle_to_sphere := sphere_center - closest_point_on_triangle;
         distance_to_surface := length(from_triangle_to_sphere);
@@ -1207,8 +1198,7 @@ collide_capsule_vs_hull :: (
 
     return num_contacts, penetration, world_normal_towards_A, world_midpoint, world_contact_point_on_A, world_contact_point_on_B;
 }
-// END OF AI-GENERATED CODE
-////////////
+
 
 
 //  Quick_hull 2D, O(nlogn)
